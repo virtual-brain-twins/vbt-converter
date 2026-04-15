@@ -1,0 +1,4 @@
+[submodule "ci/template_repo"]
+	path = ci/template_repo
+	url = https://gitlab.jsc.fz-juelich.de/virtualbraintwin/VBT_protocol_template.git
+	branch = main

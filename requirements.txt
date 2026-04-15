@@ -1,0 +1,7 @@
+h5py
+pandas
+pyyaml
+tqdm
+numpy
+pytest
+pytest-allure-plugin

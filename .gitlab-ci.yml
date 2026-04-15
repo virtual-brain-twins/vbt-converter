@@ -1,0 +1,110 @@
+# -------------------------------------------------
+# .gitlab-ci.yml – VBT‑converter CI pipeline
+# -------------------------------------------------
+# Stages
+stages:
+  - setup_environment
+  - test
+  - publish_report
+  - cleanup
+
+# -----------------------------------------------------------------
+# Global variables – keep the same behavior as the original template
+# -----------------------------------------------------------------
+variables:
+  # Force the runner to check out sub‑modules (normal)
+  GIT_SUBMODULE_STRATEGY: "normal"
+
+# -----------------------------------------------------------------
+# Pull the generic VBT CI definition from the central template repo
+# -----------------------------------------------------------------
+include:
+  - project: 'virtualbraintwin/VBT_protocol_template'   # full path of the source project
+    ref:    main                                         # branch / tag you want to use
+    file:   '/ci/template.yml'                          # path inside the source repo
+
+# -----------------------------------------------------------------
+# SET‑UP – create a clean virtual environment and install deps
+# -----------------------------------------------------------------
+vbt_setup_job:
+  extends: .VBT_SETUP                     # provided by the template
+  stage: setup_environment
+  image: docker:cli
+  tags:
+    - docker
+    - jsc-cloud
+    - fenix
+  before_script:
+    - echo "🔧 Installing jq and Python in the Alpine runner …"
+    - apk add --no-cache jq python3 bash
+    - !reference [ .VBT_SETUP, before_script ]  # Calls the base "method"
+  variables:
+    VBT_SETUP_SCRIPT: "${CI_PROJECT_DIR}/ci/template_repo/ci/scripts/setup_environment.sh"
+    # Use the project's own requirements (which must contain pytest, h5py, pandas, pyyaml, tqdm, numpy, allure‑pytest‑plugin)
+    VBT_REQUIREMENTS: "${CI_PROJECT_DIR}/requirements.txt"
+
+# -----------------------------------------------------------------
+# Run the parametrised pytest suite
+# -----------------------------------------------------------------
+vbt_test_job:
+  extends: .VBT_RUN                       # provided by the template
+  stage: test
+  tags:
+    - docker
+    - jsc-cloud
+    - fenix
+    - vbt-test-vm03
+  image: docker:cli
+  needs:
+    - job: vbt_setup_job
+      artifacts: true                     # the virtual‑env is passed as artifact
+  variables:
+    # The entry‑script for the tests stage is simply “pytest”
+    VBT_ENTRY_SCRIPT: "pytest"
+    # Allure results are written to `allure-results/`
+    VBT_ENTRY_ARGS: "-vv --alluredir=allure-results tests/test_convert_direc_to_hdf.py"
+
+    # -----------------------------------------------------------------
+    # Allure / tests‑metadata – feel free to adapt the wording
+    # -----------------------------------------------------------------
+    VBT_ALLURE_PARENT_SUITE: "VBT‑converter CI/CD"
+    VBT_ALLURE_SUITE: "convert_direc_to_hdf – Parameterised Tests"
+    VBT_ALLURE_SUB_SUITE: "Execution of synthetic‑dataset validation"
+    VBT_ALLURE_EPIC: "Guarantee that the converter works for every possible input layout"
+    VBT_ALLURE_FEATURE: "Synthetic data generation + full conversion validation"
+    VBT_ALLURE_STORY: "Create a comprehensive pytest matrix that exercises every code path"
+    VBT_ALLURE_DESCRIPTION_HTML: "${CI_PROJECT_DIR}/tests/docs/convert_direc_to_hdf_description.html"
+  before_script:
+    - echo "🔧 Installing dependencies in the docker runner …"
+    - apk add --no-cache jq python3 bash perl gettext
+    - !reference [ .VBT_RUN, before_script ]  # Calls the base "method"
+  # The artefacts are needed by the publish stage (Allure results)
+  artifacts:
+    when: always
+    paths:
+      - allure-results/
+    expire_in: 1 week
+
+# -----------------------------------------------------------------
+# PUBLISH – push the Allure report to the VBT‑template publish job
+# -----------------------------------------------------------------
+vbt_publish_job:
+  extends: .VBT_PUBLISH
+  stage: publish_report
+  needs:
+    - job: vbt_test_job
+      artifacts: true
+  variables:
+    VBT_PUBLISH_SCRIPT: "${CI_PROJECT_DIR}/ci/template_repo/ci/scripts/publish_report.sh"
+
+# -----------------------------------------------------------------
+# CLEAN‑UP – tear‑down the temporary virtual environment
+# -----------------------------------------------------------------
+vbt_cleanup_job:
+  extends: .VBT_CLEANUP
+  stage: cleanup
+  needs:
+    - job: vbt_publish_job
+      artifacts: false
+  variables:
+    VBT_CLEANUP_SCRIPT: "${CI_PROJECT_DIR}/ci/template_repo/ci/scripts/cleanup_environment.sh"

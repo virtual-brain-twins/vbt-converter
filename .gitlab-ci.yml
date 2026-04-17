@@ -38,11 +38,6 @@ vbt_setup_job:
     - echo "Installing jq and Python in the Alpine runner …"
     - apk add --no-cache jq python3 bash
     - !reference [ .VBT_SETUP, before_script ]  # Calls the base "method"
-  cache:
-    - key: vbt-converter-test-cache
-      paths:
-        - tests/test_data/
-      policy: push
   variables:
     VBT_SETUP_SCRIPT: "${CI_PROJECT_DIR}/ci/template_repo/ci/scripts/setup_environment.sh"
     # Use the project's own requirements (which must contain pytest, h5py, pandas, pyyaml, tqdm, numpy, allure‑pytest‑plugin)

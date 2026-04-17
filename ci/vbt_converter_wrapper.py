@@ -73,7 +73,7 @@ def main() -> None:
     cmd = [
         sys.executable,  # use the same Python interpreter
         str(converter_script),
-        "--input-dir",
+        "--input_dir",
         str(args.input_dir.resolve()),
         "--output_file",
         str(output_hdf),

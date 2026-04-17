@@ -63,8 +63,8 @@ vbt_test_job:
     # The entry‑script for the tests stage is simply “pytest”
     VBT_ENTRY_SCRIPT: "${CI_PROJECT_DIR}/converters/convert_direc_to_hdf.py"
     VBT_INPUT_PATH: "${CI_PROJECT_DIR}/tests/test_data/parametersweep_8s_3d_orientation_selective_12012026"
-    VBT_OUTPUT_PATH: "${CI_PROJECT_DIR}/src/output"
-    VBT_ENTRY_ARGS: "--input_dir ${VBT_INPUT_PATH} --output_dir ${VBT_OUTPUT_PATH}"
+    VBT_OUTPUT_PATH: "${CI_PROJECT_DIR}/data/converted/parametersweep_8s_3d_orientation_selective_12012026.hdf"
+    VBT_ENTRY_ARGS: "--input_dir ${VBT_INPUT_PATH} --output_file ${VBT_OUTPUT_PATH}"
     # Allure results are written to `allure-results/`
     # -----------------------------------------------------------------
     # Allure / tests‑metadata – feel free to adapt the wording

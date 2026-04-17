@@ -79,7 +79,8 @@ vbt_test_job:
     - echo "Installing dependencies in the docker runner …"
     - apk add --no-cache jq python3 bash perl gettext
     - !reference [ .VBT_RUN, before_script ]  # Calls the base "method"
-  # The artefacts are needed by the publish stage (Allure results)
+    - ls -lart "${CI_PROJECT_DIR}/tests/test_data/parametersweep_8s_3d_orientation_selective_12012026"
+  # The artifacts are needed by the publishing stage (Allure results)
   cache:
     - key: vbt-converter-test-cache
       paths:

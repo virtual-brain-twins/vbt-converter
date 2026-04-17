@@ -36,12 +36,11 @@ import numpy as np
 import pandas as pd
 import pytest
 import yaml
-import tqdm  # needed because the production code imports it
 
 # ----------------------------------------------------------------------
 # Function under test
 # ----------------------------------------------------------------------
-from convert_direc_to_hdf import convert_to_hdf5
+from converters.convert_direc_to_hdf import convert_to_hdf5
 
 # ----------------------------------------------------------------------
 # Helper utilities – create the temporary directory tree.

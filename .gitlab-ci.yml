@@ -38,6 +38,11 @@ vbt_setup_job:
     - echo "Installing jq and Python in the Alpine runner …"
     - apk add --no-cache jq python3 bash
     - !reference [ .VBT_SETUP, before_script ]  # Calls the base "method"
+  cache:
+    - key: vbt-converter-test-cache
+      paths:
+        - tests/test_data/
+      policy: push
   variables:
     VBT_SETUP_SCRIPT: "${CI_PROJECT_DIR}/ci/template_repo/ci/scripts/setup_environment.sh"
     # Use the project's own requirements (which must contain pytest, h5py, pandas, pyyaml, tqdm, numpy, allure‑pytest‑plugin)
@@ -60,10 +65,11 @@ vbt_test_job:
       artifacts: true                     # the virtual‑env is passed as artifact
   variables:
     # The entry‑script for the tests stage is simply “pytest”
-    VBT_ENTRY_SCRIPT: "echo 'Running pytest with the following arguments:' && echo \"${VBT_ENTRY_ARGS}\" && pytest ${VBT_ENTRY_ARGS}"
+    VBT_ENTRY_SCRIPT: "${CI_PROJECT_DIR}/converters/convert_direc_to_hdf.py"
+    VBT_INPUT_PATH: "${CI_PROJECT_DIR}/tests/test_data/parametersweep_8s_3d_orientation_selective_12012026"
+    VBT_OUTPUT_PATH: "${CI_PROJECT_DIR}/src/output"
+    VBT_ENTRY_ARGS: "--input_dir ${VBT_INPUT_PATH} --output_dir ${VBT_OUTPUT_PATH}"
     # Allure results are written to `allure-results/`
-    #VBT_ENTRY_ARGS: "-vv --alluredir=allure-results tests/test_convert_direc_to_hdf.py"
-
     # -----------------------------------------------------------------
     # Allure / tests‑metadata – feel free to adapt the wording
     # -----------------------------------------------------------------
@@ -83,7 +89,7 @@ vbt_test_job:
     - key: vbt-converter-test-cache
       paths:
         - tests/test_data/
-      policy: push
+      policy: pull
   artifacts:
     when: always
     paths:

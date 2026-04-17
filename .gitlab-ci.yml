@@ -35,7 +35,7 @@ vbt_setup_job:
     - jsc-cloud
     - fenix
   before_script:
-    - echo "🔧 Installing jq and Python in the Alpine runner …"
+    - echo "Installing jq and Python in the Alpine runner …"
     - apk add --no-cache jq python3 bash
     - !reference [ .VBT_SETUP, before_script ]  # Calls the base "method"
   variables:
@@ -60,9 +60,9 @@ vbt_test_job:
       artifacts: true                     # the virtual‑env is passed as artifact
   variables:
     # The entry‑script for the tests stage is simply “pytest”
-    VBT_ENTRY_SCRIPT: "pytest"
+    VBT_ENTRY_SCRIPT: "echo 'Running pytest with the following arguments:' && echo \"${VBT_ENTRY_ARGS}\" && pytest ${VBT_ENTRY_ARGS}"
     # Allure results are written to `allure-results/`
-    VBT_ENTRY_ARGS: "-vv --alluredir=allure-results tests/test_convert_direc_to_hdf.py"
+    #VBT_ENTRY_ARGS: "-vv --alluredir=allure-results tests/test_convert_direc_to_hdf.py"
 
     # -----------------------------------------------------------------
     # Allure / tests‑metadata – feel free to adapt the wording
@@ -75,10 +75,15 @@ vbt_test_job:
     VBT_ALLURE_STORY: "Create a comprehensive pytest matrix that exercises every code path"
     VBT_ALLURE_DESCRIPTION_HTML: "${CI_PROJECT_DIR}/tests/docs/convert_direc_to_hdf_description.html"
   before_script:
-    - echo "🔧 Installing dependencies in the docker runner …"
+    - echo "Installing dependencies in the docker runner …"
     - apk add --no-cache jq python3 bash perl gettext
     - !reference [ .VBT_RUN, before_script ]  # Calls the base "method"
   # The artefacts are needed by the publish stage (Allure results)
+  cache:
+    - key: vbt-converter-test-cache
+      paths:
+        - tests/test_data/
+      policy: push
   artifacts:
     when: always
     paths:

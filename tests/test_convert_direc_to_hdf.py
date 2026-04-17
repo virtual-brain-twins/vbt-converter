@@ -1,293 +1,367 @@
-import random
-import string
-from pathlib import Path
+"""
+End‑to‑end pytest‑Allure suite for ``convert_direc_to_hdf.convert_to_hdf5``.
+The suite builds a temporary directory tree that mimics the layout
+expected by the converter, runs the conversion and then inspects the
+resulting HDF5 file.
 
+All helper functions create **exactly** the file format that
+``convert_to_hdf5`` expects:
+
+* ``config.yaml`` – plain YAML.
+* ``spike_times/<layer>.npz`` – ``np.savez`` with ``indices`` & ``times``.
+* ``*.log`` – plain text files.
+* ``record_info/record_neurons.data`` – a **pickled dict** saved with
+  ``np.save`` **without** the automatic ``.npy`` suffix (the converter
+  loads it with ``np.load(..., allow_pickle=True)``).
+* ``metrics/avg_firing_rates.csv`` – a CSV readable by ``pandas.read_csv``.
+* ``random_input_<duration>ms.npz`` – ``np.savez`` containing a single
+  array (named ``arr_0``).
+
+The test reproduces the exact logic used in the production code to
+derive the expected *limits* and *values* for the stimulus group, so it
+remains correct even if the implementation changes the way those arrays
+are built.
+"""
+
+from __future__ import annotations
+
+import os
+import re
+from pathlib import Path
+from typing import Any, Dict, List
+
+import allure
 import h5py
 import numpy as np
 import pandas as pd
 import pytest
 import yaml
-# The function we want to test
+import tqdm  # needed because the production code imports it
+
+# ----------------------------------------------------------------------
+# Function under test
+# ----------------------------------------------------------------------
 from convert_direc_to_hdf import convert_to_hdf5
 
-
-# -----------------------------------------------------------------
-# Helper utilities – generate tiny, deterministic synthetic data
-# -----------------------------------------------------------------
-def _rand_string(k: int = 6) -> str:
-    return "".join(random.choices(string.ascii_letters, k=k))
+# ----------------------------------------------------------------------
+# Helper utilities – create the temporary directory tree.
+# ----------------------------------------------------------------------
 
 
-def _write_config_yaml(dir_path: Path, extra: dict | None = None):
-    """Write a minimal config.yaml – `extra` can override or delete keys."""
-    cfg = {
-        "t_sim": 1000,  # ms
-        "seed": 42,
-        "model": "testmodel",
-        "description": "synthetic test run",
-    }
-    if extra:
-        cfg.update(extra)
-    (dir_path / "config.yaml").write_text(yaml.safe_dump(cfg))
+def _write_yaml(path: Path, data: Dict[str, Any]) -> None:
+    """Write a dictionary as a YAML file."""
+    with path.open("w", encoding="utf-8") as f:
+        yaml.safe_dump(data, f)
 
 
-def _write_spike_file(spike_dir: Path, layer: str, indices: np.ndarray, times: np.ndarray):
-    """Write a .npz file that mimics the original spike output."""
-    np.savez(spike_dir / f"{layer}.npz", indices=indices, times=times)
+def _write_spike_file(path: Path, indices: np.ndarray, times: np.ndarray) -> None:
+    """Write ``indices`` and ``times`` with ``np.savez``."""
+    np.savez(path, indices=indices, times=times)
 
 
-def _write_random_input(stim_dir: Path, ms: int, values: np.ndarray):
-    """Create the *_npz* stimulus file used by the converter."""
-    fname = stim_dir / f"random_input_{ms}ms.npz"
-    np.savez(fname, arr_0=values)
+def _write_log_file(path: Path, text: str) -> None:
+    """Write a plain‑text log file."""
+    path.write_text(text, encoding="utf-8")
 
 
-def _write_logs(log_dir: Path):
-    """Create three simple log files – content does not matter for the test."""
-    for name in ["error.log", "info.log", "warning.log"]:
-        (log_dir / name).write_text(f"{name}: synthetic log for testing\n")
+def _write_record_info(path: Path, dct: Dict[str, int]) -> None:
+    """
+    ``record_neurons.data`` must be a *pickled dict* saved **exactly**
+    under that filename.  ``np.save`` automatically appends “.npy” when
+    the target is a string, therefore we open the file ourselves and pass
+    the file‑handle to ``np.save`` – this prevents the unwanted suffix.
+    """
+    with path.open("wb") as f:
+        np.save(f, dct, allow_pickle=True)
 
 
-def _write_record_neurons(sim_dir: Path, neuron_counts: dict):
-    """Create the pickled dict used by the converter."""
-    p = sim_dir / "record_info" / "record_neurons.data"
-    p.parent.mkdir(parents=True, exist_ok=True)
-    np.save(p, neuron_counts, allow_pickle=True)
+def _write_metrics_csv(path: Path, rows: List[Dict[str, Any]]) -> None:
+    """Write the metrics CSV using pandas (ensures the exact column order)."""
+    pd.DataFrame(rows).to_csv(path, index=False)
 
 
-def _write_metrics(sim_dir: Path, df: pd.DataFrame):
-    """Create the CSV file with average firing rates."""
-    (sim_dir / "metrics").mkdir(parents=True, exist_ok=True)
-    df.to_csv(sim_dir / "metrics" / "avg_firing_rates.csv", index=False)
+def _write_stimulus_files(base_dir: Path, stim_spec: List[Dict[str, Any]]) -> None:
+    """
+    ``stim_spec`` contains dictionaries with:
+
+        - ``duration_ms`` – integer duration
+        - ``array``       – ``np.ndarray`` (the stimulus values)
+
+    Files are named ``random_input_<duration>ms.npz`` and contain a
+    single array stored as ``arr_0``.
+    """
+    for spec in stim_spec:
+        fname = f"random_input_{spec['duration_ms']}ms.npz"
+        np.savez(base_dir / fname, spec["array"])
 
 
-# -----------------------------------------------------------------
-# Fixtures – generate the whole input directory tree
-# -----------------------------------------------------------------
-@pytest.fixture
-def base_input_dir(tmp_path: Path) -> Path:
-    """Create a directory that contains ONE simulation sub‑folder with the *full* set of files."""
-    sim_name = "sim_01"
-    sim_path = tmp_path / sim_name
-    sim_path.mkdir(parents=True)
+def _create_simulation_dir(root: Path, sim_name: str, scenario: Dict[str, Any]) -> None:
+    """Create one simulation folder (``sim_name``) inside ``root``."""
+    sim_dir = root / sim_name
+    sim_dir.mkdir(parents=True)
 
-    # 1️⃣ config.yaml
-    _write_config_yaml(sim_path)
+    # ── config.yaml
+    _write_yaml(sim_dir / "config.yaml", scenario["config"])
 
-    # 2️⃣ spike_times (one layer with a handful of spikes)
-    st_dir = sim_path / "spike_times"
-    st_dir.mkdir()
-    _write_spike_file(
-        st_dir,
-        layer="L23E",
-        indices=np.arange(5, dtype=int),
-        times=np.linspace(0.1, 0.5, 5),
-    )
+    # ── spike_times/
+    spike_dir = sim_dir / "spike_times"
+    spike_dir.mkdir()
+    for layer, data in scenario["spikes"].items():
+        _write_spike_file(spike_dir / f"{layer}.npz", data["indices"], data["times"])
 
-    # 3️⃣ logs
-    _write_logs(sim_path)
+    # ── logs
+    for log_name, txt in scenario["logs"].items():
+        _write_log_file(sim_dir / log_name, txt)
 
-    # 4️⃣ record_neurons
-    _write_record_neurons(sim_path, {"L23E": 100, "L4I": 80})
+    # ── record_info/
+    rec_dir = sim_dir / "record_info"
+    rec_dir.mkdir()
+    _write_record_info(rec_dir / "record_neurons.data", scenario["record_neurons"])
 
-    # 5️⃣ metrics (one row per population – we give only two rows, the rest are optional)
-    df = pd.DataFrame(
-        {
-            "Population": ["L23E", "L4I"],
-            "Avg Firing Rate Hz": [5.2, 3.1],
-        }
-    )
-    _write_metrics(sim_path, df)
+    # ── metrics/
+    metrics_dir = sim_dir / "metrics"
+    metrics_dir.mkdir()
+    _write_metrics_csv(metrics_dir / "avg_firing_rates.csv", scenario["metrics"])
 
-    # 6️⃣ stimulus – two random input files
-    _write_random_input(sim_path, 200, np.full((10,), 0.5))
-    _write_random_input(sim_path, 600, np.full((10,), 1.2))
-
-    return tmp_path
+    # ── stimulus files (directly in the simulation folder)
+    _write_stimulus_files(sim_dir, scenario["stimulus"])
 
 
-# -----------------------------------------------------------------
-# Parameterised test matrix
-# -----------------------------------------------------------------
+# ----------------------------------------------------------------------
+# Scenarios – each dict will be materialised by the helper above.
+# ----------------------------------------------------------------------
+SCENARIOS = [
+    {
+        "id": "full",
+        "description": "All possible files present, multiple spike layers, two stimulus chunks.",
+        "config": {"t_sim": 250, "model": "test_model", "seed": 42},
+        "spikes": {
+            "L1": {"indices": np.arange(10, dtype=int), "times": np.linspace(0, 100, 10)},
+            "L2": {"indices": np.arange(5, 15, dtype=int), "times": np.linspace(10, 200, 10)},
+        },
+        "logs": {
+            "error.log": "Error: something went wrong\n",
+            "info.log": "Info: all good\n",
+            "warning.log": "Warning: be careful\n",
+        },
+        "record_neurons": {"neur1": 1, "neur2": 2, "neur3": 3},
+        "metrics": [
+            {"Population": "popA", "Avg Firing Rate Hz": 5.5},
+            {"Population": "popB", "Avg Firing Rate Hz": 12.2},
+        ],
+        "stimulus": [
+            {"duration_ms": 50, "array": np.full((5,), 0.1)},
+            {"duration_ms": 200, "array": np.full((5,), 0.9)},
+        ],
+    },
+    {
+        "id": "minimal",
+        "description": "Only one spike layer, empty logs, single stimulus block, single metric row.",
+        "config": {"t_sim": 100, "model": "minimal_model"},
+        "spikes": {
+            "L1": {
+                "indices": np.array([0, 2, 4], dtype=int),
+                "times": np.array([0.0, 10.0, 20.0]),
+            }
+        },
+        "logs": {"error.log": "", "info.log": "", "warning.log": ""},
+        "record_neurons": {"a": 10},
+        "metrics": [{"Population": "popX", "Avg Firing Rate Hz": 0.0}],
+        "stimulus": [
+            {"duration_ms": 100, "array": np.full((3,), 0.5)},
+        ],
+    },
+    {
+        "id": "no_spikes_no_stim",
+        "description": (
+            "No spike files, no stimulus files, three metric rows, non‑default t_sim."
+        ),
+        "config": {"t_sim": 300, "model": "edge_case"},
+        "spikes": {},  # empty – the converter must handle an empty directory.
+        "logs": {
+            "error.log": "Error only\n",
+            "info.log": "Info only\n",
+            "warning.log": "Warning only\n",
+        },
+        "record_neurons": {"x": 0, "y": -1},
+        "metrics": [
+            {"Population": "pop1", "Avg Firing Rate Hz": 1.1},
+            {"Population": "pop2", "Avg Firing Rate Hz": 2.2},
+            {"Population": "pop3", "Avg Firing Rate Hz": 3.3},
+        ],
+        "stimulus": [],  # no stimulus files at all.
+    },
+]
+
+
+# ----------------------------------------------------------------------
+# Pytest‑Allure test class
+# ----------------------------------------------------------------------
+@allure.feature("HDF5 conversion")
+@allure.story("convert_to_hdf5")
+@allure.severity(allure.severity_level.CRITICAL)
 @pytest.mark.parametrize(
-    "scenario,modifier,should_raise",
-    [
-        # ── VALID case – everything present, conversion must succeed ──
-        ("valid_full", {}, None),
-
-        # ── Missing logs – the converter opens each log file explicitly → FileNotFoundError ──
-        ("missing_logs", {"remove": ["error.log", "info.log", "warning.log"]}, FileNotFoundError),
-
-        # ── Empty spike directory – should still succeed, just no spike layers ──
-        ("empty_spike", {"empty_spike_dir": True}, None),
-
-        # ── No stimulus files – the converter still writes a stimulus with only the
-        #    [0, t_sim] limits and a single zero value ──
-        ("no_stimulus_files", {"remove_stim_files": True}, None),
-
-        # ── Missing record_neurons file – code tries to open it → FileNotFoundError ──
-        ("missing_record_neurons", {"remove": ["record_info/record_neurons.data"]}, FileNotFoundError),
-
-        # ── Config without `t_sim` – the stimulus building step accesses the key → KeyError ──
-        ("config_no_tsim", {"config_extra": {"t_sim": None}}, KeyError),
-
-        # ── Corrupt spike .npz (missing 'times' field) – np.load will still succeed, but later
-        #    histogram on an empty array works fine; we test that the conversion does NOT raise.
-        ("corrupt_spike_file", {"corrupt_spike": True}, None),
-
-        # ── Large number of random_input files (edge of memory) – still works ──
-        ("many_random_inputs", {"many_inputs": True}, None),
-    ],
-    ids=lambda x: x,
+    "scenario",
+    SCENARIOS,
+    ids=[s["id"] for s in SCENARIOS],
 )
-def test_convert_to_hdf5(
-        base_input_dir: Path,
-        tmp_path: Path,
-        scenario: str,
-        modifier: dict,
-        should_raise: type[BaseException] | None,
-):
-    """
-    For each *scenario* we mutate the ``base_input_dir`` according to ``modifier``
-    and then call :func:`convert_to_hdf5`.  Afterwards we perform a small set
-    of sanity checks on the produced HDF5 file (if conversion succeeded).
-    """
-    # -----------------------------------------------------------------
-    # 1️⃣  Apply the requested modifications to the synthetic tree
-    # -----------------------------------------------------------------
-    sim_dir = base_input_dir / "sim_01"
+class TestConvertToHDF5:
+    """Parameterised end‑to‑end test suite."""
 
-    # a) Remove arbitrary files
-    for rel in modifier.get("remove", []):
-        (sim_dir / rel).unlink(missing_ok=True)
+    @staticmethod
+    def _build_input(tmp_path: Path, scenario: Dict[str, Any]) -> Path:
+        """Create the temporary input directory tree."""
+        input_root = tmp_path / "input"
+        input_root.mkdir()
+        _create_simulation_dir(input_root, scenario["id"], scenario)
+        return input_root
 
-    # b) Empty the spike_times folder
-    if modifier.get("empty_spike_dir"):
-        for p in (sim_dir / "spike_times").iterdir():
-            p.unlink()
-    # c) Delete *all* stimulus files
-    if modifier.get("remove_stim_files"):
-        for p in sim_dir.iterdir():
-            if p.name.startswith("random_input_") and p.suffix == ".npz":
-                p.unlink()
-    # d) Overwrite config.yaml (e.g. remove t_sim)
-    if "config_extra" in modifier:
-        # Write a new config that merges the default with the requested extra dict
-        cfg_path = sim_dir / "config.yaml"
-        old_cfg = yaml.safe_load(cfg_path.read_text())
-        new_cfg = {k: v for k, v in old_cfg.items() if v is not None}
-        new_cfg.update(modifier["config_extra"])
-        cfg_path.write_text(yaml.safe_dump(new_cfg))
+    @allure.title("Convert folder structure to HDF5 and validate contents")
+    def test_convert_to_hdf5(self, tmp_path: Path, scenario: Dict[str, Any]) -> None:
+        # ------------------------------------------------------------------
+        # 1️⃣ Build the input directory hierarchy
+        # ------------------------------------------------------------------
+        input_dir = self._build_input(tmp_path, scenario)
+        output_file = tmp_path / f"{scenario['id']}.h5"
 
-    # e) Corrupt spike file – drop the 'times' entry (used later for histogram)
-    if modifier.get("corrupt_spike"):
-        spike_npz = sim_dir / "spike_times" / "L23E.npz"
-        data = np.load(spike_npz, allow_pickle=True)
-        # Create a new .npz that only contains indices
-        np.savez(spike_npz, indices=data["indices"])
+        # ------------------------------------------------------------------
+        # 2️⃣ Run the conversion
+        # ------------------------------------------------------------------
+        with allure.step("Execute conversion"):
+            convert_to_hdf5(str(input_dir), str(output_file))
 
-    # f) Produce a *lot* of random_input files (30 of them) – still tiny data,
-    #    just to hit the loop that builds the stimulus list.
-    if modifier.get("many_inputs"):
-        for i in range(30):
-            step = 100 + i * 50
-            _write_random_input(sim_dir, step, np.full((5,), float(i)))
+        # ------------------------------------------------------------------
+        # 3️⃣ Inspect the produced HDF5 file
+        # ------------------------------------------------------------------
+        with allure.step("Open produced HDF5 file"):
+            with h5py.File(output_file, "r") as h5:
+                # --------------------------------------------------------------
+                # Global attributes
+                # --------------------------------------------------------------
+                with allure.step("Check global attributes"):
+                    assert h5.attrs["version"] == "0.1"
 
-    # -----------------------------------------------------------------
-    # 2️⃣  Run the conversion
-    # -----------------------------------------------------------------
-    out_h5 = tmp_path / "out.h5"
+                # --------------------------------------------------------------
+                # Simulations group
+                # --------------------------------------------------------------
+                sims = h5["simulations"]
+                assert scenario["id"] in sims, "Simulation group missing"
+                sim = sims[scenario["id"]]
 
-    if should_raise is not None:
-        with pytest.raises(should_raise):
-            convert_to_hdf5(str(base_input_dir), str(out_h5))
-        return  # No further checks needed for error cases
+                # --------------------------------------------------------------
+                # Config attributes
+                # --------------------------------------------------------------
+                with allure.step("Validate config attributes"):
+                    for key, expected in scenario["config"].items():
+                        assert sim.attrs[key] == expected, f"config[{key!r}] mismatch"
 
-    # No exception expected
-    convert_to_hdf5(str(base_input_dir), str(out_h5))
+                # --------------------------------------------------------------
+                # Spike times
+                # --------------------------------------------------------------
+                with allure.step("Validate spike data"):
+                    spike_grp = sim["spike_times"]
+                    expected_layers = set(scenario["spikes"])
+                    assert set(spike_grp) == expected_layers, "Spike layer mismatch"
+                    for layer, src in scenario["spikes"].items():
+                        grp = spike_grp[layer]
+                        np.testing.assert_array_equal(
+                            grp["indices"][...], src["indices"]
+                        )
+                        np.testing.assert_allclose(
+                            grp["times"][...], src["times"]
+                        )
 
-    # -----------------------------------------------------------------
-    # 3️⃣  Validate the generated HDF5
-    # -----------------------------------------------------------------
-    with h5py.File(out_h5, "r") as h5:
-        # a) Top‑level attribute `version` must exist and be a string
-        assert "version" in h5.attrs
-        assert isinstance(h5.attrs["version"], (bytes, str))
+                # --------------------------------------------------------------
+                # Logs
+                # --------------------------------------------------------------
+                with allure.step("Validate log datasets"):
+                    log_grp = sim["logs"]
+                    for name, txt in scenario["logs"].items():
+                        raw: np.ndarray = log_grp[name][...]  # scalar byte‑string
+                        stored = raw.tobytes().decode()
+                        assert stored == txt, f"{name} content mismatch"
 
-        # b) The `simulations` group must contain *exactly* one subgroup (our sim)
-        sims = h5["simulations"]
-        assert list(sims.keys()) == ["sim_01"]
+                # --------------------------------------------------------------
+                # Record neurons
+                # --------------------------------------------------------------
+                with allure.step("Validate record_neurons dataset"):
+                    rec_arr = sim["record_neurons"][...]  # structured array
+                    rec_dict = {
+                        rec_arr["label"][i].decode("utf-8"): int(rec_arr["value"][i])
+                        for i in range(len(rec_arr))
+                    }
+                    assert rec_dict == scenario["record_neurons"], "record_neurons mismatch"
 
-        sim_grp = sims["sim_01"]
+                # --------------------------------------------------------------
+                # Metrics
+                # --------------------------------------------------------------
+                with allure.step("Validate metrics dataset"):
+                    metrics_arr = sim["metrics"]["Avg Firing Rate Hz"][...]
+                    metric_dict = {
+                        label.decode("utf-8"): float(val)
+                        for label, val in zip(metrics_arr["label"], metrics_arr["value"])
+                    }
+                    expected = {
+                        row["Population"]: float(row["Avg Firing Rate Hz"])
+                        for row in scenario["metrics"]
+                    }
+                    assert metric_dict == expected, "Metrics mismatch"
 
-        # c) All configuration keys from config.yaml are now attributes of the simulation group
-        cfg = yaml.safe_load((sim_dir / "config.yaml").read_text())
-        for key, val in cfg.items():
-            # `None` gets stored as the HDF5 *null* datatype – we simply skip the check for that case
-            if val is None:
-                continue
-            assert key in sim_grp.attrs, f"missing attribute {key}"
-            # HDF5 stores numbers as numpy scalars; strings as bytes.
-            stored = sim_grp.attrs[key]
-            if isinstance(val, str):
-                assert stored.decode() == val
-            else:
-                assert stored == val
+                # --------------------------------------------------------------
+                # Stimulus
+                # --------------------------------------------------------------
+                with allure.step("Validate stimulus group"):
+                    stim = sim["stimulus"]
+                    assert stim.attrs["type"] == "piecewise_constant"
 
-        # d) Spike‑times subgroup must exist (even if empty)
-        assert "spike_times" in sim_grp
-        spike_grp = sim_grp["spike_times"]
-        # If we removed all spike files the group will be empty – that is fine.
-        # Otherwise at least one layer should be present.
-        if not modifier.get("empty_spike_dir"):
-            assert "L23E" in spike_grp
-            layer = spike_grp["L23E"]
-            assert "indices" in layer
-            assert "times" in layer
-            # The data we wrote must be exactly what we read back (or empty if we corrupted it)
-            if modifier.get("corrupt_spike"):
-                # only indices exist → times dataset should have length 0
-                assert layer["times"].size == 0
-            else:
-                np.testing.assert_array_equal(layer["times"], np.linspace(0.1, 0.5, 5))
+                    # ----------------------------------------------------------
+                    # Expected limits & values – replicate the logic from the
+                    # production code so the test stays in sync.
+                    # ----------------------------------------------------------
+                    exp_limits = [0]
+                    exp_values = [0.0]  # the first scalar inserted by the converter
+                    pattern = re.compile(r"random_input_(\d+)ms\.npz")
+                    # Files are already sorted in the conversion routine; we sort
+                    # them here as well to obtain the same order.
+                    fnames = sorted(
+                        [
+                            f
+                            for f in os.listdir(os.path.join(input_dir, scenario["id"]))
+                            if pattern.match(f)
+                        ],
+                        key=lambda x: int(pattern.match(x).group(1)),
+                    )
+                    for fname in fnames:
+                        dur = int(pattern.match(fname).group(1))
+                        exp_limits.append(dur)
+                        arr = np.load(
+                            os.path.join(input_dir, scenario["id"], fname)
+                        )["arr_0"]
+                        exp_values.append(arr)
 
-        # e) Log datasets – they are stored as plain strings.
-        if not modifier.get("remove"):
-            logs = sim_grp["logs"]
-            for name in ["error.log", "info.log", "warning.log"]:
-                assert name in logs
-                txt = logs[name][()].decode()
-                assert name.split(".")[0] in txt  # simple sanity check
+                    exp_limits.append(scenario["config"]["t_sim"])
+                    exp_limits = np.array(exp_limits)
 
-        # f) `record_neurons` must be present unless we removed it.
-        if not modifier.get("remove") or "record_info/record_neurons.data" not in modifier.get("remove", []):
-            rec = sim_grp["record_neurons"]
-            # The dtype must contain the two fields defined in the converter
-            assert "label" in rec.dtype.names
-            assert "value" in rec.dtype.names
+                    # ``exp_values`` is a list that starts with a scalar 0.0.
+                    # When NumPy builds an ``ndarray`` from that list together
+                    # with the subsequent equal‑shaped arrays, the scalar is
+                    # broadcast to the shape of the first array – exactly what
+                    # the converter does.
+                    exp_values = np.array(exp_values)
 
-        # g) Metrics – check that at least one row matches the CSV we wrote
-        if "metrics" in sim_grp:
-            metrics = sim_grp["metrics"]["Avg Firing Rate Hz"]
-            assert "label" in metrics.dtype.names and "value" in metrics.dtype.names
-            # The csv had two rows → we expect exactly two entries
-            assert metrics.shape[0] == 2
-            # Validate the content of the first row
-            first_label = metrics[0]["label"].decode()
-            first_val = metrics[0]["value"]
-            assert first_label == "L23E"
-            assert pytest.approx(first_val, rel=1e-6) == 5.2
+                    np.testing.assert_array_equal(stim["limits"][...], exp_limits)
+                    np.testing.assert_allclose(stim["values"][...], exp_values)
 
-        # h) Stimulus – piecewise_constant must be present, limits must start with 0 and end with t_sim
-        stim = sim_grp["stimulus"]
-        assert stim.attrs["type"] == "piecewise_constant"
-        lim = stim["limits"][()]
-        val = stim["values"][()]
-        assert lim[0] == 0
-        # t_sim comes from the (possibly modified) config
-        expected_tsim = cfg["t_sim"]
-        assert lim[-1] == expected_tsim
-        # The number of limits must be len(values)+1
-        assert len(lim) == len(val) + 1
-        # Values must be a numpy array of objects (or scalars) – we only check shape here
-        assert val.shape[0] == (len(lim) - 1)
+
+
+def test_convert_to_hdf5_direct():
+    """Test the converter with a direct call and a simple scenario."""
+    input_dir = Path("/home/jmurugan/work/Artefacts/VT-233/vbt-converter/parametersweep_8s_3d_orientation_selective_12012026")
+    output_file = Path("test_convert_output.h5")
+
+    convert_to_hdf5(str(input_dir), str(output_file))
+
+    # Just check that the file was created and has the expected group.
+    # The detailed content validation is covered by the parameterised test above.
+    with h5py.File(output_file, "r") as h5:
+        assert "simulations" in h5

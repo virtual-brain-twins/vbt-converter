@@ -355,7 +355,7 @@ class TestConvertToHDF5:
 
 def test_convert_to_hdf5_direct():
     """Test the converter with a direct call and a simple scenario."""
-    input_dir = Path("/home/jmurugan/work/Artefacts/VT-233/vbt-converter/parametersweep_8s_3d_orientation_selective_12012026")
+    input_dir = Path("/home/jmurugan/work/Artefacts/VT-233/vbt-converter/tests/test_data/parametersweep_8s_3d_orientation_selective_12012026")
     output_file = Path("test_convert_output.h5")
 
     convert_to_hdf5(str(input_dir), str(output_file))

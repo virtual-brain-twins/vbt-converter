@@ -34,6 +34,7 @@ vbt_setup_job:
     - docker
     - jsc-cloud
     - fenix
+    - vbt-test-vm03
   before_script:
     - echo "Installing jq and Python in the Alpine runner …"
     - apk add --no-cache jq python3 bash

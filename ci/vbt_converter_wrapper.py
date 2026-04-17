@@ -74,7 +74,7 @@ def main() -> None:
         sys.executable,  # use the same Python interpreter
         str(converter_script),
         "--input_dir",
-        str(args.input_dir.resolve()),
+        str(args.input_dir.resolve() / "parametersweep_8s_3d_orientation_selective_12012026"),
         "--output_file",
         str(output_hdf),
     ]

@@ -128,14 +128,13 @@ def main() -> None:
         result = subprocess.run(['h5diff', '-q', ground_truth, output_hdf])
         success = result.returncode == 0
         template = (ci_root / "ci" / "test_result.html").read_text()
-
-        filled = template.format(
-            ground_truth=ground_truth,
-            output_hdf=output_hdf,
-            status_class="success" if success else "failure",
-            status_message="✅ Comparison using h5diff tool succeeded" if success else "❌ Comparison FAILED"
+        filled = (
+            template
+            .replace("{ground_truth}", ground_truth)
+            .replace("{output_hdf}", str(output_hdf))
+            .replace("{status_class}", "success" if success else "failure")
+            .replace("{status_message}", "✅ Comparison using h5diff tool succeeded" if success else "❌ Comparison FAILED")
         )
-
         report_path: Path = args.output_dir / "test_result_report.html"
         report_path.write_text(filled)
 

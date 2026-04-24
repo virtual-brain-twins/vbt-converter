@@ -124,6 +124,23 @@ def main() -> None:
 
         print(f"[INFO] Conversion successful – file copied to {destination}")
 
+        ground_truth = str(args.input_dir.resolve() / "ground_truth" / "test_convert_output.h5")
+        result = subprocess.run(['h5diff', '-q', ground_truth, output_hdf])
+        success = result.returncode == 0
+        template = (ci_root / "ci" / "test_result.html").read_text()
+
+        filled = template.format(
+            ground_truth=ground_truth,
+            output_hdf=output_hdf,
+            status_class="success" if success else "failure",
+            status_message="✅ Comparison using h5diff tool succeeded" if success else "❌ Comparison FAILED"
+        )
+
+        report_path: Path = args.output_dir / "test_result_report.html"
+        report_path.write_text(filled)
+
+        print(f"[INFO] Report written to {report_path}")
+
 
 # ----------------------------------------------------------------------
 # Script entry point

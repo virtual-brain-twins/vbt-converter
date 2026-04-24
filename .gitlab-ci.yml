@@ -64,6 +64,7 @@ vbt_test_job:
     VBT_ENTRY_SCRIPT: "${CI_PROJECT_DIR}/ci/vbt_converter_wrapper.py"
     VBT_INPUT_PATH: "${CI_PROJECT_DIR}/tests/test_data/parametersweep_8s_3d_orientation_selective_12012026"
     VBT_OUTPUT_PATH: "${CI_PROJECT_DIR}/data/"
+    VBT_ENABLE_OUTPUT_DIR_RECURSIVE_ATTACH: "false" # Do not attach the whole output dir as artifact
     # Allure results are written to `allure-results/`
     # -----------------------------------------------------------------
     # Allure / tests‑metadata – feel free to adapt the wording
@@ -77,7 +78,7 @@ vbt_test_job:
     VBT_ALLURE_DESCRIPTION_HTML: "${CI_PROJECT_DIR}/tests/docs/convert_direc_to_hdf_description.html"
   before_script:
     - echo "Installing dependencies in the docker runner …"
-    - apk add --no-cache jq python3 bash perl gettext curl
+    - apk add --no-cache jq python3 bash perl gettext curl hdf5-tools
     - !reference [ .VBT_RUN, before_script ]  # Calls the base "method"
   # The artifacts are needed by the publishing stage (Allure results)
   cache:

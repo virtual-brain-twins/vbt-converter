@@ -61,6 +61,7 @@ vbt_test_job:
       artifacts: true                     # the virtual‑env is passed as artifact
   variables:
     # The entry‑script for the tests stage is simply “pytest”
+    HDF5_DISABLE_VERSION_CHECK: "1"  # Avoid HDF5 version check warnings in the logs
     VBT_ENTRY_SCRIPT: "${CI_PROJECT_DIR}/ci/vbt_converter_wrapper.py"
     VBT_INPUT_PATH: "${CI_PROJECT_DIR}/tests/test_data/parametersweep_8s_3d_orientation_selective_12012026"
     VBT_OUTPUT_PATH: "${CI_PROJECT_DIR}/data/"

@@ -117,6 +117,7 @@ def main() -> None:
         sys.exit(1)
 
     logger.info("Using converter script: %s", converter_script)
+    converted_hdf5 = None
 
     with tempfile.TemporaryDirectory() as tmp_dir_str:
         output_hdf = (
@@ -168,83 +169,89 @@ def main() -> None:
         # Copy the resulting HDF5 file to the user‑specified output directory
         # ------------------------------------------------------------------
         args.output_dir.mkdir(parents=True, exist_ok=True)
-        destination = args.output_dir / output_hdf.name
+        converted_hdf5 = args.output_dir / output_hdf.name
 
         try:
-            shutil.copy2(output_hdf, destination)
+            shutil.copy2(output_hdf, converted_hdf5)
         except OSError as exc:
             logger.error(
-                "Could not copy %s → %s: %s", output_hdf, destination, exc
+                "Could not copy %s → %s: %s", output_hdf, converted_hdf5, exc
             )
             sys.exit(1)
 
-        logger.info("Conversion successful – file copied to %s", destination)
+        logger.info("Conversion successful – file copied to %s", converted_hdf5)
 
-        # ------------------------------------------------------------------
-        # Compare with ground‑truth using h5diff and generate a tiny HTML report
-        # ------------------------------------------------------------------
-        ground_truth = (
-                args.input_dir.resolve()
-                / "ground_truth"
-                / "test_convert_output.h5"
-        )
-        logger.debug("Ground‑truth file: %s", ground_truth)
+    # ------------------------------------------------------------------
+    # Compare with ground‑truth using h5diff and generate a tiny HTML report
+    # ------------------------------------------------------------------
+    ground_truth = (
+            args.input_dir.resolve()
+            / "ground_truth"
+            / "test_convert_output.h5"
+    )
+    logger.debug("Ground‑truth file: %s", ground_truth)
 
-        result = subprocess.run(
-            ["h5diff", "-q", str(ground_truth), str(output_hdf)],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True
-        )
-        success = result.returncode == 0
-        # Build the status_message string
-        # --------------------------------------------------------------
-        if result.returncode == 0:
-            # Files are identical – nothing else to report
-            status_message = "✅  Files are identical."
+    result = subprocess.run(
+        ["h5diff", "-q", str(ground_truth), str(converted_hdf5)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True
+    )
+    success = result.returncode == 0
+    # Build the status_message string
+    # --------------------------------------------------------------
+    if result.returncode == 0:
+        # Files are identical – nothing else to report
+        status_message = "✅  Files are identical."
 
-        elif result.returncode == 1:
-            # Files differ – attach the detailed diff
-            status_message = (
-                "❌  Files differ – see the diff below:\n"
-                f"{result.stdout}"  # the diff output from h5diff
-            )
-
-        elif result.returncode == 2:
-            # h5diff itself failed – report the error text
-            status_message = (
-                "⚠️  h5diff reported an error:\n"
-                f"{result.stderr}"
-            )
-
-        else:  # returncode 3 or any unexpected value
-            status_message = (
-                f"⚠️  Unexpected return code {success}\n"
-                "stdout:\n"
-                f"{result.stdout}\n"
-                "stderr:\n"
-                f"{result.stderr}"
-            )
-        logger.info(
-            "Comparison result: %s, status message: %s",
-            "success" if success else "failure",
-            status_message
+    elif result.returncode == 1:
+        # Files differ – attach the detailed diff
+        status_message = (
+            "❌  Files differ – see the diff below:\n"
+            "stdout:\n"
+            f"{result.stdout}\n"
+            "stderr:\n"
+            f"{result.stderr}"
         )
 
-        template_path = ci_root / "ci" / "test_result.html"
-        template = template_path.read_text()
-        filled = (
-            template
-            .replace("{ground_truth}", str(ground_truth))
-            .replace("{output_hdf}", str(output_hdf))
-            .replace("{status_class}", "success" if success else "failure")
-            .replace("{status_message}", status_message,
-                     )
+    elif result.returncode == 2:
+        # h5diff itself failed – report the error text
+        status_message = (
+            "⚠️  h5diff reported an error:\n"
+            "stdout:\n"
+            f"{result.stdout}\n"
+            "stderr:\n"
+            f"{result.stderr}"
         )
-        report_path: Path = args.output_dir / "test_result_report.html"
-        report_path.write_text(filled)
 
-        logger.info("Report written to %s", report_path)
+    else:  # returncode 3 or any unexpected value
+        status_message = (
+            f"⚠️  Unexpected return code {success}\n"
+            "stdout:\n"
+            f"{result.stdout}\n"
+            "stderr:\n"
+            f"{result.stderr}"
+        )
+    logger.info(
+        "Comparison result: %s, status message: %s",
+        "success" if success else "failure",
+        status_message
+    )
+
+    template_path = ci_root / "ci" / "test_result.html"
+    template = template_path.read_text()
+    filled = (
+        template
+        .replace("{ground_truth}", str(ground_truth))
+        .replace("{output_hdf}", str(output_hdf))
+        .replace("{status_class}", "success" if success else "failure")
+        .replace("{status_message}", status_message,
+                 )
+    )
+    report_path: Path = args.output_dir / "test_result_report.html"
+    report_path.write_text(filled)
+
+    logger.info("Report written to %s", report_path)
 
 
 # ----------------------------------------------------------------------

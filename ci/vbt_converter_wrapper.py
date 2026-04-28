@@ -281,7 +281,7 @@ def create_link_html(output_file: Path, logger: logging.Logger) -> None:
     <title>Converted HDF5 File</title>
 </head>
 <body>
-    <p><a href="{artifact_url}">Converted HDF5 File</a></p>
+    <p><a href="{artifact_url}" target="_blank" rel="noopener noreferrer">Converted HDF5 File</a></p>
 </body>
 </html>
 """

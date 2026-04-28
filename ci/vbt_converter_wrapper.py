@@ -169,7 +169,8 @@ def main() -> None:
         # Copy the resulting HDF5 file to the user‑specified output directory
         # ------------------------------------------------------------------
         args.output_dir.mkdir(parents=True, exist_ok=True)
-        converted_hdf5 = Path(str(os.getenv("OUTPUT_HDF5_PATH")))
+        converted_hdf5 = Path(str(os.getenv("OUTPUT_HDF5_PATH"))).expanduser().resolve()
+        converted_hdf5.parent.mkdir(parents=True, exist_ok=True)
 
         try:
             shutil.copy2(output_hdf5, converted_hdf5)

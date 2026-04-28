@@ -78,6 +78,7 @@ vbt_test_job:
     VBT_ALLURE_FEATURE: "Synthetic data generation + full conversion validation"
     VBT_ALLURE_STORY: "Create a comprehensive pytest matrix that exercises every code path"
     VBT_ALLURE_DESCRIPTION_HTML: "${CI_PROJECT_DIR}/tests/docs/convert_direc_to_hdf_description.html"
+    VBT_ALLURE_TEST_TITLE: "test_vbt_parameter_sweep_dir_to_hdf5"
   before_script:
     - echo "Installing dependencies in the docker runner …"
     - apk add --no-cache jq python3 bash perl gettext curl hdf5-tools

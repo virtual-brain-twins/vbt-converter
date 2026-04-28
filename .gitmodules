@@ -1,4 +1,4 @@
 [submodule "ci/template_repo"]
 	path = ci/template_repo
 	url = https://gitlab.jsc.fz-juelich.de/virtualbraintwin/VBT_protocol_template.git
-	branch = VT-233-implement-end-to-end-vbt-simulation-data-conversion-dir-→-hdf-5-→-dsr-in-vbt-converter
+	branch = main

@@ -262,7 +262,7 @@ def create_link_html(output_file: Path, logger: logging.Logger) -> None:
     Write a minimal HTML file that contains a link to the converted HDF5 artifact.
 
     The URL is built from the environment variable ``VBT_ALLURE_LINK_JOB`` and the
-    fixed path ``/artifacts/browse/converted.hdf5``.  If the environment variable
+    fixed path ``/artifacts/file/converted/converted.hdf5``.  If the environment variable
     is not defined the function raises a clear ``RuntimeError``.
     """
     base_url = os.getenv("VBT_ALLURE_LINK_JOB")
@@ -272,7 +272,7 @@ def create_link_html(output_file: Path, logger: logging.Logger) -> None:
         )
 
     # Ensure we don't end up with a double slash when we concatenate.
-    artifact_url = f"{base_url.rstrip('/')}/artifacts/browse/converted/converted.hdf5"
+    artifact_url = f"{base_url.rstrip('/')}/artifacts/file/converted/converted.hdf5"
 
     html_content = f"""<!DOCTYPE html>
 <html lang="en">

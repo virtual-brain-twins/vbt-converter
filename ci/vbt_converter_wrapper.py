@@ -120,14 +120,14 @@ def main() -> None:
     converted_hdf5 = None
 
     with tempfile.TemporaryDirectory() as tmp_dir_str:
-        output_hdf = (
+        output_hdf5 = (
                 Path(tmp_dir_str)
                 / "data"
                 / "converted"
-                / "parametersweep_8s_3d_orientation_selective_12012026.hdf"
+                / "parametersweep_8s_3d_orientation_selective_12012026.hdf5"
         )
-        output_hdf.parent.mkdir(parents=True, exist_ok=True)  # ensure target folder exists
-        logger.debug("Temporary HDF5 output will be written to %s", output_hdf)
+        output_hdf5.parent.mkdir(parents=True, exist_ok=True)  # ensure target folder exists
+        logger.debug("Temporary HDF5 output will be written to %s", output_hdf5)
 
         # ------------------------------------------------------------------
         # Assemble the command line for the converter
@@ -138,7 +138,7 @@ def main() -> None:
             "--input_dir",
             str(args.input_dir.resolve() / "parametersweep_8s_3d_orientation_selective_12012026"),
             "--output_file",
-            str(output_hdf),
+            str(output_hdf5),
         ]
 
         # ------------------------------------------------------------------
@@ -159,23 +159,23 @@ def main() -> None:
         # ------------------------------------------------------------------
         # Verify that the converter produced the expected file
         # ------------------------------------------------------------------
-        if not output_hdf.is_file():
-            logger.error("Expected output file was not created: %s", output_hdf)
+        if not output_hdf5.is_file():
+            logger.error("Expected output file was not created: %s", output_hdf5)
             sys.exit(1)
 
-        logger.info("Converter produced expected file: %s", output_hdf)
+        logger.info("Converter produced expected file: %s", output_hdf5)
 
         # ------------------------------------------------------------------
         # Copy the resulting HDF5 file to the user‑specified output directory
         # ------------------------------------------------------------------
         args.output_dir.mkdir(parents=True, exist_ok=True)
-        converted_hdf5 = args.output_dir / output_hdf.name
+        converted_hdf5 = Path(str(os.getenv("OUTPUT_HDF5_PATH")))
 
         try:
-            shutil.copy2(output_hdf, converted_hdf5)
+            shutil.copy2(output_hdf5, converted_hdf5)
         except OSError as exc:
             logger.error(
-                "Could not copy %s → %s: %s", output_hdf, converted_hdf5, exc
+                "Could not copy %s → %s: %s", output_hdf5, converted_hdf5, exc
             )
             sys.exit(1)
 
@@ -185,7 +185,9 @@ def main() -> None:
     # Compare with ground‑truth using h5diff and generate a tiny HTML report
     # ------------------------------------------------------------------
     ground_truth = (
-            args.input_dir.resolve()
+            ci_root
+            / "tests"
+            / "test_data"
             / "ground_truth"
             / "test_convert_output.h5"
     )
@@ -243,15 +245,50 @@ def main() -> None:
     filled = (
         template
         .replace("{ground_truth}", str(ground_truth))
-        .replace("{output_hdf}", str(output_hdf))
+        .replace("{output_hdf}", str(converted_hdf5))
         .replace("{status_class}", "success" if success else "failure")
         .replace("{status_message}", status_message,
                  )
     )
     report_path: Path = args.output_dir / "test_result_report.html"
     report_path.write_text(filled)
-
+    create_link_html(args.output_dir / "converted_hdf5_link.html", logger)
     logger.info("Report written to %s", report_path)
+
+
+def create_link_html(output_file: Path, logger: logging.Logger) -> None:
+    """
+    Write a minimal HTML file that contains a link to the converted HDF5 artifact.
+
+    The URL is built from the environment variable ``VBT_ALLURE_LINK_JOB`` and the
+    fixed path ``/artifacts/browse/converted.hdf5``.  If the environment variable
+    is not defined the function raises a clear ``RuntimeError``.
+    """
+    base_url = os.getenv("VBT_ALLURE_LINK_JOB")
+    if not base_url:
+        raise RuntimeError(
+            "Environment variable 'VBT_ALLURE_LINK_JOB' is not set."
+        )
+
+    # Ensure we don't end up with a double slash when we concatenate.
+    artifact_url = f"{base_url.rstrip('/')}/artifacts/browse/converted/converted.hdf5"
+
+    html_content = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Converted HDF5 File</title>
+</head>
+<body>
+    <p><a href="{artifact_url}">Converted HDF5 File</a></p>
+</body>
+</html>
+"""
+
+    # Write the file (parents are created automatically if they do not exist)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    output_file.write_text(html_content, encoding="utf-8")
+    logger.info(f"HTML file created at: {output_file.resolve()}")
 
 
 # ----------------------------------------------------------------------

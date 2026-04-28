@@ -66,6 +66,7 @@ vbt_test_job:
     VBT_INPUT_PATH: "${CI_PROJECT_DIR}/tests/test_data/parametersweep_8s_3d_orientation_selective_12012026"
     VBT_OUTPUT_PATH: "${CI_PROJECT_DIR}/data/"
     VBT_ENABLE_OUTPUT_DIR_RECURSIVE_ATTACH: "false" # Do not attach the whole output dir as artifact
+    OUTPUT_HDF5_PATH: "${CI_PROJECT_DIR}/converted/converted.hdf5" # Path to the converted HDF5 file (which is the only output artifact we want to attach to CI Job)
     # Allure results are written to `allure-results/`
     # -----------------------------------------------------------------
     # Allure / tests‑metadata – feel free to adapt the wording
@@ -91,6 +92,7 @@ vbt_test_job:
     when: always
     paths:
       - allure-results/
+      - "${CI_PROJECT_DIR}/converted"
     expire_in: 1 week
 
 # -----------------------------------------------------------------

@@ -44,17 +44,13 @@ vbt_setup_job:
     # Use the project's own requirements (which must contain pytest, h5py, pandas, pyyaml, tqdm, numpy, allure‑pytest‑plugin)
     VBT_REQUIREMENTS: "${CI_PROJECT_DIR}/requirements.txt"
 
-# -----------------------------------------------------------------
-# Run the parametrised pytest suite
-# -----------------------------------------------------------------
-vbt_test_job:
+test_vbt_convert_parameter_sweep_dir_to_hdf5:
   extends: .VBT_RUN                       # provided by the template
   stage: test
   tags:
     - docker
     - jsc-cloud
     - fenix
-    - vbt-test-vm03
   image: docker:cli
   needs:
     - job: vbt_setup_job
@@ -62,7 +58,7 @@ vbt_test_job:
   variables:
     # The entry‑script for the tests stage is simply “pytest”
     HDF5_DISABLE_VERSION_CHECK: "1"  # Avoid HDF5 version check warnings in the logs
-    VBT_ENTRY_SCRIPT: "${CI_PROJECT_DIR}/ci/vbt_converter_wrapper.py"
+    VBT_ENTRY_SCRIPT: "${CI_PROJECT_DIR}/ci/vbt_converter_ps_to_hdf5_wrapper.py"
     VBT_INPUT_PATH: "${CI_PROJECT_DIR}/tests/test_data/parametersweep_8s_3d_orientation_selective_12012026"
     VBT_OUTPUT_PATH: "${CI_PROJECT_DIR}/data/"
     VBT_ENABLE_OUTPUT_DIR_RECURSIVE_ATTACH: "false" # Do not attach the whole output dir as artifact
@@ -72,13 +68,13 @@ vbt_test_job:
     # Allure / tests‑metadata – feel free to adapt the wording
     # -----------------------------------------------------------------
     VBT_ALLURE_PARENT_SUITE: "VBT‑converter CI/CD"
-    VBT_ALLURE_SUITE: "convert_direc_to_hdf – Parameterised Tests"
+    VBT_ALLURE_SUITE: "convert_param_sweep_direc_to_hdf – Parameterised Tests"
     VBT_ALLURE_SUB_SUITE: "Execution of synthetic‑dataset validation"
     VBT_ALLURE_EPIC: "Guarantee that the converter works for every possible input layout"
     VBT_ALLURE_FEATURE: "Synthetic data generation + full conversion validation"
     VBT_ALLURE_STORY: "Create a comprehensive pytest matrix that exercises every code path"
     VBT_ALLURE_DESCRIPTION_HTML: "${CI_PROJECT_DIR}/tests/docs/convert_direc_to_hdf_description.html"
-    VBT_ALLURE_TEST_TITLE: "test_vbt_parameter_sweep_dir_to_hdf5"
+    VBT_ALLURE_TEST_TITLE: "test_vbt_convert_parameter_sweep_dir_to_hdf5"
   before_script:
     - echo "Installing dependencies in the docker runner …"
     - apk add --no-cache jq python3 bash perl gettext curl hdf5-tools
@@ -96,6 +92,48 @@ vbt_test_job:
       - "${CI_PROJECT_DIR}/converted"
     expire_in: 1 week
 
+test_vbt_convert_hdf5_to_dsr:
+  extends: .VBT_RUN
+  stage: test
+  tags:
+    - docker
+    - jsc-cloud
+    - fenix
+  image: docker:cli
+  needs:
+    - job: test_vbt_convert_parameter_sweep_dir_to_hdf5
+      artifacts: true
+  variables:
+    # The entry‑script for the tests stage is simply “pytest”
+    VBT_ENTRY_SCRIPT: "${CI_PROJECT_DIR}/ci/vbt_converter_hdf5_to_dsr_wrapper.py"
+    VBT_INPUT_PATH: "${CI_PROJECT_DIR}/converted/" #${CI_PROJECT_DIR}/converted/converted.hdf5 to be used
+    VBT_OUTPUT_PATH: "${CI_PROJECT_DIR}/data/"
+    VBT_ENABLE_INPUT_DIR_RECURSIVE_ATTACH: "false"
+    VBT_ENABLE_OUTPUT_DIR_RECURSIVE_ATTACH: "false"
+    OUTPUT_NPZ_PATH: "${CI_PROJECT_DIR}/converted/converted.npz" # Path to the converted numpy file (which is the only output artifact we want to attach to CI Job)
+    # Allure results are written to `allure-results/`
+    # -----------------------------------------------------------------
+    # Allure / tests‑metadata – feel free to adapt the wording
+    # -----------------------------------------------------------------
+    VBT_ALLURE_PARENT_SUITE: "VBT‑converter CI/CD"
+    VBT_ALLURE_SUITE: "convert_hdf5_to_dsr – Parameterised Tests"
+    VBT_ALLURE_SUB_SUITE: "Execution of synthetic‑dataset validation"
+    VBT_ALLURE_EPIC: "Guarantee that the converter works for every possible input layout"
+    VBT_ALLURE_FEATURE: "Synthetic data generation + full conversion validation"
+    VBT_ALLURE_STORY: "Create a comprehensive pytest matrix that exercises every code path"
+    VBT_ALLURE_DESCRIPTION_HTML: "${CI_PROJECT_DIR}/tests/docs/convert_direc_to_hdf_description.html"
+    VBT_ALLURE_TEST_TITLE: "test_vbt_convert_hdf5_to_dsr"
+  before_script:
+    - echo "Installing dependencies in the docker runner …"
+    - apk add --no-cache jq python3 bash perl gettext curl
+    - !reference [ .VBT_RUN, before_script ]  # Calls the base "method"
+  artifacts:
+    when: always
+    paths:
+      - allure-results/
+      - "${CI_PROJECT_DIR}/converted"
+    expire_in: 1 week
+
 # -----------------------------------------------------------------
 # PUBLISH – push the Allure report to the VBT‑template publish job
 # -----------------------------------------------------------------
@@ -103,7 +141,7 @@ vbt_publish_job:
   extends: .VBT_PUBLISH
   stage: publish_report
   needs:
-    - job: vbt_test_job
+    - job: test_vbt_convert_parameter_sweep_dir_to_hdf5
       artifacts: true
   variables:
     VBT_PUBLISH_SCRIPT: "${CI_PROJECT_DIR}/ci/template_repo/ci/scripts/publish_report.sh"

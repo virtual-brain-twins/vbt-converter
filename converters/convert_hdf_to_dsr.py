@@ -2,8 +2,6 @@ import argparse
 
 import h5py
 import numpy as np
-import pandas as pd
-import tqdm
 
 parameters = ['scale_num_neurons', 'scale_syn_strength', 'scale_nmda_efficacy']
 parameters_short = ["numneur", "synstr", "nmdaeff"]

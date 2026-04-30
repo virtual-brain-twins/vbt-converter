@@ -124,7 +124,7 @@ def main() -> None:
             sys.executable,  # use the same Python interpreter
             str(converter_script),
             "--input_file",
-            str(args.input_dir.resolve() / "converted.hdf5"),
+            str(args.input_dir.resolve() / "converted" / "converted.hdf5"),
             "--output_file",
             str(output_npz),
             "--bin_size",

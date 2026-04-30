@@ -74,6 +74,7 @@ test_vbt_convert_parameter_sweep_dir_to_hdf5:
     VBT_ALLURE_FEATURE: "Synthetic data generation + full conversion validation"
     VBT_ALLURE_STORY: "Create a comprehensive pytest matrix that exercises every code path"
     VBT_ALLURE_DESCRIPTION_HTML: "${CI_PROJECT_DIR}/tests/docs/convert_direc_to_hdf_description.html"
+    VBT_DYNAMIC_TEST_NAME_SUFFIX: "test_vbt_convert_parameter_sweep_dir_to_hdf5"
     VBT_ALLURE_TEST_TITLE: "test_vbt_convert_parameter_sweep_dir_to_hdf5"
   before_script:
     - echo "Installing dependencies in the docker runner …"
@@ -124,6 +125,7 @@ test_vbt_convert_hdf5_to_dsr:
     VBT_ALLURE_FEATURE: "Synthetic data generation + full conversion validation"
     VBT_ALLURE_STORY: "Create a comprehensive pytest matrix that exercises every code path"
     VBT_ALLURE_DESCRIPTION_HTML: "${CI_PROJECT_DIR}/tests/docs/convert_direc_to_hdf_description.html"
+    VBT_DYNAMIC_TEST_NAME_SUFFIX: "test_vbt_convert_hdf5_to_dsr"
     VBT_ALLURE_TEST_TITLE: "test_vbt_convert_hdf5_to_dsr"
   before_script:
     - echo "Installing dependencies in the docker runner …"

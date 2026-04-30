@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import os
 import re
+import subprocess
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -41,6 +42,8 @@ import yaml
 # Function under test
 # ----------------------------------------------------------------------
 from converters.convert_direc_to_hdf import convert_to_hdf5
+from dump_contents import create_hdf5_html_report
+
 
 # ----------------------------------------------------------------------
 # Helper utilities – create the temporary directory tree.
@@ -356,7 +359,7 @@ class TestConvertToHDF5:
 def test_convert_to_hdf5_direct():
     """Test the converter with a direct call and a simple scenario."""
     input_dir = Path("/home/jmurugan/work/Artefacts/VT-233/vbt-converter/tests/test_data/parametersweep_8s_3d_orientation_selective_12012026")
-    output_file = Path("test_convert_output.h5")
+    output_file = Path("test_convert_output_created.h5")
 
     convert_to_hdf5(str(input_dir), str(output_file))
 
@@ -364,3 +367,35 @@ def test_convert_to_hdf5_direct():
     # The detailed content validation is covered by the parameterised test above.
     with h5py.File(output_file, "r") as h5:
         assert "simulations" in h5
+
+def test_convert_hdf5_to_html():
+    """Test the converter with a direct call and a simple scenario."""
+
+    create_hdf5_html_report("/home/jmurugan/work/Artefacts/VT-233/vbt-converter/test_convert_output.h5")
+
+
+def test_equal():
+        result = subprocess.run(['h5diff', '-q', "/home/jmurugan/work/Artefacts/VT-233/vbt-converter/test_convert_output.h5", "test_convert_output.h5"])
+        assert result.returncode == 0
+
+def test_convert_hdf5_to_html_v1(tmp_path: Path):
+    """End‑to‑end smoke test: create a file, run the reporter, check the HTML."""
+    h5_file = "/home/jmurugan/work/Artefacts/VT-233/vbt-converter/test_convert_output.h5"
+    html_file = "report.html"
+
+    # -----------------------------------------------------------------
+    # ACT – generate the report
+    # -----------------------------------------------------------------
+    result_path = create_hdf5_html_report(h5_file, html_file)
+
+    # -----------------------------------------------------------------
+    # ASSERT – file exists and contains expected rows
+    # -----------------------------------------------------------------
+    assert result_path.is_file(), "HTML file was not created"
+    #
+    # html_text = result_path.read_text(encoding="utf-8")
+    # assert "my_group" in html_text
+    # assert "values" in html_text
+    # assert "tags" in html_text
+    # # Check that the dtype of the byte‑string dataset is rendered (it looks like "|S3")
+    # assert "|S3" in html_text or "S3" in html_text

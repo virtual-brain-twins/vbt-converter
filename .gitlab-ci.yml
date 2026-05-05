@@ -59,9 +59,8 @@ unit_tests:
     - echo "Installing dependencies in the docker runner …"
     - apk add --no-cache jq python3 bash perl gettext curl
     - !reference [ .VBT_RUN, before_script ]  # Calls the base "method"
-  script:
-    - echo "Running unit tests with pytest …"
-    - pytest -s --alluredir=allure-results tests/unit
+  variables:
+    VBT_TEST_PATHS: "tests/unit"  # Override the default test suite path to point to the unit tests
   artifacts:
     when: always
     paths:

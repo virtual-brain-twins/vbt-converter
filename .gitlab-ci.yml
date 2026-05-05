@@ -56,9 +56,9 @@ unit_tests:
     - job: vbt_setup_job
       artifacts: true
   before_script:
-    - echo "Installing jq and Python in the Alpine runner …"
-    - apk add --no-cache jq python3 bash curl
-    - !reference [ .VBT_SETUP, before_script ]  # Calls the base "method"
+    - echo "Installing dependencies in the docker runner …"
+    - apk add --no-cache jq python3 bash perl gettext curl
+    - !reference [ .VBT_RUN, before_script ]  # Calls the base "method"
   variables:
     VBT_TEST_PATHS: "tests/unit"  # Override the default test suite path to point to the unit tests
   artifacts:

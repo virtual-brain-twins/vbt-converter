@@ -55,10 +55,6 @@ unit_tests:
   needs:
     - job: vbt_setup_job
       artifacts: true
-  before_script:
-    - echo "Installing dependencies in the docker runner …"
-    - apk add --no-cache jq python3 bash perl gettext curl
-    - !reference [ .VBT_RUN, before_script ]  # Calls the base "method"
   variables:
     VBT_TEST_PATHS: "tests/unit"  # Override the default test suite path to point to the unit tests
   artifacts:
@@ -97,7 +93,8 @@ test_vbt_convert_parameter_sweep_dir_to_hdf5:
     VBT_ALLURE_SUB_SUITE: "Conversion of parameter‑sweep‑style directories to HDF5 file and validation of the converted file against the ground‑truth HDF5 file"
     VBT_ALLURE_EPIC: "Guarantee that the converter works for every possible input layout"
     VBT_ALLURE_FEATURE: "Use of cached test data to validate the converter’s functionality for a directory layout that is representative of real‑world use cases"
-    VBT_ALLURE_STORY: "https://tvb-projects.atlassian.net/browse/VT-233"
+    VBT_ALLURE_STORY: "Integration test for the conversion of parameter‑sweep‑style directories to HDF5 file and validation of the converted file against the ground‑truth HDF5 file (https://tvb-projects.atlassian.net/browse/VT-233)"
+    VBT_ALLURE_LINK_JIRA: "https://tvb-projects.atlassian.net/browse/VT-233"
     VBT_ALLURE_DESCRIPTION_HTML: "${CI_PROJECT_DIR}/tests/docs/convert_direc_to_hdf_description.html"
     VBT_DYNAMIC_TEST_NAME_SUFFIX: "test_vbt_convert_parameter_sweep_dir_to_hdf5"
     VBT_ALLURE_TEST_TITLE: "test_vbt_convert_parameter_sweep_dir_to_hdf5"
@@ -148,7 +145,8 @@ test_vbt_convert_hdf5_to_dsr:
     VBT_ALLURE_SUB_SUITE: "Conversion of the created HDF5 file to DSR format and validation of the results"
     VBT_ALLURE_EPIC: "Use of the converted HDF5 file to validate the converter’s functionality for the conversion to DSR format, which is the format used by upscale teams for simulations"
     VBT_ALLURE_FEATURE: "Use of the converted HDF5 file to validate the converter’s functionality for the conversion to DSR format, which is the format used by upscale teams for simulations"
-    VBT_ALLURE_STORY: "https://tvb-projects.atlassian.net/browse/VT-233"
+    VBT_ALLURE_STORY: "Integration test for the conversion of the created HDF5 file to DSR format and validation of the results (https://tvb-projects.atlassian.net/browse/VT-233)"
+    VBT_ALLURE_LINK_JIRA: "https://tvb-projects.atlassian.net/browse/VT-233"
     VBT_ALLURE_DESCRIPTION_HTML: "${CI_PROJECT_DIR}/tests/docs/convert_direc_to_hdf_description.html"
     VBT_DYNAMIC_TEST_NAME_SUFFIX: "test_vbt_convert_hdf5_to_dsr"
     VBT_ALLURE_TEST_TITLE: "test_vbt_convert_hdf5_to_dsr"

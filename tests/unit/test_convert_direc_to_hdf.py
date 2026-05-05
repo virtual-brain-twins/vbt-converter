@@ -3,6 +3,10 @@ import pickle
 import re
 import sys
 
+# ------------------------------------------------------------
+# Allure imports & configuration
+# ------------------------------------------------------------
+import allure
 import h5py
 import numpy as np
 import pandas as pd
@@ -106,10 +110,18 @@ def dummy_input_dir(tmp_path):
 # ----------------------------------------------------------------------
 # Test class – all test functions are now methods of this class.
 # ----------------------------------------------------------------------
+@allure.parent_suite("VBT‑converter CI/CD")
+@allure.suite("Unit tests")
+@allure.sub_suite("Tests for convert_to_hdf5.py")
+@allure.description("Unit tests for convert_to_hdf5.py")
+@allure.feature("HDF5 conversion from the parameter sweep directory")
 class TestConvertToHdf5:
     # --------------------------------------------------------------
     # Test the core conversion function
     # --------------------------------------------------------------
+    @allure.story("Basic conversion of a complete simulation directory")
+    @allure.title("convert_to_hdf5 creates a correct HDF5 file from a valid simulation directory")
+    @allure.severity(allure.severity_level.CRITICAL)
     def test_convert_to_hdf5_basic(self, dummy_input_dir, tmp_path):
         input_dir, config = dummy_input_dir
 
@@ -119,88 +131,97 @@ class TestConvertToHdf5:
         # ------------------------------------------------------------------
         # Call the function under test
         # ------------------------------------------------------------------
-        convert_to_hdf5(str(input_dir), str(out_file))
+        with allure.step("Run convert_to_hdf5"):
+            convert_to_hdf5(str(input_dir), str(out_file))
 
         # ------------------------------------------------------------------
         # Basic sanity checks on the output file
         # ------------------------------------------------------------------
-        assert out_file.is_file(), "Output HDF5 file was not created"
+        with allure.step("Verify output file existence"):
+            assert out_file.is_file(), "Output HDF5 file was not created"
 
         with h5py.File(out_file, "r") as h5:
             # ---- global attribute ----
-            assert h5.attrs["version"] == "0.1"
+            with allure.step("Check global version attribute"):
+                assert h5.attrs["version"] == "0.1"
 
             # ---- simulation group ----
             sims = h5["simulations"]
-            assert "sim1" in sims, "Simulation group missing"
+            with allure.step("Validate simulation group name"):
+                assert "sim1" in sims, "Simulation group missing"
             sim = sims["sim1"]
 
             # ---- config attributes ----
-            for k, v in config.items():
-                assert k in sim.attrs
-                # HDF5 stores everything as a numpy scalar, so we cast to plain Python
-                stored = sim.attrs[k]
-                if isinstance(stored, bytes):
-                    stored = stored.decode()
-                assert stored == v
+            with allure.step("Validate stored config attributes"):
+                for k, v in config.items():
+                    assert k in sim.attrs
+                    stored = sim.attrs[k]
+                    if isinstance(stored, bytes):
+                        stored = stored.decode()
+                    assert stored == v
 
             # ---- spike times ----
-            spike_grp = sim["spike_times"]
-            assert "L23" in spike_grp
-            layer = spike_grp["L23"]
-            np.testing.assert_array_equal(layer["indices"][()], np.arange(0, 10))
-            np.testing.assert_array_equal(layer["times"][()], np.linspace(0, 100, 10))
+            with allure.step("Validate spike‑time datasets"):
+                spike_grp = sim["spike_times"]
+                assert "L23" in spike_grp
+                layer = spike_grp["L23"]
+                np.testing.assert_array_equal(layer["indices"][()], np.arange(0, 10))
+                np.testing.assert_array_equal(layer["times"][()], np.linspace(0, 100, 10))
 
             # ---- logs ----
-            logs = sim["logs"]
-            for log_name, text in [
-                ("error.log", "error line 1\nerror line 2"),
-                ("info.log", "info line 1\ninfo line 2"),
-                ("warning.log", "warning line 1\nwarning line 2"),
-            ]:
-                # h5py returns a bytes object for variable‑length strings.
-                stored = logs[log_name][()]
-                if isinstance(stored, bytes):
-                    stored = stored.decode()
-                assert stored == text
+            with allure.step("Validate log datasets"):
+                logs = sim["logs"]
+                for log_name, text in [
+                    ("error.log", "error line 1\nerror line 2"),
+                    ("info.log", "info line 1\ninfo line 2"),
+                    ("warning.log", "warning line 1\nwarning line 2"),
+                ]:
+                    stored = logs[log_name][()]
+                    if isinstance(stored, bytes):
+                        stored = stored.decode()
+                    assert stored == text
 
             # ---- record_neurons ----
-            rec = sim["record_neurons"]
-            # The dataset is a structured array with fields “label” and “value”
-            labels = rec["label"][()].astype(str).tolist()
-            values = rec["value"][()].tolist()
-            expected_labels = ["neuron_A", "neuron_B", "neuron_C"]
-            expected_values = [1, 2, 3]
-            assert sorted(labels) == sorted(expected_labels)
-            assert sorted(values) == sorted(expected_values)
+            with allure.step("Validate record_neurons structured array"):
+                rec = sim["record_neurons"]
+                labels = rec["label"][()].astype(str).tolist()
+                values = rec["value"][()].tolist()
+                expected_labels = ["neuron_A", "neuron_B", "neuron_C"]
+                expected_values = [1, 2, 3]
+                assert sorted(labels) == sorted(expected_labels)
+                assert sorted(values) == sorted(expected_values)
 
             # ---- metrics ----
-            metrics_grp = sim["metrics"]
-            assert "Avg Firing Rate Hz" in metrics_grp
-            metric_ds = metrics_grp["Avg Firing Rate Hz"]
-            metric_labels = metric_ds["label"][()].astype(str).tolist()
-            metric_vals = metric_ds["value"][()].tolist()
-            assert metric_labels == ["pop1", "pop2"]
-            assert metric_vals == [5.0, 12.7]
+            with allure.step("Validate metrics datasets"):
+                metrics_grp = sim["metrics"]
+                assert "Avg Firing Rate Hz" in metrics_grp
+                metric_ds = metrics_grp["Avg Firing Rate Hz"]
+                metric_labels = metric_ds["label"][()].astype(str).tolist()
+                metric_vals = metric_ds["value"][()].tolist()
+                assert metric_labels == ["pop1", "pop2"]
+                assert metric_vals == [5.0, 12.7]
 
             # ---- stimulus (piecewise constant) ----
-            stim = sim["stimulus"]
-            assert stim.attrs["type"] == "piecewise_constant"
-            limits = stim["limits"][()].tolist()
-            values = stim["values"][()].tolist()
+            with allure.step("Validate stimulus piecewise‑constant representation"):
+                stim = sim["stimulus"]
+                assert stim.attrs["type"] == "piecewise_constant"
+                limits = stim["limits"][()].tolist()
+                values = stim["values"][()].tolist()
 
-            # limits = [0, 100, 200, t_sim]
-            assert limits == [0, 100, 200, config["t_sim"]]
+                # limits = [0, 100, 200, t_sim]
+                assert limits == [0, 100, 200, config["t_sim"]]
 
-            # values[0] is the initial zero‑value array, then the two arrays we saved
-            # shape is (5,) because we used np.full((5,), …)
-            assert isinstance(values[0], float) and np.allclose(values[0], 0.0)
-            assert isinstance(values[1], float) and np.allclose(values[1], 0.5)
-            assert isinstance(values[2], float) and np.allclose(values[2], 1.2)
+                # values[0] is the initial zero‑value array, then the two arrays we saved
+                assert isinstance(values[0], float) and np.allclose(values[0], 0.0)
+                assert isinstance(values[1], float) and np.allclose(values[1], 0.5)
+                assert isinstance(values[2], float) and np.allclose(values[2], 1.2)
 
     # --------------------------------------------------------------
     # Test the CLI entry point (i.e. `python -m convert_to_hdf5 ...`)
     # --------------------------------------------------------------
+    @allure.story("CLI invocation")
+    @allure.title("Running the module as a script creates the expected HDF5 file")
+    @allure.severity(allure.severity_level.NORMAL)
     def test_cli_invocation(self, dummy_input_dir, tmp_path, monkeypatch):
         input_dir, _ = dummy_input_dir
         out_file = tmp_path / "cli_out.h5"
@@ -214,16 +235,21 @@ class TestConvertToHdf5:
         monkeypatch.setattr(sys, "argv", test_args)
 
         # Run the CLI entry point; it should call `convert_to_hdf5`
-        main()
+        with allure.step("Execute main() with patched argv"):
+            main()
 
         # Very small sanity check – the file must exist and contain the version attribute.
-        assert out_file.is_file()
-        with h5py.File(out_file, "r") as h5:
-            assert h5.attrs["version"] == "0.1"
+        with allure.step("Validate CLI‑produced file"):
+            assert out_file.is_file()
+            with h5py.File(out_file, "r") as h5:
+                assert h5.attrs["version"] == "0.1"
 
     # --------------------------------------------------------------
     # Ensure the script fails gracefully when required files are missing
     # --------------------------------------------------------------
+    @allure.story("Error handling – missing required files")
+    @allure.title("Missing config.yaml raises FileNotFoundError")
+    @allure.severity(allure.severity_level.MINOR)
     def test_missing_config_raises(self, tmp_path):
         """
         If a simulation directory does not contain a `config.yaml`,
@@ -242,21 +268,27 @@ class TestConvertToHdf5:
         out_file = tmp_path / "bad_out.h5"
         out_file.parent.mkdir(parents=True, exist_ok=True)  # ensure target folder exists
 
-        with pytest.raises(FileNotFoundError):
-            convert_to_hdf5(str(input_dir), str(out_file))
+        with allure.step("Expect FileNotFoundError when config.yaml is absent"):
+            with pytest.raises(FileNotFoundError):
+                convert_to_hdf5(str(input_dir), str(out_file))
 
     # --------------------------------------------------------------
     # Helper: make sure the regular‑expression used for stimulus files works
     # --------------------------------------------------------------
+    @allure.story("Utility – stimulus filename regex")
+    @allure.title("Stimulus filename regular expression matches only valid patterns")
+    @allure.severity(allure.severity_level.TRIVIAL)
     def test_stimulus_regex(self):
         pattern = re.compile(r"random_input_(\d+)ms\.npz")
         good = ["random_input_10ms.npz", "random_input_250ms.npz"]
         bad = ["randominput_10ms.npz", "random_input_10ms.txt", "random_input_ms.npz"]
 
         for f in good:
-            m = pattern.match(f)
-            assert m is not None
-            assert int(m.group(1)) > 0
+            with allure.step(f"Validate good pattern: {f}"):
+                m = pattern.match(f)
+                assert m is not None
+                assert int(m.group(1)) > 0
 
         for f in bad:
-            assert pattern.match(f) is None
+            with allure.step(f"Validate bad pattern is rejected: {f}"):
+                assert pattern.match(f) is None

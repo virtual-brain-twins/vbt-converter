@@ -19,7 +19,6 @@ def interpolate_constant(x, xp, yp, extrapolate=False):
     if extrapolate:
         yp = np.concatenate(([yp[0]], yp, [yp[-1]]))
 
-    assert len(xp) + 1 == len(yp)
     indices = np.searchsorted(xp, x, side='right')
     return np.array(yp)[indices]
 
@@ -97,7 +96,6 @@ def convert(input_file, output_file, bin_size):
         u, mu_u, sd_u = normalize(u, axis=(0, 1))
         theta, mu_theta, sd_theta = normalize(theta, axis=0)
 
-    names_theta = ["numneur", "synstr", "nmdaeff"]
     np.savez(output_file, x=r, u=u, theta=theta,
              names_x=populations, names_theta=parameters_short, dt=bin_size,
              mu_x=mu_r, sd_x=sd_r,

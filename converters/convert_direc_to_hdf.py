@@ -14,7 +14,7 @@ def convert_to_hdf5(input_dir, output_file):
     with h5py.File(output_file, "w") as h:
         h.attrs['version'] = '0.1'
         sims_grp = h.create_group("simulations")
-        for directory in tqdm(cast(Iterable[str], os.listdir(input_dir))):
+        for directory in tqdm(sorted(cast(Iterable[str], os.listdir(input_dir)))):
             full_path = str(os.path.join(input_dir, directory))
             if not os.path.isdir(full_path) or not os.listdir(full_path):
                 continue  # not a folder → ignore | empty folder → skip

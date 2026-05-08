@@ -92,11 +92,11 @@ def convert(input_file, output_file, bin_size):
         theta = np.array(theta)  # shape: (npoints, nparams)
 
         # Normalize
-        r, mu_r, sd_r = normalize(r, axis=(0, 1))
-        u, mu_u, sd_u = normalize(u, axis=(0, 1))
-        theta, mu_theta, sd_theta = normalize(theta, axis=0)
+        r_norm, mu_r, sd_r = normalize(r, axis=(0, 1))
+        u_norm, mu_u, sd_u = normalize(u, axis=(0, 1))
+        theta_norm, mu_theta, sd_theta = normalize(theta, axis=0)
 
-    np.savez(output_file, x=r, u=u, theta=theta,
+    np.savez(output_file, x=r_norm, u=u_norm, theta=theta_norm,
              names_x=populations, names_theta=parameters_short, dt=bin_size,
              mu_x=mu_r, sd_x=sd_r,
              mu_u=mu_u, sd_u=sd_u,

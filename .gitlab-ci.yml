@@ -180,7 +180,7 @@ test_vbt_convert_sweep_dir_to_dsr:
   variables:
     # The entry‑script for the tests stage is simply “pytest”
     VBT_ENTRY_SCRIPT: "${CI_PROJECT_DIR}/ci/vbt_converter_ps_to_npz_wrapper.py"
-    VBT_INPUT_PATH: "${CI_PROJECT_DIR}/converted/" #${CI_PROJECT_DIR}/converted/converted.hdf5 to be used
+    VBT_INPUT_PATH: "${CI_PROJECT_DIR}/tests/test_data/parametersweep_8s_3d_orientation_selective_12012026"
     VBT_OUTPUT_PATH: "${CI_PROJECT_DIR}/data/"
     VBT_ENABLE_INPUT_DIR_RECURSIVE_ATTACH: "false"
     VBT_ENABLE_OUTPUT_DIR_RECURSIVE_ATTACH: "false"

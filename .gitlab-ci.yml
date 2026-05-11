@@ -202,7 +202,7 @@ test_vbt_convert_sweep_dir_to_dsr:
     VBT_ALLURE_TEST_TITLE: "test_vbt_convert_sweep_directory_to_dsr"
   before_script:
     - echo "Installing dependencies in the docker runner …"
-    - apk add --no-cache jq python3 bash perl gettext curl
+    - apk add --no-cache jq python3 bash perl gettext curl hdf5-tools
     - !reference [ .VBT_RUN, before_script ]  # Calls the base "method"
   # The artifacts are needed by the publishing stage (Allure results)
   cache:

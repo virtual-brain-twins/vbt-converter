@@ -260,7 +260,7 @@ update_cache_job:
     DATA: "test_convert_output.npz"
     TARGET: "tests/test_data/ground_truth/test_convert_output.npz"
   before_script:
-    - echo "Installing dependencies in the docker runner …"
+    - echo "Installing dependencies in the docker runner"
     - apk add --no-cache curl
     - |
     # Install the 'mc' binary (official release)

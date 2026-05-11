@@ -196,7 +196,7 @@ def _write_intermediate_hdf5(sim_path: Path, cfg: ConversionConfig) -> None:
 
             # Configuration and metadata
             for key, val in config_dict.items():
-                sims_grp.attrs[key] = val
+                sim_grp.attrs[key] = val
 
             # Spikes
             spike_grp = sim_grp.create_group("spike_times")
@@ -312,6 +312,10 @@ def _normalize(x: np.ndarray, axis: Tuple[int, ...] | int):
 # Manager – orchestrates the parallel map, accumulates statistics, writes final file
 def convert_directory(cfg: ConversionConfig) -> None:
     """Main driver – called from CLI."""
+    # Initialize
+    lock = ctx.Lock() if cfg.intermediate_hdf5 else None
+    _worker_init(lock, str(cfg.intermediate_hdf5) if cfg.intermediate_hdf5 else None)
+
     logging.info("Scanning %s …", cfg.input_dir)
     sim_dirs = sorted(
         d for d in cfg.input_dir.iterdir()
@@ -326,6 +330,7 @@ def convert_directory(cfg: ConversionConfig) -> None:
     n_params = len(cfg.parameters)
 
     # Intermediate HDF5 file (optional)
+    # a lock is required only when the intermediate HDF5 is requested
     if cfg.intermediate_hdf5:
         # create an empty container with a version attribute
         with h5py.File(cfg.intermediate_hdf5, "w") as h:
@@ -375,15 +380,11 @@ def convert_directory(cfg: ConversionConfig) -> None:
         cfg.n_workers,
     )
 
-    # a lock is required only when the intermediate HDF5 is requested
-    lock = ctx.Lock() if cfg.intermediate_hdf5 else None
-
     # Prepare executor – note the initializer that propagates the lock & path
-    init_args = (lock, str(cfg.intermediate_hdf5) if cfg.intermediate_hdf5 else None)
     with ProcessPoolExecutor(
         max_workers=cfg.n_workers,
         initializer=_worker_init,
-        initargs=init_args,
+        initargs=(lock, str(cfg.intermediate_hdf5) if cfg.intermediate_hdf5 else None),
         mp_context=ctx,
     ) as executor:
         future_to_idx = {

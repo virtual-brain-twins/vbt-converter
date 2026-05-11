@@ -263,7 +263,7 @@ update_cache_job:
     - echo "Installing dependencies in the docker runner"
     - apk add --no-cache curl
     - |
-    # Install the 'mc' binary (official release)
+      # Install the 'mc' binary (official release)
       # Install MinIO client (mc)
       MC_URL="https://dl.min.io/client/mc/release/linux-amd64/mc"
       curl -L ${MC_URL} -o /usr/local/bin/mc && chmod +x /usr/local/bin/mc

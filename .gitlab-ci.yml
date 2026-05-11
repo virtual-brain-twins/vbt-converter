@@ -281,7 +281,6 @@ update_cache_job:
       # ---- Pull the required file -------------------------------------------------
       mkdir -p "$(dirname "${TARGET}")"               # make sure the dir exists
       mc cp "minio/${MINIO_BUCKET}/${DATA}" "${TARGET}"
-    - !reference [ .VBT_RUN, before_script ]      # Calls the base “method”
 
   # Cache configuration – pull existing cache and push any changes back
   cache:

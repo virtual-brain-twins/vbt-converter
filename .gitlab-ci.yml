@@ -243,3 +243,53 @@ vbt_cleanup_job:
       artifacts: false
   variables:
     VBT_CLEANUP_SCRIPT: "${CI_PROJECT_DIR}/ci/template_repo/ci/scripts/cleanup_environment.sh"
+
+
+# Manual job to update the cache in MinIO with a new version of the ground‑truth file (e.g. after fixing a bug in the converter that caused the old ground‑truth file to be incorrect).
+# This job is not part of the regular pipeline run, but can be triggered manually when needed.
+update_cache_job:
+  stage: setup_environment
+  tags:
+    - docker
+    - jsc-cloud
+    - fenix
+  image: docker:cli                           # keeps the original container
+  when: manual
+  # Install deps + MinIO client (mc) and fetch the file
+  variables:
+    DATA: "test_convert_output.npz"
+    TARGET: "tests/test_data/ground_truth/test_convert_output.npz"
+  before_script:
+    - echo "Installing dependencies in the docker runner …"
+    - apk add --no-cache curl
+    - |
+    # Install the 'mc' binary (official release)
+      # Install MinIO client (mc)
+      MC_URL="https://dl.min.io/client/mc/release/linux-amd64/mc"
+      curl -L ${MC_URL} -o /usr/local/bin/mc && chmod +x /usr/local/bin/mc
+    - |
+      # ---- Configure MinIO access (use CI variables----
+      #   MINIO_ENDPOINT  – e.g.   https://vbt-minio.fz-juelich.de/
+      #   MINIO_ACCESS_KEY    – access key with read permission on the cache bucket
+      #   MINIO_SECRET_KEY    – secret key
+      #   MINIO_BUCKET        – bucket name that stores the cache (e.g. “ci-temp-cache”)
+      #
+      #   All four variables should be defined in *Settings → CI/CD → Variables*.
+      #
+      mc alias set minio "${MINIO_ENDPOINT}" "${MINIO_ACCESS_KEY}" "${MINIO_SECRET_KEY}" --api S3v4
+    - |
+      # ---- Pull the required file -------------------------------------------------
+      mkdir -p "$(dirname "${TARGET}")"               # make sure the dir exists
+      mc cp "minio/${MINIO_BUCKET}/${DATA}" "${TARGET}"
+    - !reference [ .VBT_RUN, before_script ]      # Calls the base “method”
+
+  # Cache configuration – pull existing cache and push any changes back
+  cache:
+    - key: vbt-converter-test-cache
+      paths:
+        - tests/test_data/
+      policy: pull-push                      # pull at start, push at end
+
+  # (Optional) script – just a sanity echo
+  script:
+    - echo "${DATA} has been copied from MinIO into tests/test_data/ground_truth/"

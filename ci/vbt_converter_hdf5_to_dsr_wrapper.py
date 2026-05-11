@@ -167,13 +167,22 @@ def main() -> None:
         logger.info("Conversion successful – file copied to %s", converted_npz)
     validate_script = ci_root / "tests" / "utils" / "validate_and_report.py"
     report_path: Path = args.output_dir / "test_result_report.html"
+    ground_truth = (
+            ci_root
+            / "tests"
+            / "test_data"
+            / "ground_truth"
+            / "test_convert_output.npz"
+    )
     cmd = [
         sys.executable,
         str(validate_script),
         "-i",
         str(converted_npz),
         "-o",
-        str(report_path)
+        str(report_path),
+        "-g",
+        str(ground_truth)
     ]
 
     # Execute the validator

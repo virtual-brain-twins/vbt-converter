@@ -272,19 +272,38 @@ def create_link_html(output_file: Path, logger: logging.Logger) -> None:
         )
 
     # Ensure we don't end up with a double slash when we concatenate.
-    artifact_url = f"{base_url.rstrip('/')}/artifacts/file/converted/converted.hdf5"
+    # Build the URLs for the two artifacts
+    artifact_hdf5 = f"{base_url.rstrip('/')}/artifacts/file/converted/converted.hdf5"
+    artifact_npz = f"{base_url.rstrip('/')}/artifacts/file/converted/converted.npz"
 
+    # Create the HTML page with both links
     html_content = f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <title>Converted HDF5 File</title>
-</head>
-<body>
-    <p><a href="{artifact_url}" target="_blank" rel="noopener noreferrer">Converted HDF5 File</a></p>
-</body>
-</html>
-"""
+    <html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <title>Converted Artifacts</title>
+        <style>
+            body {{ font-family: Arial, sans-serif; line-height: 1.6; margin: 2rem; }}
+            a   {{ color:#0066CC; text-decoration:none; }}
+            a:hover {{ text-decoration:underline; }}
+            .artifact-list {{ margin-top: 1rem; }}
+        </style>
+    </head>
+    <body>
+        <h1>Converted Artifacts</h1>
+        <p class="artifact-list">
+            • <a href="{artifact_hdf5}" target="_blank" rel="noopener noreferrer">
+                Converted HDF5 File
+              </a>
+        </p>
+        <p class="artifact-list">
+            • <a href="{artifact_npz}" target="_blank" rel="noopener noreferrer">
+                Generated NPZ File
+              </a>
+        </p>
+    </body>
+    </html>
+    """
 
     # Write the file (parents are created automatically if they do not exist)
     output_file.parent.mkdir(parents=True, exist_ok=True)

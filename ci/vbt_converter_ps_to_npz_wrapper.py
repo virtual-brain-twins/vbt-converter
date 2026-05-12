@@ -273,7 +273,7 @@ def main() -> None:
     )
     report_path: Path = args.output_dir / "test_result_report.html"
     report_path.write_text(filled)
-    create_link_html(args.output_dir / "converted_hdf5_link.html", logger)
+    create_link_html(args.output_dir / "converted_hdf5_&_npz_links.html", logger)
     logger.info("Report written to %s", report_path)
 
 def create_link_html(output_file: Path, logger: logging.Logger) -> None:

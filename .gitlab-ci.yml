@@ -280,7 +280,9 @@ update_cache_job:
     - |
       # ---- Pull the required file -------------------------------------------------
       mkdir -p "$(dirname "${TARGET}")"               # make sure the dir exists
+      ls -l "tests/test_data/ground_truth/"           # list existing files in the target dir for debugging
       mc cp "minio/${MINIO_BUCKET}/${DATA}" "${TARGET}"
+      
 
   # Cache configuration – pull existing cache and push any changes back
   cache:
@@ -292,3 +294,4 @@ update_cache_job:
   # (Optional) script – just a sanity echo
   script:
     - echo "${DATA} has been copied from MinIO into tests/test_data/ground_truth/"
+    - ls -l "tests/test_data/ground_truth/"           # list files in the target dir after copying for debugging

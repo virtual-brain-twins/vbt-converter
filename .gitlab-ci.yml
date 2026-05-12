@@ -157,6 +157,11 @@ test_vbt_convert_hdf5_to_dsr:
     - echo "Installing dependencies in the docker runner …"
     - apk add --no-cache jq python3 bash perl gettext curl
     - !reference [ .VBT_RUN, before_script ]  # Calls the base "method"
+  cache:
+    - key: vbt-converter-test-cache
+      paths:
+        - tests/test_data/
+      policy: pull
   artifacts:
     when: always
     paths:

@@ -11,7 +11,9 @@ Utility to
 3. write a human‑readable HTML report that lists the contents and
    prints a success message,
 4. optionally compare the file with a ground‑truth .npz and report the
-   comparison outcome.
+   comparison outcome,
+5. include a link to the stored artifact (`/artifacts/file/converted/converted.npz`)
+   in the generated HTML report.
 
 Usage
 -----
@@ -23,6 +25,7 @@ The script exits with status 0 on success, 1 on validation failure.
 import argparse
 import datetime
 import html
+import os
 import pathlib
 import sys
 from typing import Optional, Tuple
@@ -169,7 +172,8 @@ def validate_npz(npz_path: pathlib.Path) -> dict:
 # ----------------------------------------------------------------------
 # Comparison logic
 # ----------------------------------------------------------------------
-def compare_npz(file1: pathlib.Path, file2: pathlib.Path, rtol: float = 1e-04, atol: float = 1e-08) -> Tuple[bool, str]:
+def compare_npz(file1: pathlib.Path, file2: pathlib.Path,
+                rtol: float = 1e-04, atol: float = 1e-08) -> Tuple[bool, str]:
     """
     Consistently and optimally compares two npz files.
 
@@ -343,6 +347,29 @@ def build_comparison_section(comp_result: Optional[Tuple[bool, str]]) -> str:
     """
 
 
+def build_artifact_section() -> str:
+    """
+    Produce an HTML fragment that links to the stored NPZ artifact.
+    The URL is constructed from the ``VBT_ALLURE_LINK_JOB`` environment
+    variable (if present) and the fixed path
+    ``/artifacts/file/converted/converted.npz``.
+    """
+    base_url = os.getenv("VBT_ALLURE_LINK_JOB")
+    if base_url:
+        artifact_url = f"{base_url.rstrip('/')}/artifacts/file/converted/converted.npz"
+    else:
+        # Fallback to the absolute path within the repository – this will still be a valid link in a
+        # local filesystem view.
+        artifact_url = "/artifacts/file/converted/converted.npz"
+
+    escaped_url = html.escape(artifact_url)
+
+    return f"""
+    <h2>Artifact</h2>
+    <p><a href="{escaped_url}" target="_blank" rel="noopener noreferrer">converted.npz</a></p>
+    """
+
+
 def write_html_report(
     output_path: pathlib.Path,
     *,
@@ -359,6 +386,8 @@ def write_html_report(
         status_class = "success"
         status_message = "✅ Validation successful"
         content = build_content(data)
+        # Append the artifact link after the main content
+        content += build_artifact_section()
     else:
         status_class = "error"
         status_message = f"❌ Validation failed – {html.escape(error_msg or 'unknown error')}"

@@ -85,6 +85,40 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def move_converted_hdf5(logger: logging.Logger, ci_root: Path, input_dir: Path) -> None:
+    """
+    Move ``ci_root/converted/converted.hdf5`` into the folder that the
+    converter expects: ``<input_dir>/converted/converted.hdf5``.
+    """
+    src = ci_root / "converted" / "converted.hdf5"
+    dst_dir = Path(input_dir) / "converted"
+    dst = dst_dir / "converted.hdf5"
+
+    # Make sure we have something to move
+    if not src.is_file():
+        logger.error("Source HDF5 file does not exist: %s", src)
+        sys.exit(1)
+
+    # Ensure the destination folder exists (no error if it already does)
+    dst_dir.mkdir(parents=True, exist_ok=True)
+
+    # Move / rename the file
+    try:
+        # Path.replace works like os.rename but raises an OSError if the
+        # source and destination are on different filesystems.
+        # fastest when on same FS
+        src.replace(dst)
+    except OSError:  # (different FS)
+        # Fall back to shutil.move which handles cross‑filesystem moves.
+        try:
+            shutil.move(str(src), str(dst))
+        except OSError as exc:
+            logger.error("Could not move %s → %s: %s", src, dst, exc)
+            sys.exit(1)
+
+    logger.info("Successfully moved %s → %s", src, dst)
+
+
 # Core wrapper logic
 def main() -> None:
     """Entry point – run the converter and copy its output."""
@@ -99,6 +133,9 @@ def main() -> None:
 
     ci_root = Path(ci_project_dir).resolve()
     logger.info("CI project root resolved to %s", ci_root)
+
+    # Move the hdf5 file to the expected location for the converter
+    move_converted_hdf5(logger, ci_root, args.input_dir)
 
     # Build paths to the converter script and the expected HDF5 output
     converter_script = ci_root / "converters" / "convert_hdf_to_dsr.py"

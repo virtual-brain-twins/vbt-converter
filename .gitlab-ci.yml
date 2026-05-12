@@ -134,11 +134,11 @@ test_vbt_convert_hdf5_to_dsr:
   variables:
     # The entry‑script for the tests stage is simply “pytest”
     VBT_ENTRY_SCRIPT: "${CI_PROJECT_DIR}/ci/vbt_converter_hdf5_to_dsr_wrapper.py"
-    VBT_INPUT_PATH: "${CI_PROJECT_DIR}/converted/" #${CI_PROJECT_DIR}/converted/converted.hdf5 to be used
-    VBT_OUTPUT_PATH: "${CI_PROJECT_DIR}/data/"
+    VBT_INPUT_PATH: "${CI_PROJECT_DIR}/input/" #${CI_PROJECT_DIR}/input/converted.hdf5 to be used
+    VBT_OUTPUT_PATH: "${CI_PROJECT_DIR}/output/"
     VBT_ENABLE_INPUT_DIR_RECURSIVE_ATTACH: "false"
     VBT_ENABLE_OUTPUT_DIR_RECURSIVE_ATTACH: "false"
-    OUTPUT_NPZ_PATH: "${VBT_OUTPUT_PATH}/converted.npz" # Path to the converted numpy file (which is the only output artifact we want to attach to CI Job)
+    OUTPUT_NPZ_PATH: "${CI_PROJECT_DIR}/converted/converted.npz" # Path to the converted numpy file (which is the only output artifact we want to attach to CI Job)
     # Allure results are written to `allure-results/`
     # -----------------------------------------------------------------
     # Allure / tests‑metadata – feel free to adapt the wording
@@ -166,7 +166,7 @@ test_vbt_convert_hdf5_to_dsr:
     when: always
     paths:
       - allure-results/
-      - "${CI_PROJECT_DIR}/converted"
+      - "${CI_PROJECT_DIR}/converted/"
     expire_in: 1 week
 
 

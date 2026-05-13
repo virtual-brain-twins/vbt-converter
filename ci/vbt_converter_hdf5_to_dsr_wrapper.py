@@ -165,7 +165,7 @@ def main() -> None:
             "--output_file",
             str(output_npz),
             "--bin_size",
-            "12"
+            "0.1"
         ]
 
         # Execute the converter

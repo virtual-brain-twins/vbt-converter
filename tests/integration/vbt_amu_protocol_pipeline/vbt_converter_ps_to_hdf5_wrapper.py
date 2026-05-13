@@ -241,7 +241,7 @@ def main() -> None:
         status_message
     )
 
-    template_path = ci_root / "ci" / "test_result.html"
+    template_path = ci_root / "tests"/ "integration"/ "vbt_amu_protocol_pipeline" / "test_result.html"
     template = template_path.read_text()
     filled = (
         template

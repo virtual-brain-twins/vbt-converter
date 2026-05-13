@@ -8,6 +8,9 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from typing import Tuple
+
+import numpy as np
 
 
 # ----------------------------------------------------------------------
@@ -87,6 +90,175 @@ def _parse_args() -> argparse.Namespace:
         help="Directory where the generated *.hdf* file will be copied.",
     )
     return parser.parse_args()
+
+
+# Comparison helper
+def compare_npz(file1: Path, file2: Path,
+                rtol: float = 1e-04, atol: float = 1e-08) -> Tuple[bool, str]:
+    """
+    Consistently and optimally compares two npz files.
+
+    Returns a tuple `(are_equal, message)`.  `are_equal` is ``True`` if the
+    files match within the given tolerances, otherwise ``False`` with an
+    explanatory message.
+    """
+    try:
+        with np.load(file1) as data1, np.load(file2) as data2:
+            # 1. Check if both have the same keys
+            if sorted(data1.files) != sorted(data2.files):
+                return False, "Key mismatch"
+
+            for key in data1.files:
+                # 2. Fast‑fail shape check
+                if data1[key].shape != data2[key].shape:
+                    return False, f"Shape mismatch in key: {key}"
+                # 3. Optimized value comparison
+                # Use allclose for floats to handle precision; array_equal for others
+                if np.issubdtype(data1[key].dtype, np.floating):
+                    matches = np.isclose(
+                        data1[key],
+                        data2[key],
+                        rtol=rtol,
+                        atol=atol,
+                        equal_nan=True,
+                    )
+                    if not np.all(matches):
+                        mismatch_indices = np.where(~matches)
+                        first_mismatch_idx = tuple(idx[0] for idx in mismatch_indices)
+                        val1 = data1[key][first_mismatch_idx]
+                        val2 = data2[key][first_mismatch_idx]
+                        diff = abs(val1 - val2)
+                        return (
+                            False,
+                            f"First mismatch in '{key}' at index {first_mismatch_idx}: "
+                            f"Val1={val1}, Val2={val2}, Diff={diff}",
+                        )
+                    # Redundant second allclose kept for strictness
+                    if not np.allclose(
+                            data1[key],
+                            data2[key],
+                            rtol=rtol,
+                            atol=atol,
+                            equal_nan=True,
+                    ):
+                        return False, f"Value mismatch (float) in key: {key}"
+                else:
+                    if not np.array_equal(data1[key], data2[key]):
+                        return False, f"Value mismatch in key: {key}"
+
+        return True, "Files are identical"
+    except Exception as e:
+        return False, f"Error during comparison: {str(e)}"
+
+
+# Main comparison block
+def run_comparisons(ci_root: Path,
+                    converted_hdf5: Path,
+                    converted_npz: Path,
+                    output_dir: Path,
+                    logger: logging.Logger):
+    """
+    Compare the produced HDF5 & NPZ files against the ground‑truth
+    and write a tiny HTML report.
+    """
+    # Paths to the ground‑truth artefacts
+    ground_truth_h5 = (
+            ci_root
+            / "tests"
+            / "test_data"
+            / "ground_truth"
+            / "test_convert_output.h5"
+    )
+    ground_truth_npz = (
+            ci_root
+            / "tests"
+            / "test_data"
+            / "ground_truth"
+            / "test_convert_output.npz"
+    )
+    logger.debug("Ground‑truth HDF5 file: %s", ground_truth_h5)
+    logger.debug("Ground‑truth NPZ  file: %s", ground_truth_npz)
+
+    # HDF5 comparison
+    result = subprocess.run(
+        ["h5diff", "-q", str(ground_truth_h5), str(converted_hdf5)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    h5_success = result.returncode == 0
+
+    if result.returncode == 0:
+        h5_message = "✅  Files are identical."
+    elif result.returncode == 1:
+        h5_message = (
+            "❌  Files differ – see the diff below:\n"
+            "stdout:\n"
+            f"{result.stdout}\n"
+            "stderr:\n"
+            f"{result.stderr}"
+        )
+    elif result.returncode == 2:
+        h5_message = (
+            "⚠️  h5diff reported an error:\n"
+            "stdout:\n"
+            f"{result.stdout}\n"
+            "stderr:\n"
+            f"{result.stderr}"
+        )
+    else:  # returncode 3 or any unexpected value
+        h5_message = (
+            f"⚠️  Unexpected return code {result.returncode}\n"
+            "stdout:\n"
+            f"{result.stdout}\n"
+            "stderr:\n"
+            f"{result.stderr}"
+        )
+
+    logger.info(
+        "HDF5 comparison result: %s, message: %s",
+        "success" if h5_success else "failure",
+        h5_message,
+    )
+
+    # NPZ comparison
+    npz_success, npz_message = compare_npz(ground_truth_npz, converted_npz)
+    npz_message = ("✅  " + npz_message) if npz_success else ("❌  " + npz_message)
+
+    logger.info(
+        "NPZ comparison result: %s, message: %s",
+        "success" if npz_success else "failure",
+        npz_message,
+    )
+
+    # Build the HTML report
+    template_path = ci_root / "ci" / "test_result.html"
+    template = template_path.read_text(encoding="utf-8")
+
+    def _html_escape(txt: str) -> str:
+        """Very small HTML‑escape (only the characters we care about here)."""
+        return (
+            txt.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+        )
+
+    filled = (
+        template
+        .replace("{ground_truth_h5}", str(ground_truth_h5))
+        .replace("{output_hdf}", str(converted_hdf5))
+        .replace("{status_class_h5}", "success" if h5_success else "failure")
+        .replace("{status_message_h5}", _html_escape(h5_message))
+
+        .replace("{ground_truth_npz}", str(ground_truth_npz))
+        .replace("{output_npz}", str(converted_npz))
+        .replace("{status_class_npz}", "success" if npz_success else "failure")
+        .replace("{status_message_npz}", _html_escape(npz_message))
+    )
+
+    report_path: Path = output_dir / "test_result_report.html"
+    report_path.write_text(filled, encoding="utf-8")
+    logger.info("HTML comparison report written to %s", report_path)
 
 
 # ----------------------------------------------------------------------
@@ -201,80 +373,15 @@ def main() -> None:
             sys.exit(1)
 
         logger.info("Conversion successful – files copied to %s and %s", converted_hdf5, converted_npz)
-
-    # ------------------------------------------------------------------
-    # Compare with ground‑truth using h5diff and generate a tiny HTML report
-    # ------------------------------------------------------------------
-    ground_truth = (
-            ci_root
-            / "tests"
-            / "test_data"
-            / "ground_truth"
-            / "test_convert_output.h5"
+    run_comparisons(
+        ci_root=ci_root,
+        converted_hdf5=converted_hdf5,
+        converted_npz=converted_npz,
+        output_dir=args.output_dir,
+        logger=logger,
     )
-    logger.debug("Ground‑truth file: %s", ground_truth)
-
-    result = subprocess.run(
-        ["h5diff", "-q", str(ground_truth), str(converted_hdf5)],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True
-    )
-    success = result.returncode == 0
-    # Build the status_message string
-    # --------------------------------------------------------------
-    if result.returncode == 0:
-        # Files are identical – nothing else to report
-        status_message = "✅  Files are identical."
-
-    elif result.returncode == 1:
-        # Files differ – attach the detailed diff
-        status_message = (
-            "❌  Files differ – see the diff below:\n"
-            "stdout:\n"
-            f"{result.stdout}\n"
-            "stderr:\n"
-            f"{result.stderr}"
-        )
-
-    elif result.returncode == 2:
-        # h5diff itself failed – report the error text
-        status_message = (
-            "⚠️  h5diff reported an error:\n"
-            "stdout:\n"
-            f"{result.stdout}\n"
-            "stderr:\n"
-            f"{result.stderr}"
-        )
-
-    else:  # returncode 3 or any unexpected value
-        status_message = (
-            f"⚠️  Unexpected return code {success}\n"
-            "stdout:\n"
-            f"{result.stdout}\n"
-            "stderr:\n"
-            f"{result.stderr}"
-        )
-    logger.info(
-        "Comparison result: %s, status message: %s",
-        "success" if success else "failure",
-        status_message
-    )
-
-    template_path = ci_root / "ci" / "test_result.html"
-    template = template_path.read_text()
-    filled = (
-        template
-        .replace("{ground_truth}", str(ground_truth))
-        .replace("{output_hdf}", str(converted_hdf5))
-        .replace("{status_class}", "success" if success else "failure")
-        .replace("{status_message}", status_message,
-                 )
-    )
-    report_path: Path = args.output_dir / "test_result_report.html"
-    report_path.write_text(filled)
     create_link_html(args.output_dir / "converted_hdf5_&_npz_links.html", logger)
-    logger.info("Report written to %s", report_path)
+
 
 def create_link_html(output_file: Path, logger: logging.Logger) -> None:
     """
@@ -328,6 +435,7 @@ def create_link_html(output_file: Path, logger: logging.Logger) -> None:
     output_file.parent.mkdir(parents=True, exist_ok=True)
     output_file.write_text(html_content, encoding="utf-8")
     logger.info(f"HTML file created at: {output_file.resolve()}")
+
 
 # ----------------------------------------------------------------------
 # Script entry point

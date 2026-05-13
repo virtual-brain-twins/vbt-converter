@@ -1,10 +1,17 @@
 #!/bin/sh
 # download_child_artifacts.sh - Script to fetch GitLab child pipeline artifacts
 
-# Ensure the log directory exists and initialize the log file
+# LOGGING SETUP
 if [ -n "$VBT_JOB_LOGS" ]; then
-    mkdir -p "$(dirname "$VBT_JOB_LOGS")"
-    touch "$VBT_JOB_LOGS"
+    # Ensure the directory exists
+    mkdir -p "$VBT_JOB_LOGS"
+
+    # Build the full log‑file path  (e.g. /path/to/logs/download_child_artifacts.log)
+    SCRIPT_NAME="$(basename "$0" .sh)"
+    LOG_FILE="${VBT_JOB_LOGS}/${SCRIPT_NAME}.log"
+
+    # Create / truncate the log file so we start fresh for this run
+    : > "$LOG_FILE"
 else
     echo "ERROR: Environment variable VBT_JOB_LOGS is not defined." >&2
     exit 1
@@ -12,11 +19,11 @@ fi
 
 log_message() {
     _timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    echo "[$_timestamp] $1" >> "$VBT_JOB_LOGS"
+    echo "[$_timestamp] $1" >> "$LOG_FILE"
     echo "$1"
 }
 
-# Parameter Validation
+# PARAMETER VALIDATION
 TRIGGER_JOB_NAME="$1"
 TARGET_CHILD_JOB_NAME="$2"
 
@@ -30,7 +37,7 @@ log_message "=== Starting Artifact Retrieval Process ==="
 log_message "Trigger Job Name: $TRIGGER_JOB_NAME"
 log_message "Target Child Job Name: $TARGET_CHILD_JOB_NAME"
 
-# Verify critical GitLab CI environment variables
+# VERIFY MANDATORY GITLAB CI ENVIRONMENT VARIABLES
 if [ -z "$CI_JOB_TOKEN" ] || [ -z "$CI_API_V4_URL" ] || [ -z "$CI_PROJECT_ID" ] || [ -z "$CI_PIPELINE_ID" ]; then
     log_message "ERROR: Missing mandatory GitLab CI environment variables."
     exit 1
@@ -38,7 +45,7 @@ fi
 
 log_message "Fetching bridges for Parent Pipeline ID: $CI_PIPELINE_ID"
 
-# Fetch all bridge jobs to find the downstream pipeline ID triggered by TRIGGER_JOB_NAME
+# GET CHILD PIPELINE ID FROM BRIDGE JOBS
 _bridge_url="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/pipelines/${CI_PIPELINE_ID}/bridges"
 _bridge_response=$(curl --silent --fail --header "JOB-TOKEN: $CI_JOB_TOKEN" "$_bridge_url")
 
@@ -47,7 +54,7 @@ if [ $? -ne 0 ] || [ -z "$_bridge_response" ]; then
     exit 1
 fi
 
-# Parse downstream pipeline ID using jq
+# Extract downstream pipeline ID for the trigger job
 CHILD_PIPELINE_ID=$(echo "$_bridge_response" | jq -r ".[] | select(.name==\"$TRIGGER_JOB_NAME\") | .downstream_pipeline.id // empty")
 
 if [ -z "$CHILD_PIPELINE_ID" ] || [ "$CHILD_PIPELINE_ID" = "null" ]; then
@@ -58,7 +65,7 @@ fi
 
 log_message "Success: Found Child Pipeline ID: $CHILD_PIPELINE_ID"
 
-# Fetch all jobs belonging to the discovered child pipeline
+# LIST JOBS IN CHILD PIPELINE
 _jobs_url="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/pipelines/${CHILD_PIPELINE_ID}/jobs"
 _jobs_response=$(curl --silent --fail --header "JOB-TOKEN: $CI_JOB_TOKEN" "$_jobs_url")
 
@@ -67,7 +74,7 @@ if [ $? -ne 0 ] || [ -z "$_jobs_response" ]; then
     exit 1
 fi
 
-# Parse the exact target job ID from the child pipeline using jq
+# Find the job ID of the target child job
 CHILD_JOB_ID=$(echo "$_jobs_response" | jq -r ".[] | select(.name==\"$TARGET_CHILD_JOB_NAME\") | .id // empty")
 
 if [ -z "$CHILD_JOB_ID" ] || [ "$CHILD_JOB_ID" = "null" ]; then
@@ -78,7 +85,7 @@ fi
 
 log_message "Success: Found Target Child Job ID: $CHILD_JOB_ID"
 
-# Download the zipped artifact bundle
+# DOWNLOAD AND EXTRACT ARTIFACTS
 _artifact_url="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/jobs/${CHILD_JOB_ID}/artifacts"
 _output_zip="child_${CHILD_JOB_ID}_artifacts.zip"
 
@@ -90,7 +97,6 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# Extract the artifacts safely into the workspace
 log_message "Extracting artifacts archive..."
 if unzip -o "$_output_zip"; then
     log_message "SUCCESS: Artifacts successfully fetched and unpacked from child job '$TARGET_CHILD_JOB_NAME'."
@@ -101,4 +107,3 @@ else
 fi
 
 log_message "=== Process Completed Successfully ==="
-exit 0

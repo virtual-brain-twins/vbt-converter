@@ -39,7 +39,7 @@ test_vbt_convert_parameter_sweep_dir_to_hdf5:
   variables:
     # The entry‑script for the tests stage is simply “pytest”
     HDF5_DISABLE_VERSION_CHECK: "1"  # Avoid HDF5 version check warnings in the logs
-    VBT_SUBMODULE_PATH: "ci/template_repo"
+    VBT_SUBMODULE_PATH: '$CI_PROJECT_DIR/ci/template_repo'
     VBT_ENTRY_SCRIPT: "tests/integration/vbt_amu_protocol_pipeline/vbt_converter_ps_to_hdf5_wrapper.py"
     VBT_INPUT_PATH: "tests/test_data/parametersweep_8s_3d_orientation_selective_12012026"
     VBT_OUTPUT_PATH: "data/"
@@ -95,7 +95,7 @@ test_vbt_convert_hdf5_to_dsr:
       artifacts: true
   variables:
     # The entry‑script for the tests stage is simply “pytest”
-    VBT_SUBMODULE_PATH: "ci/template_repo"
+    VBT_SUBMODULE_PATH: '$CI_PROJECT_DIR/ci/template_repo'
     VBT_ENTRY_SCRIPT: "tests/integration/vbt_amu_protocol_pipeline/vbt_converter_hdf5_to_dsr_wrapper.py"
     VBT_INPUT_PATH: "input/" #../../../input/converted.hdf5 to be used
     VBT_OUTPUT_PATH: "output/"
@@ -118,6 +118,9 @@ test_vbt_convert_hdf5_to_dsr:
     VBT_ALLURE_TEST_TITLE: "test_vbt_convert_hdf5_to_dsr"
   before_script:
     - echo "Installing dependencies in the docker runner …"
+    - echo "pwd= $(pwd)"
+    - echo "VBT_SUBMODULE_PATH= ${VBT_SUBMODULE_PATH}"
+    - echo "Listing files in VBT_SUBMODULE_PATH= $(ls -la ${VBT_SUBMODULE_PATH})"
     - apk add --no-cache jq python3 bash perl gettext curl
     - export VBT_SUBMODULE_PATH="ci/template_repo"
     - !reference [ .VBT_RUN, before_script ]  # Calls the base "method"
@@ -148,6 +151,7 @@ test_vbt_convert_sweep_dir_to_dsr:
       artifacts: true
   variables:
     HDF5_DISABLE_VERSION_CHECK: "1"  # Avoid HDF5 version check warnings in the logs
+    VBT_SUBMODULE_PATH: '$CI_PROJECT_DIR/ci/template_repo'
     # The entry‑script for the tests stage is simply “pytest”
     VBT_ENTRY_SCRIPT: "tests/integration/vbt_amu_protocol_pipeline/vbt_converter_ps_to_npz_wrapper.py"
     VBT_INPUT_PATH: "tests/test_data/parametersweep_8s_3d_orientation_selective_12012026"
@@ -172,6 +176,9 @@ test_vbt_convert_sweep_dir_to_dsr:
     VBT_ALLURE_TEST_TITLE: "test_vbt_convert_sweep_directory_to_dsr"
   before_script:
     - echo "Installing dependencies in the docker runner …"
+    - echo "pwd= $(pwd)"
+    - echo "VBT_SUBMODULE_PATH= ${VBT_SUBMODULE_PATH}"
+    - echo "Listing files in VBT_SUBMODULE_PATH= $(ls -la ${VBT_SUBMODULE_PATH})"
     - apk add --no-cache jq python3 bash perl gettext curl hdf5-tools
     - !reference [ .VBT_RUN, before_script ]  # Calls the base "method"
   # The artifacts are needed by the publishing stage (Allure results)

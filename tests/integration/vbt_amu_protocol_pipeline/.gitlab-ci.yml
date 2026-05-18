@@ -30,9 +30,11 @@ test_vbt_convert_parameter_sweep_dir_to_hdf5:
     - fenix
   image: docker:cli
   needs:
-    - job: vbt_setup_job
+    - pipeline: $CI_PARENT_PIPELINE_ID
+      job: vbt_setup_job
       artifacts: true
-    - job: unit_tests
+    - pipeline: $CI_PARENT_PIPELINE_ID
+      job: unit_tests
       artifacts: true
   variables:
     # The entry‑script for the tests stage is simply “pytest”

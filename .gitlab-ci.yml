@@ -64,6 +64,8 @@ trigger-integration-amu:
   trigger:
     include: tests/integration/vbt_amu_protocol_pipeline/.gitlab-ci.yml
     strategy: depend
+  variables:
+    PARENT_PIPELINE_ID: "$CI_PIPELINE_ID"
   rules:
     # Run automatically only if files inside pipeline_a folder change
     - changes:
@@ -79,6 +81,8 @@ trigger-integration-bg:
   trigger:
     include: tests/integration/vbt_kth_bg_protocol_pipeline/.gitlab-ci.yml
     strategy: depend
+  variables:
+    PARENT_PIPELINE_ID: "$CI_PIPELINE_ID"
   rules:
     - changes:
         - tests/integration/vbt_kth_bg_protocol_pipeline/**/*

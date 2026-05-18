@@ -9,7 +9,7 @@ stages:
 # Global variables – keep the same behavior as the original template
 # -----------------------------------------------------------------
 variables:
-  VBT_SUBMODULE_PATH: "$CI_PROJECT_DIR/ci/template_repo"
+  VBT_SUBMODULE_PATH: "${CI_PROJECT_DIR}/ci/template_repo"
   # Force the runner to check out sub‑modules (normal)
   GIT_SUBMODULE_STRATEGY: "normal"
 

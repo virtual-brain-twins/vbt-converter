@@ -54,15 +54,17 @@ test_vbt_convert_parameter_sweep_dir_to_hdf5:
     VBT_DYNAMIC_TEST_NAME_SUFFIX: "test_vbt_convert_parameter_sweep_dir_to_hdf5"
     VBT_ALLURE_TEST_TITLE: "test_vbt_convert_parameter_sweep_dir_to_hdf5"
   before_script:
+    - export VBT_ALLURE_LINK_PIPELINE="${CI_PIPELINE_URL}"
+    - export VBT_ALLURE_LINK_JOB="${CI_JOB_URL}"
     - export VBT_SUBMODULE_PATH="${CI_PROJECT_DIR}/ci/template_repo"
     - export VBT_ENTRY_SCRIPT="${CI_PROJECT_DIR}/tests/integration/vbt_amu_protocol_pipeline/vbt_converter_ps_to_hdf5_wrapper.py"
     - export VBT_INPUT_PATH="${CI_PROJECT_DIR}/tests/test_data/parametersweep_8s_3d_orientation_selective_12012026"
     - export VBT_OUTPUT_PATH="${CI_PROJECT_DIR}/data/"
     - export OUTPUT_HDF5_PATH="${CI_PROJECT_DIR}/converted/converted.hdf5"
     - export VBT_ALLURE_DESCRIPTION_HTML="${CI_PROJECT_DIR}/tests/docs/convert_direc_to_hdf_description.html"
-    - echo "Installing dependencies in the docker runner …"
     - echo "VBT_SUBMODULE_PATH= ${VBT_SUBMODULE_PATH}"
     - echo "Listing files in VBT_SUBMODULE_PATH= $(ls -la ${VBT_SUBMODULE_PATH})"
+    - echo "Installing dependencies in the docker runner …"
     - apk add --no-cache jq python3 bash perl gettext curl hdf5-tools
     - !reference [ .VBT_RUN, before_script ]  # Calls the base "method"
   # The artifacts are needed by the publishing stage (Allure results)
@@ -109,7 +111,9 @@ test_vbt_convert_hdf5_to_dsr:
     VBT_DYNAMIC_TEST_NAME_SUFFIX: "test_vbt_convert_hdf5_to_dsr"
     VBT_ALLURE_TEST_TITLE: "test_vbt_convert_hdf5_to_dsr"
   before_script:
-    - echo "Installing dependencies in the docker runner …"
+    - export VBT_ALLURE_LINK_PIPELINE="${CI_PIPELINE_URL}"
+    - export VBT_ALLURE_LINK_JOB="${CI_JOB_URL}"
+    - export VBT_SUBMODULE_PATH="${CI_PROJECT_DIR}/ci/template_repo"
     - export VBT_ENTRY_SCRIPT="${CI_PROJECT_DIR}/tests/integration/vbt_amu_protocol_pipeline/vbt_converter_hdf5_to_dsr_wrapper.py"
     - export VBT_INPUT_PATH="${CI_PROJECT_DIR}/input/"
     - export VBT_OUTPUT_PATH="${CI_PROJECT_DIR}/output/"
@@ -117,8 +121,8 @@ test_vbt_convert_hdf5_to_dsr:
     - export VBT_ALLURE_DESCRIPTION_HTML="${CI_PROJECT_DIR}/tests/docs/convert_direc_to_hdf_description.html"
     - echo "VBT_SUBMODULE_PATH= ${VBT_SUBMODULE_PATH}"
     - echo "Listing files in VBT_SUBMODULE_PATH= $(ls -la ${VBT_SUBMODULE_PATH})"
+    - echo "Installing dependencies in the docker runner …"
     - apk add --no-cache jq python3 bash perl gettext curl
-    - export VBT_SUBMODULE_PATH="ci/template_repo"
     - !reference [ .VBT_RUN, before_script ]  # Calls the base "method"
   cache:
     - key: vbt-converter-test-cache
@@ -164,7 +168,9 @@ test_vbt_convert_sweep_dir_to_dsr:
     VBT_ALLURE_TEST_TITLE: "test_vbt_convert_sweep_directory_to_dsr"
   before_script:
     - echo "Installing dependencies in the docker runner …"
-    - export VBT_SUBMODULE_PATH='$CI_PROJECT_DIR/ci/template_repo'
+    - export VBT_ALLURE_LINK_PIPELINE="${CI_PIPELINE_URL}"
+    - export VBT_ALLURE_LINK_JOB="${CI_JOB_URL}"
+    - export VBT_SUBMODULE_PATH="${CI_PROJECT_DIR}/ci/template_repo"
     - export VBT_ENTRY_SCRIPT="${CI_PROJECT_DIR}/tests/integration/vbt_amu_protocol_pipeline/vbt_converter_ps_to_npz_wrapper.py"
     - export VBT_INPUT_PATH="${CI_PROJECT_DIR}/tests/test_data/parametersweep_8s_3d_orientation_selective_12012026"
     - export VBT_OUTPUT_PATH="${CI_PROJECT_DIR}/data/"

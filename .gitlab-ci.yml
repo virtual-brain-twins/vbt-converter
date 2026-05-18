@@ -67,6 +67,7 @@ trigger-integration-amu:
     strategy: depend
   variables:
     PARENT_PIPELINE_ID: "$CI_PIPELINE_ID"
+    VBT_SUBMODULE_PATH: "${CI_PROJECT_DIR}/ci/template_repo"
   rules:
     # Run automatically only if files inside pipeline_a folder change
     - changes:
@@ -84,6 +85,7 @@ trigger-integration-bg:
     strategy: depend
   variables:
     PARENT_PIPELINE_ID: "$CI_PIPELINE_ID"
+    VBT_SUBMODULE_PATH: "${CI_PROJECT_DIR}/ci/template_repo"
   rules:
     - changes:
         - tests/integration/vbt_kth_bg_protocol_pipeline/**/*

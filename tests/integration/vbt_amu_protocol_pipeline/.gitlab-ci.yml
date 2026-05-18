@@ -64,11 +64,11 @@ test_vbt_convert_parameter_sweep_dir_to_hdf5:
     - apk add --no-cache jq python3 bash perl gettext curl hdf5-tools
     - |
       echo "CI_PROJECT_DIR = ${CI_PROJECT_DIR}"
-      if [[ -z "${VBT_SUBMODULE_PATH}" ]]; then
+      if [[ -z "\${VBT_SUBMODULE_PATH}" ]]; then
         echo "VBT_SUBMODULE_PATH is not defined. Exiting."
         exit 1
       fi
-      echo "🔎  VBT_SUBMODULE_PATH = ${VBT_SUBMODULE_PATH}"
+      echo "VBT_SUBMODULE_PATH = ${VBT_SUBMODULE_PATH}"
       echo "Listing contents of ${VBT_SUBMODULE_PATH}:"
       ls -la "${VBT_SUBMODULE_PATH}"
     - !reference [ .VBT_RUN, before_script ]  # Calls the base "method"

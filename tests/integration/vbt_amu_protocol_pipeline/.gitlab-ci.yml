@@ -63,6 +63,7 @@ test_vbt_convert_parameter_sweep_dir_to_hdf5:
     - echo "Installing dependencies in the docker runner …"
     - echo "pwd= $(pwd)"
     - echo "VBT_SUBMODULE_PATH= ${VBT_SUBMODULE_PATH}"
+    - echo "Listing files in VBT_SUBMODULE_PATH= $(ls -la ${VBT_SUBMODULE_PATH})"
     - apk add --no-cache jq python3 bash perl gettext curl hdf5-tools
     - !reference [ .VBT_RUN, before_script ]  # Calls the base "method"
   # The artifacts are needed by the publishing stage (Allure results)

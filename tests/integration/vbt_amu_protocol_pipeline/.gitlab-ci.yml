@@ -39,11 +39,11 @@ test_vbt_convert_parameter_sweep_dir_to_hdf5:
   variables:
     # The entry‑script for the tests stage is simply “pytest”
     HDF5_DISABLE_VERSION_CHECK: "1"  # Avoid HDF5 version check warnings in the logs
-    VBT_ENTRY_SCRIPT: "${CI_PROJECT_DIR}/tests/integration/vbt_amu_protocol_pipeline/vbt_converter_ps_to_hdf5_wrapper.py"
-    VBT_INPUT_PATH: "${CI_PROJECT_DIR}/tests/test_data/parametersweep_8s_3d_orientation_selective_12012026"
-    VBT_OUTPUT_PATH: "${CI_PROJECT_DIR}/data/"
+    VBT_ENTRY_SCRIPT: "../../../tests/integration/vbt_amu_protocol_pipeline/vbt_converter_ps_to_hdf5_wrapper.py"
+    VBT_INPUT_PATH: "../../../tests/test_data/parametersweep_8s_3d_orientation_selective_12012026"
+    VBT_OUTPUT_PATH: "../../../data/"
     VBT_ENABLE_OUTPUT_DIR_RECURSIVE_ATTACH: "false" # Do not attach the whole output dir as artifact
-    OUTPUT_HDF5_PATH: "${CI_PROJECT_DIR}/converted/converted.hdf5" # Path to the converted HDF5 file (which is the only output artifact we want to attach to CI Job)
+    OUTPUT_HDF5_PATH: "../../../converted/converted.hdf5" # Path to the converted HDF5 file (which is the only output artifact we want to attach to CI Job)
     # Allure results are written to `allure-results/`
     # -----------------------------------------------------------------
     # Allure / tests‑metadata – feel free to adapt the wording
@@ -55,13 +55,13 @@ test_vbt_convert_parameter_sweep_dir_to_hdf5:
     VBT_ALLURE_FEATURE: "Use of cached test data to validate the converter’s functionality for a directory layout that is representative of real‑world use cases"
     VBT_ALLURE_STORY: "Integration test for the conversion of parameter‑sweep‑style directories to HDF5 file and validation of the converted file against the ground‑truth HDF5 file (https://tvb-projects.atlassian.net/browse/VT-233)"
     VBT_ALLURE_LINK_JIRA: "https://tvb-projects.atlassian.net/browse/VT-233"
-    VBT_ALLURE_DESCRIPTION_HTML: "${CI_PROJECT_DIR}/tests/docs/convert_direc_to_hdf_description.html"
+    VBT_ALLURE_DESCRIPTION_HTML: "../../../tests/docs/convert_direc_to_hdf_description.html"
     VBT_DYNAMIC_TEST_NAME_SUFFIX: "test_vbt_convert_parameter_sweep_dir_to_hdf5"
     VBT_ALLURE_TEST_TITLE: "test_vbt_convert_parameter_sweep_dir_to_hdf5"
   before_script:
     - echo "Installing dependencies in the docker runner …"
     - apk add --no-cache jq python3 bash perl gettext curl hdf5-tools
-    - export VBT_SUBMODULE_PATH="${CI_PROJECT_DIR}/ci/template_repo"
+    - export VBT_SUBMODULE_PATH="../../../ci/template_repo"
     - !reference [ .VBT_RUN, before_script ]  # Calls the base "method"
   # The artifacts are needed by the publishing stage (Allure results)
   cache:
@@ -73,7 +73,7 @@ test_vbt_convert_parameter_sweep_dir_to_hdf5:
     when: always
     paths:
       - allure-results/
-      - "${CI_PROJECT_DIR}/converted"
+      - "../../../converted"
     expire_in: 1 week
 
 test_vbt_convert_hdf5_to_dsr:
@@ -92,13 +92,13 @@ test_vbt_convert_hdf5_to_dsr:
       artifacts: true
   variables:
     # The entry‑script for the tests stage is simply “pytest”
-    VBT_SUBMODULE_PATH: "${CI_PROJECT_DIR}/ci/template_repo"
-    VBT_ENTRY_SCRIPT: "${CI_PROJECT_DIR}/tests/integration/vbt_amu_protocol_pipeline/vbt_converter_hdf5_to_dsr_wrapper.py"
-    VBT_INPUT_PATH: "${CI_PROJECT_DIR}/input/" #${CI_PROJECT_DIR}/input/converted.hdf5 to be used
-    VBT_OUTPUT_PATH: "${CI_PROJECT_DIR}/output/"
+    VBT_SUBMODULE_PATH: "../../../ci/template_repo"
+    VBT_ENTRY_SCRIPT: "../../../tests/integration/vbt_amu_protocol_pipeline/vbt_converter_hdf5_to_dsr_wrapper.py"
+    VBT_INPUT_PATH: "../../../input/" #../../../input/converted.hdf5 to be used
+    VBT_OUTPUT_PATH: "../../../output/"
     VBT_ENABLE_INPUT_DIR_RECURSIVE_ATTACH: "false"
     VBT_ENABLE_OUTPUT_DIR_RECURSIVE_ATTACH: "false"
-    OUTPUT_NPZ_PATH: "${CI_PROJECT_DIR}/converted/converted.npz" # Path to the converted numpy file (which is the only output artifact we want to attach to CI Job)
+    OUTPUT_NPZ_PATH: "../../../converted/converted.npz" # Path to the converted numpy file (which is the only output artifact we want to attach to CI Job)
     # Allure results are written to `allure-results/`
     # -----------------------------------------------------------------
     # Allure / tests‑metadata – feel free to adapt the wording
@@ -110,13 +110,13 @@ test_vbt_convert_hdf5_to_dsr:
     VBT_ALLURE_FEATURE: "Use of the converted HDF5 file to validate the converter’s functionality for the conversion to DSR format, which is the format used by upscale teams for simulations"
     VBT_ALLURE_STORY: "Integration test for the conversion of the created HDF5 file to DSR format and validation of the results (https://tvb-projects.atlassian.net/browse/VT-233)"
     VBT_ALLURE_LINK_JIRA: "https://tvb-projects.atlassian.net/browse/VT-233"
-    VBT_ALLURE_DESCRIPTION_HTML: "${CI_PROJECT_DIR}/tests/docs/convert_direc_to_hdf_description.html"
+    VBT_ALLURE_DESCRIPTION_HTML: "../../../tests/docs/convert_direc_to_hdf_description.html"
     VBT_DYNAMIC_TEST_NAME_SUFFIX: "test_vbt_convert_hdf5_to_dsr"
     VBT_ALLURE_TEST_TITLE: "test_vbt_convert_hdf5_to_dsr"
   before_script:
     - echo "Installing dependencies in the docker runner …"
     - apk add --no-cache jq python3 bash perl gettext curl
-    - export VBT_SUBMODULE_PATH="${CI_PROJECT_DIR}/ci/template_repo"
+    - export VBT_SUBMODULE_PATH="../../../ci/template_repo"
     - !reference [ .VBT_RUN, before_script ]  # Calls the base "method"
   cache:
     - key: vbt-converter-test-cache
@@ -127,7 +127,7 @@ test_vbt_convert_hdf5_to_dsr:
     when: always
     paths:
       - allure-results/
-      - "${CI_PROJECT_DIR}/converted/"
+      - "../../../converted/"
     expire_in: 1 week
 
 
@@ -146,13 +146,13 @@ test_vbt_convert_sweep_dir_to_dsr:
   variables:
     HDF5_DISABLE_VERSION_CHECK: "1"  # Avoid HDF5 version check warnings in the logs
     # The entry‑script for the tests stage is simply “pytest”
-    VBT_ENTRY_SCRIPT: "${CI_PROJECT_DIR}/tests/integration/vbt_amu_protocol_pipeline/vbt_converter_ps_to_npz_wrapper.py"
-    VBT_INPUT_PATH: "${CI_PROJECT_DIR}/tests/test_data/parametersweep_8s_3d_orientation_selective_12012026"
-    VBT_OUTPUT_PATH: "${CI_PROJECT_DIR}/data/"
+    VBT_ENTRY_SCRIPT: "../../../tests/integration/vbt_amu_protocol_pipeline/vbt_converter_ps_to_npz_wrapper.py"
+    VBT_INPUT_PATH: "../../../tests/test_data/parametersweep_8s_3d_orientation_selective_12012026"
+    VBT_OUTPUT_PATH: "../../../data/"
     VBT_ENABLE_INPUT_DIR_RECURSIVE_ATTACH: "false"
     VBT_ENABLE_OUTPUT_DIR_RECURSIVE_ATTACH: "false"
-    OUTPUT_NPZ_PATH: "${CI_PROJECT_DIR}/converted/converted.npz" # Path to the converted numpy file (which is the only output artifact we want to attach to CI Job)
-    OUTPUT_HDF5_PATH: "${CI_PROJECT_DIR}/converted/converted.hdf5" # Path to the converted hdf5 file (which is the only output artifact we want to attach to CI Job)
+    OUTPUT_NPZ_PATH: "../../../converted/converted.npz" # Path to the converted numpy file (which is the only output artifact we want to attach to CI Job)
+    OUTPUT_HDF5_PATH: "../../../converted/converted.hdf5" # Path to the converted hdf5 file (which is the only output artifact we want to attach to CI Job)
     # Allure results are written to `allure-results/`
     # -----------------------------------------------------------------
     # Allure / tests‑metadata – feel free to adapt the wording
@@ -164,7 +164,7 @@ test_vbt_convert_sweep_dir_to_dsr:
     VBT_ALLURE_FEATURE: "Use of the converted HDF5 file to validate the converter’s functionality for the conversion to DSR format, which is the format used by upscale teams for simulations"
     VBT_ALLURE_STORY: "Integration test for the conversion of the sweep directory to HDF5 file & DSR format and validation of the results (https://tvb-projects.atlassian.net/browse/VT-233)"
     VBT_ALLURE_LINK_JIRA: "https://tvb-projects.atlassian.net/browse/VT-233"
-    VBT_ALLURE_DESCRIPTION_HTML: "${CI_PROJECT_DIR}/tests/docs/convert_direc_to_hdf_description.html"
+    VBT_ALLURE_DESCRIPTION_HTML: "../../../tests/docs/convert_direc_to_hdf_description.html"
     VBT_DYNAMIC_TEST_NAME_SUFFIX: "test_vbt_convert_sweep_directory_to_dsr"
     VBT_ALLURE_TEST_TITLE: "test_vbt_convert_sweep_directory_to_dsr"
   before_script:
@@ -181,5 +181,5 @@ test_vbt_convert_sweep_dir_to_dsr:
     when: always
     paths:
       - allure-results/
-      - "${CI_PROJECT_DIR}/converted/"
+      - "../../../converted/"
     expire_in: 1 week

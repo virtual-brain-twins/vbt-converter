@@ -84,7 +84,8 @@ test_vbt_convert_hdf5_to_dsr:
     - fenix
   image: docker:cli
   needs:
-    - job: vbt_setup_job
+    - pipeline: $CI_PARENT_PIPELINE_ID
+      job: vbt_setup_job
       artifacts: true
     - job: test_vbt_convert_parameter_sweep_dir_to_hdf5
       artifacts: true
@@ -136,7 +137,8 @@ test_vbt_convert_sweep_dir_to_dsr:
     - fenix
   image: docker:cli
   needs:
-    - job: vbt_setup_job
+    - pipeline: $CI_PARENT_PIPELINE_ID
+      job: vbt_setup_job
       artifacts: true
   variables:
     HDF5_DISABLE_VERSION_CHECK: "1"  # Avoid HDF5 version check warnings in the logs

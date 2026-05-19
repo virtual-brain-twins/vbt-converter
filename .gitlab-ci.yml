@@ -97,21 +97,12 @@ vbt_publish_job:
   needs:
     - job: unit_tests
       artifacts: true
-    - job: trigger-integration-amu
-      artifacts: true
-      optional: true
-    - job: trigger-integration-bg
-      artifacts: true
-      optional: true
   variables:
     VBT_PUBLISH_SCRIPT: "${CI_PROJECT_DIR}/ci/template_repo/ci/scripts/publish_report.sh"
   before_script:
     - echo "Installing dependencies in the Alpine runner …"
     - apk add --no-cache jq unzip
     - !reference [ .VBT_PUBLISH, before_script ]  # Calls the base "method"
-  script:
-    - echo "Executing artifact downloader script..."
-    - !reference [ .VBT_PUBLISH, script ]  # Calls the base "method"
 
 # CLEAN‑UP – tear‑down the temporary virtual environment
 vbt_cleanup_job:

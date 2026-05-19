@@ -51,8 +51,8 @@ test_vbt_convert_parameter_sweep_dir_to_hdf5:
     VBT_ALLURE_FEATURE: "Use of cached test data to validate the converter’s functionality for a directory layout that is representative of real‑world use cases"
     VBT_ALLURE_STORY: "Integration test for the conversion of parameter‑sweep‑style directories to HDF5 file and validation of the converted file against the ground‑truth HDF5 file (https://tvb-projects.atlassian.net/browse/VT-233)"
     VBT_ALLURE_LINK_JIRA: "https://tvb-projects.atlassian.net/browse/VT-233"
-    VBT_DYNAMIC_TEST_NAME_SUFFIX: "test_vbt_convert_parameter_sweep_dir_to_hdf5"
-    VBT_ALLURE_TEST_TITLE: "test_vbt_convert_parameter_sweep_dir_to_hdf5"
+    VBT_DYNAMIC_TEST_NAME_SUFFIX: "test_vbt_bg_convert_parameter_sweep_dir_to_hdf5"
+    VBT_ALLURE_TEST_TITLE: "test_vbt_bg_convert_parameter_sweep_dir_to_hdf5"
   before_script:
     - export VBT_ALLURE_LINK_PIPELINE="${CI_PIPELINE_URL}"
     - export VBT_ALLURE_LINK_JOB="${CI_JOB_URL}"

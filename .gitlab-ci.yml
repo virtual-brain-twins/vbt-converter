@@ -51,6 +51,13 @@ unit_tests:
     - apk add --no-cache jq python3 bash perl gettext curl
     - !reference [ .VBT_RUN, before_script ]  # Calls the base "method"
   variables:
+    VBT_ALLURE_PARENT_SUITE: "VBT‑converter CI/CD"
+    VBT_ALLURE_SUITE: "Unit Tests"
+    VBT_ALLURE_EPIC: "Guarantee that the converter works for every possible input layout"
+    VBT_ALLURE_FEATURE: "Use of cached test data to validate the converter’s functionality for a directory layout that is representative of real‑world use cases"
+    VBT_ALLURE_STORY: "Unit test suite for the conversion of parameter‑sweep‑style directories to HDF5 file and validation of the converted file against the ground‑truth HDF5 file (https://tvb-projects.atlassian.net/browse/VT-233). Also conversion of the HDf5 file to NPZ format and their tests."
+    VBT_ALLURE_LINK_JIRA: "https://tvb-projects.atlassian.net/browse/VT-233"
+    VBT_DYNAMIC_TEST_NAME_SUFFIX: "unit_tests_parameter_sweep_dir_to_hdf5_to_upstream_formats"
     VBT_TEST_PATHS: "tests/unit"  # Override the default test suite path to point to the unit tests
   artifacts:
     when: always

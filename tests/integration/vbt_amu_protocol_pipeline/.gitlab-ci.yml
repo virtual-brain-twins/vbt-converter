@@ -22,20 +22,6 @@ include:
     file:   '/ci/template.yml'                          # path inside the source repo
 
 test_vbt_convert_parameter_sweep_dir_to_hdf5:
-  extends: .VBT_RUN                       # provided by the template
-  stage: test
-  tags:
-    - docker
-    - jsc-cloud
-    - fenix
-  image: docker:cli
-  needs:
-    - pipeline: $PARENT_PIPELINE_ID
-      job: vbt_setup_job
-      artifacts: true
-    - pipeline: $PARENT_PIPELINE_ID
-      job: unit_tests
-      artifacts: true
   variables:
     # The entry‑script for the tests stage is simply “pytest”
     HDF5_DISABLE_VERSION_CHECK: "1"  # Avoid HDF5 version check warnings in the logs
@@ -53,6 +39,17 @@ test_vbt_convert_parameter_sweep_dir_to_hdf5:
     VBT_ALLURE_LINK_JIRA: "https://tvb-projects.atlassian.net/browse/VT-233"
     VBT_DYNAMIC_TEST_NAME_SUFFIX: "test_vbt_convert_parameter_sweep_dir_to_hdf5"
     VBT_ALLURE_TEST_TITLE: "test_vbt_convert_parameter_sweep_dir_to_hdf5"
+  extends: .VBT_RUN                       # provided by the template
+  stage: test
+  tags:
+    - docker
+    - jsc-cloud
+    - fenix
+  image: docker:cli
+  needs:
+    - pipeline: $PARENT_PIPELINE_ID
+      job: vbt_setup_job
+      artifacts: true
   before_script:
     - echo "VBT_ALLURE_PARENT_SUITE= ${VBT_ALLURE_PARENT_SUITE}"
     - export VBT_ALLURE_LINK_PIPELINE="${CI_PIPELINE_URL}"
@@ -66,6 +63,9 @@ test_vbt_convert_parameter_sweep_dir_to_hdf5:
     - echo "Installing dependencies in the docker runner …"
     - apk add --no-cache jq python3 bash perl gettext curl hdf5-tools
     - !reference [ .VBT_RUN, before_script ]  # Calls the base "method"
+  script:
+    - echo "VBT_ALLURE_PARENT_SUITE= ${VBT_ALLURE_PARENT_SUITE}"
+    - !reference [ .VBT_RUN, script ]  # Calls the base "method"
   # The artifacts are needed by the publishing stage (Allure results)
   cache:
     - key: vbt-converter-test-cache
@@ -193,8 +193,6 @@ vbt_publish_job:
   extends: .VBT_PUBLISH
   stage: publish_report
   needs:
-    - job: test_vbt_convert_parameter_sweep_dir_to_hdf5
-      artifacts: true
     - job: test_vbt_convert_hdf5_to_dsr
       artifacts: true
     - job: test_vbt_convert_sweep_dir_to_dsr

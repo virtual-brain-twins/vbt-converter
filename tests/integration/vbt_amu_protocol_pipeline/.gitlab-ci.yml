@@ -21,7 +21,6 @@ include:
     ref:    main                                         # branch / tag you want to use
     file:   '/ci/template.yml'                          # path inside the source repo
 
-
 test_vbt_convert_parameter_sweep_dir_to_hdf5:
   extends: .VBT_RUN                       # provided by the template
   stage: test
@@ -46,7 +45,7 @@ test_vbt_convert_parameter_sweep_dir_to_hdf5:
     # Allure / tests‑metadata – feel free to adapt the wording
     # -----------------------------------------------------------------
     VBT_ALLURE_PARENT_SUITE: "VBT‑converter CI/CD"
-    VBT_ALLURE_SUITE: "Integration Tests"
+    VBT_ALLURE_SUITE: "Integration Tests AMU Protocol Pipeline"
     VBT_ALLURE_SUB_SUITE: "Conversion of parameter‑sweep‑style directories to HDF5 file and validation of the converted file against the ground‑truth HDF5 file"
     VBT_ALLURE_EPIC: "Guarantee that the converter works for every possible input layout"
     VBT_ALLURE_FEATURE: "Use of cached test data to validate the converter’s functionality for a directory layout that is representative of real‑world use cases"
@@ -101,7 +100,7 @@ test_vbt_convert_hdf5_to_dsr:
     # Allure / tests‑metadata – feel free to adapt the wording
     # -----------------------------------------------------------------
     VBT_ALLURE_PARENT_SUITE: "VBT‑converter CI/CD"
-    VBT_ALLURE_SUITE: "Integration Tests"
+    VBT_ALLURE_SUITE: "Integration Tests AMU Protocol Pipeline"
     VBT_ALLURE_SUB_SUITE: "Conversion of the created HDF5 file to DSR format and validation of the results"
     VBT_ALLURE_EPIC: "Use of the converted HDF5 file to validate the converter’s functionality for the conversion to DSR format, which is the format used by upscale teams for simulations"
     VBT_ALLURE_FEATURE: "Use of the converted HDF5 file to validate the converter’s functionality for the conversion to DSR format, which is the format used by upscale teams for simulations"
@@ -155,7 +154,7 @@ test_vbt_convert_sweep_dir_to_dsr:
     # Allure / tests‑metadata – feel free to adapt the wording
     # -----------------------------------------------------------------
     VBT_ALLURE_PARENT_SUITE: "VBT‑converter CI/CD"
-    VBT_ALLURE_SUITE: "Integration Tests"
+    VBT_ALLURE_SUITE: "Integration Tests AMU Protocol Pipeline"
     VBT_ALLURE_SUB_SUITE: "Conversion of the parameter sweep directory to HDF5 + NPZ format and validation of the results"
     VBT_ALLURE_EPIC: "Use of the converted HDF5 file to validate the converter’s functionality for the conversion to DSR format, which is the format used by upscale teams for simulations"
     VBT_ALLURE_FEATURE: "Use of the converted HDF5 file to validate the converter’s functionality for the conversion to DSR format, which is the format used by upscale teams for simulations"
@@ -200,6 +199,9 @@ vbt_publish_job:
     - job: test_vbt_convert_sweep_dir_to_dsr
       artifacts: true
   before_script:
+    - export VBT_ALLURE_LINK_PIPELINE="${CI_PIPELINE_URL}"
+    - export VBT_ALLURE_LINK_JOB="${CI_JOB_URL}"
+    - export VBT_SUBMODULE_PATH="${CI_PROJECT_DIR}/ci/template_repo"
     - export VBT_PUBLISH_SCRIPT="${CI_PROJECT_DIR}/ci/template_repo/ci/scripts/publish_report.sh"
     - echo "Installing dependencies in the Alpine runner …"
     - apk add --no-cache jq unzip

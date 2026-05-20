@@ -38,6 +38,7 @@ test_vbt_convert_parameter_sweep_dir_to_hdf5:
       artifacts: true
   before_script:
     - export VBT_ENABLE_OUTPUT_DIR_RECURSIVE_ATTACH="false" # Do not attach the whole output dir as artifact
+    - export VBT_ENABLE_INPUT_DIR_RECURSIVE_ATTACH="false" # Do not attach the whole output dir as artifact
     - export VBT_ALLURE_PARENT_SUITE="VBT‑converter CI/CD"
     - export VBT_TEST_CHECK="VBT‑Test Check"
     - export VBT_ALLURE_SUITE="Integration Tests AMU Protocol Pipeline"
@@ -54,7 +55,8 @@ test_vbt_convert_parameter_sweep_dir_to_hdf5:
     - export VBT_ENTRY_SCRIPT="${CI_PROJECT_DIR}/tests/integration/vbt_amu_protocol_pipeline/vbt_converter_ps_to_hdf5_wrapper.py"
     - export VBT_INPUT_PATH="${CI_PROJECT_DIR}/tests/test_data/parametersweep_8s_3d_orientation_selective_12012026"
     - export VBT_OUTPUT_PATH="${CI_PROJECT_DIR}/data/"
-    - export OUTPUT_HDF5_PATH="${CI_PROJECT_DIR}/converted/converted.hdf5"
+    - export INPUT_SWEEP_DIR_PATH="${CI_PROJECT_DIR}/attachments/parametersweep_8s_3d_orientation_selective_12012026"
+    - export OUTPUT_HDF5_PATH="${CI_PROJECT_DIR}/attachments/converted.hdf5"
     - export VBT_ALLURE_DESCRIPTION_HTML="${CI_PROJECT_DIR}/tests/docs/convert_direc_to_hdf_description.html"
     - echo "Installing dependencies in the docker runner …"
     - apk add --no-cache jq python3 bash perl gettext curl hdf5-tools
@@ -69,8 +71,8 @@ test_vbt_convert_parameter_sweep_dir_to_hdf5:
     when: always
     paths:
       - allure-results/
-      - "${CI_PROJECT_DIR}/converted"
-    expire_in: 1 week
+      - "${CI_PROJECT_DIR}/attachments/"
+    expire_in: 6 week
 
 test_vbt_convert_hdf5_to_dsr:
   extends: .VBT_RUN

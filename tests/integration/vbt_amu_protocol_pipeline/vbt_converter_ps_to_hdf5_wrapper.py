@@ -253,16 +253,30 @@ def main() -> None:
     )
     report_path: Path = args.output_dir / "test_result_report.html"
     report_path.write_text(filled)
-    create_link_html(args.output_dir / "converted_hdf5_link.html", logger)
+    create_link_html(args.output_dir / "converted_hdf5_link.html", "converted.hdf5", "Converted HDF5 File", logger)
     logger.info("Report written to %s", report_path)
 
-def create_link_html(output_file: Path, logger: logging.Logger) -> None:
-    """
-    Write a minimal HTML file that contains a link to the converted HDF5 artifact.
+    # Allure report gets burdened by input sweep directory, hence attaching it as an HTML entry with the actual directory attached to CI job
+    input_sweep = ci_root / "tests" / "test_data" / "parametersweep_8s_3d_orientation_selective_12012026"
+    dest_sweep_dir = Path(str(os.getenv("INPUT_SWEEP_DIR_PATH"))).expanduser().resolve()
+    dest_sweep_dir.parent.mkdir(parents=True, exist_ok=True)
+    # Move / rename the file
+    try:
+        input_sweep.replace(dest_sweep_dir)
+    except OSError:  # (different FS)
+        # Fall back to shutil.move which handles cross‑filesystem moves.
+        try:
+            shutil.move(str(input_sweep), str(dest_sweep_dir))
+        except OSError as exc:
+            logger.error("Could not move %s → %s: %s", input_sweep, dest_sweep_dir, exc)
+            sys.exit(1)
 
-    The URL is built from the environment variable ``VBT_ALLURE_LINK_JOB`` and the
-    fixed path ``/artifacts/file/converted/converted.hdf5``.  If the environment variable
-    is not defined the function raises a clear ``RuntimeError``.
+    logger.info("Successfully moved %s → %s", input_sweep, dest_sweep_dir)
+    create_link_html(args.input_dir / "input_sweep_dir_link.html", "parametersweep_8s_3d_orientation_selective_12012026", "Parameter Sweep Directory", logger)
+
+def create_link_html(output_file: Path, attachment_name, link_text, logger: logging.Logger) -> None:
+    """
+    Write a minimal HTML file that contains a link to the attachment artifact.
     """
     base_url = os.getenv("VBT_ALLURE_LINK_JOB")
     if not base_url:
@@ -271,16 +285,16 @@ def create_link_html(output_file: Path, logger: logging.Logger) -> None:
         )
 
     # Ensure we don't end up with a double slash when we concatenate.
-    artifact_url = f"{base_url.rstrip('/')}/artifacts/file/converted/converted.hdf5"
+    artifact_url = f"{base_url.rstrip('/')}/artifacts/file/attachments/{attachment_name}"
 
     html_content = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>Converted HDF5 File</title>
+    <title>{link_text}</title>
 </head>
 <body>
-    <p><a href="{artifact_url}" target="_blank" rel="noopener noreferrer">Converted HDF5 File</a></p>
+    <p><a href="{artifact_url}" target="_blank" rel="noopener noreferrer">{link_text}</a></p>
 </body>
 </html>
 """

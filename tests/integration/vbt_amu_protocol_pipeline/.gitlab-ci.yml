@@ -10,7 +10,6 @@ stages:
 # Global variables – keep the same behavior as the original template
 # -----------------------------------------------------------------
 variables:
-  VBT_ALLURE_PARENT_SUITE: "VBT‑converter CI/CD"
   # Force the runner to check out sub‑modules (normal)
   GIT_SUBMODULE_STRATEGY: "normal"
 

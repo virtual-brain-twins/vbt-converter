@@ -87,11 +87,11 @@ def _parse_args() -> argparse.Namespace:
 
 def move_converted_hdf5(logger: logging.Logger, ci_root: Path, input_dir: Path) -> None:
     """
-    Move ``ci_root/converted/converted.hdf5`` into the folder that the
-    converter expects: ``<input_dir>/converted/converted.hdf5``.
+    Move ``ci_root/attachments/converted.hdf5`` into the folder that the
+    converter expects: ``<input_dir>/attachments/converted.hdf5``.
     """
-    src = ci_root / "converted" / "converted.hdf5"
-    dst_dir = Path(input_dir) / "converted"
+    src = ci_root / "attachments" / "converted.hdf5"
+    dst_dir = Path(input_dir) / "attachments"
     dst = dst_dir / "converted.hdf5"
 
     # Make sure we have something to move
@@ -161,7 +161,7 @@ def main() -> None:
             sys.executable,  # use the same Python interpreter
             str(converter_script),
             "--input_file",
-            str(args.input_dir.resolve() / "converted" / "converted.hdf5"),
+            str(args.input_dir.resolve() / "attachments" / "converted.hdf5"),
             "--output_file",
             str(output_npz),
             "--bin_size",
@@ -251,18 +251,27 @@ def main() -> None:
         "success" if success else "failure",
         status_message
     )
-    # report_path.write_text(filled)
-    # create_link_html(args.output_dir / "converted_hdf5_link.html", logger)
+
+    # Move the input hdf5 to the attachments
+    input_file = args.input_dir.resolve() / "attachments" / "converted.hdf5"
+    input_hdf5_target_path = Path(str(os.getenv("INPUT_HDF5_PATH"))).expanduser().resolve()
+    input_hdf5_target_path.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        shutil.move(input_file, input_hdf5_target_path)
+    except OSError as exc:
+        logger.error(
+            "Could not move %s → %s: %s", input_file, input_hdf5_target_path, exc
+        )
+        sys.exit(1)
+    logger.info("Input HDF5 file moved from %s → %s", input_file, input_hdf5_target_path)
+    create_link_html(ci_root / "input" / "input_hdf5_link.html", "input.hdf5", "Input HDF5 File", logger)
     logger.info("Report written to %s", report_path)
 
 
-def create_link_html(output_file: Path, logger: logging.Logger) -> None:
+def create_link_html(output_file: Path, attachment_name, link_name, logger: logging.Logger) -> None:
     """
-    Write a minimal HTML file that contains a link to the converted HDF5 artifact.
-
-    The URL is built from the environment variable ``VBT_ALLURE_LINK_JOB`` and the
-    fixed path ``/artifacts/file/converted/converted.hdf5``.  If the environment variable
-    is not defined the function raises a clear ``RuntimeError``.
+    Write a minimal HTML file that contains a link to the attached artifact.
     """
     base_url = os.getenv("VBT_ALLURE_LINK_JOB")
     if not base_url:
@@ -271,16 +280,16 @@ def create_link_html(output_file: Path, logger: logging.Logger) -> None:
         )
 
     # Ensure we don't end up with a double slash when we concatenate.
-    artifact_url = f"{base_url.rstrip('/')}/artifacts/file/converted/converted.hdf5"
+    artifact_url = f"{base_url.rstrip('/')}/artifacts/file/attachments/{attachment_name}"
 
     html_content = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>Converted HDF5 File</title>
+    <title>{link_name}</title>
 </head>
 <body>
-    <p><a href="{artifact_url}" target="_blank" rel="noopener noreferrer">Converted HDF5 File</a></p>
+    <p><a href="{artifact_url}" target="_blank" rel="noopener noreferrer">{link_name}</a></p>
 </body>
 </html>
 """

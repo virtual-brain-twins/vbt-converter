@@ -281,7 +281,7 @@ def main() -> None:
             # fallback for cross‑filesystem moves
             shutil.move(str(entry), str(target))
     logger.info("Successfully moved contents of %s → %s", src_sweep, dest_sweep_dir)
-    create_link_html(args.input_dir / "input_sweep_dir_link.html", "parametersweep_8s_3d_orientation_selective_12012026", "Parameter Sweep Directory", logger)
+    create_link_html(src_sweep / "input_sweep_dir_link.html", "parametersweep_8s_3d_orientation_selective_12012026", "Parameter Sweep Directory", logger)
 
 def create_link_html(output_file: Path, attachment_name, link_text, logger: logging.Logger) -> None:
     """

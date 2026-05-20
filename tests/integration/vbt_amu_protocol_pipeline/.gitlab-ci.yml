@@ -10,6 +10,7 @@ stages:
 # Global variables – keep the same behavior as the original template
 # -----------------------------------------------------------------
 variables:
+  VBT_ALLURE_PARENT_SUITE: "VBT‑converter CI/CD"
   # Force the runner to check out sub‑modules (normal)
   GIT_SUBMODULE_STRATEGY: "normal"
 
@@ -64,7 +65,7 @@ test_vbt_convert_parameter_sweep_dir_to_hdf5:
     - export VBT_ALLURE_DESCRIPTION_HTML="${CI_PROJECT_DIR}/tests/docs/convert_direc_to_hdf_description.html"
     - echo "Installing dependencies in the docker runner …"
     - apk add --no-cache jq python3 bash perl gettext curl hdf5-tools
-    #- !reference [ .VBT_RUN, before_script ]  # Calls the base "method"
+    - !reference [ .VBT_RUN, before_script ]  # Calls the base "method"
   script:
     - echo "VBT_ALLURE_PARENT_SUITE= ${VBT_ALLURE_PARENT_SUITE}"
     - !reference [ .VBT_RUN, script ]  # Calls the base "method"

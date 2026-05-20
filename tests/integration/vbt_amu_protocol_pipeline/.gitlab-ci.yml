@@ -31,6 +31,7 @@ test_vbt_convert_parameter_sweep_dir_to_hdf5:
     # Allure / tests‑metadata – feel free to adapt the wording
     # -----------------------------------------------------------------
     VBT_ALLURE_PARENT_SUITE: "VBT‑converter CI/CD"
+    VBT_TEST_CHECK: "VBT‑Test Check"
     VBT_ALLURE_SUITE: "Integration Tests AMU Protocol Pipeline"
     VBT_ALLURE_SUB_SUITE: "Conversion of parameter‑sweep‑style directories to HDF5 file and validation of the converted file against the ground‑truth HDF5 file"
     VBT_ALLURE_EPIC: "Guarantee that the converter works for every possible input layout"
@@ -52,6 +53,7 @@ test_vbt_convert_parameter_sweep_dir_to_hdf5:
       artifacts: true
   before_script:
     - echo "VBT_ALLURE_PARENT_SUITE= ${VBT_ALLURE_PARENT_SUITE}"
+    - echo "VBT_TEST_CHECK= ${VBT_TEST_CHECK}"
     - export VBT_ALLURE_LINK_PIPELINE="${CI_PIPELINE_URL}"
     - export VBT_ALLURE_LINK_JOB="${CI_JOB_URL}"
     - export VBT_SUBMODULE_PATH="${CI_PROJECT_DIR}/ci/template_repo"

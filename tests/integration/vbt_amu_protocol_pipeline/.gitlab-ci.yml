@@ -21,25 +21,10 @@ include:
     ref:    main                                         # branch / tag you want to use
     file:   '/ci/template.yml'                          # path inside the source repo
 
-test_vbt_amu_convert_parameter_sweep_dir_to_hdf5:
+test_vbt_convert_parameter_sweep_dir_to_hdf5:
   variables:
     # The entry‑script for the tests stage is simply “pytest”
     HDF5_DISABLE_VERSION_CHECK: "1"  # Avoid HDF5 version check warnings in the logs
-    VBT_ENABLE_OUTPUT_DIR_RECURSIVE_ATTACH: "false" # Do not attach the whole output dir as artifact
-    # Allure results are written to `allure-results/`
-    # -----------------------------------------------------------------
-    # Allure / tests‑metadata – feel free to adapt the wording
-    # -----------------------------------------------------------------
-    VBT_ALLURE_PARENT_SUITE: "VBT‑converter CI/CD"
-    VBT_TEST_CHECK: "VBT‑Test Check"
-    VBT_ALLURE_SUITE: "Integration Tests AMU Protocol Pipeline"
-    VBT_ALLURE_SUB_SUITE: "Conversion of parameter‑sweep‑style directories to HDF5 file and validation of the converted file against the ground‑truth HDF5 file"
-    VBT_ALLURE_EPIC: "Guarantee that the converter works for every possible input layout"
-    VBT_ALLURE_FEATURE: "Use of cached test data to validate the converter’s functionality for a directory layout that is representative of real‑world use cases"
-    VBT_ALLURE_STORY: "Integration test for the conversion of parameter‑sweep‑style directories to HDF5 file and validation of the converted file against the ground‑truth HDF5 file (https://tvb-projects.atlassian.net/browse/VT-233)"
-    VBT_ALLURE_LINK_JIRA: "https://tvb-projects.atlassian.net/browse/VT-233"
-    VBT_DYNAMIC_TEST_NAME_SUFFIX: "test_vbt_convert_parameter_sweep_dir_to_hdf5"
-    VBT_ALLURE_TEST_TITLE: "test_vbt_convert_parameter_sweep_dir_to_hdf5"
   extends: .VBT_RUN                       # provided by the template
   stage: test
   tags:
@@ -52,8 +37,17 @@ test_vbt_amu_convert_parameter_sweep_dir_to_hdf5:
       job: vbt_setup_job
       artifacts: true
   before_script:
-    - echo "VBT_ALLURE_PARENT_SUITE= ${VBT_ALLURE_PARENT_SUITE}"
-    - echo "VBT_TEST_CHECK= ${VBT_TEST_CHECK}"
+    - export VBT_ENABLE_OUTPUT_DIR_RECURSIVE_ATTACH="false" # Do not attach the whole output dir as artifact
+    - export VBT_ALLURE_PARENT_SUITE="VBT‑converter CI/CD"
+    - export VBT_TEST_CHECK="VBT‑Test Check"
+    - export VBT_ALLURE_SUITE="Integration Tests AMU Protocol Pipeline"
+    - export VBT_ALLURE_SUB_SUITE="Conversion of parameter‑sweep‑style directories to HDF5 file and validation of the converted file against the ground‑truth HDF5 file"
+    - export VBT_ALLURE_EPIC="Guarantee that the converter works for every possible input layout"
+    - export VBT_ALLURE_FEATURE="Use of cached test data to validate the converter’s functionality for a directory layout that is representative of real‑world use cases"
+    - export VBT_ALLURE_STORY="Integration test for the conversion of parameter‑sweep‑style directories to HDF5 file and validation of the converted file against the ground‑truth HDF5 file (https://tvb-projects.atlassian.net/browse/VT-233)"
+    - export VBT_ALLURE_LINK_JIRA="https://tvb-projects.atlassian.net/browse/VT-233"
+    - export VBT_DYNAMIC_TEST_NAME_SUFFIX="test_vbt_convert_parameter_sweep_dir_to_hdf5"
+    - export VBT_ALLURE_TEST_TITLE="test_vbt_convert_parameter_sweep_dir_to_hdf5"
     - export VBT_ALLURE_LINK_PIPELINE="${CI_PIPELINE_URL}"
     - export VBT_ALLURE_LINK_JOB="${CI_JOB_URL}"
     - export VBT_SUBMODULE_PATH="${CI_PROJECT_DIR}/ci/template_repo"
@@ -65,9 +59,6 @@ test_vbt_amu_convert_parameter_sweep_dir_to_hdf5:
     - echo "Installing dependencies in the docker runner …"
     - apk add --no-cache jq python3 bash perl gettext curl hdf5-tools
     - !reference [ .VBT_RUN, before_script ]  # Calls the base "method"
-  script:
-    - echo "VBT_ALLURE_PARENT_SUITE= ${VBT_ALLURE_PARENT_SUITE}"
-    - !reference [ .VBT_RUN, script ]  # Calls the base "method"
   # The artifacts are needed by the publishing stage (Allure results)
   cache:
     - key: vbt-converter-test-cache
@@ -81,7 +72,7 @@ test_vbt_amu_convert_parameter_sweep_dir_to_hdf5:
       - "${CI_PROJECT_DIR}/converted"
     expire_in: 1 week
 
-test_vbt_amu_convert_hdf5_to_dsr:
+test_vbt_convert_hdf5_to_dsr:
   extends: .VBT_RUN
   stage: test
   tags:
@@ -93,25 +84,20 @@ test_vbt_amu_convert_hdf5_to_dsr:
     - pipeline: $PARENT_PIPELINE_ID
       job: vbt_setup_job
       artifacts: true
-    - job: test_vbt_amu_convert_parameter_sweep_dir_to_hdf5
+    - job: test_vbt_convert_parameter_sweep_dir_to_hdf5
       artifacts: true
-  variables:
-    VBT_ENABLE_INPUT_DIR_RECURSIVE_ATTACH: "false"
-    VBT_ENABLE_OUTPUT_DIR_RECURSIVE_ATTACH: "false"
-    # Allure results are written to `allure-results/`
-    # -----------------------------------------------------------------
-    # Allure / tests‑metadata – feel free to adapt the wording
-    # -----------------------------------------------------------------
-    VBT_ALLURE_PARENT_SUITE: "VBT‑converter CI/CD"
-    VBT_ALLURE_SUITE: "Integration Tests AMU Protocol Pipeline"
-    VBT_ALLURE_SUB_SUITE: "Conversion of the created HDF5 file to DSR format and validation of the results"
-    VBT_ALLURE_EPIC: "Use of the converted HDF5 file to validate the converter’s functionality for the conversion to DSR format, which is the format used by upscale teams for simulations"
-    VBT_ALLURE_FEATURE: "Use of the converted HDF5 file to validate the converter’s functionality for the conversion to DSR format, which is the format used by upscale teams for simulations"
-    VBT_ALLURE_STORY: "Integration test for the conversion of the created HDF5 file to DSR format and validation of the results (https://tvb-projects.atlassian.net/browse/VT-233)"
-    VBT_ALLURE_LINK_JIRA: "https://tvb-projects.atlassian.net/browse/VT-233"
-    VBT_DYNAMIC_TEST_NAME_SUFFIX: "test_vbt_convert_hdf5_to_dsr"
-    VBT_ALLURE_TEST_TITLE: "test_vbt_convert_hdf5_to_dsr"
   before_script:
+    - export VBT_ENABLE_INPUT_DIR_RECURSIVE_ATTACH="false"
+    - export VBT_ENABLE_OUTPUT_DIR_RECURSIVE_ATTACH="false"
+    - export VBT_ALLURE_PARENT_SUITE="VBT‑converter CI/CD"
+    - export VBT_ALLURE_SUITE="Integration Tests AMU Protocol Pipeline"
+    - export VBT_ALLURE_SUB_SUITE="Conversion of the created HDF5 file to DSR format and validation of the results"
+    - export VBT_ALLURE_EPIC="Use of the converted HDF5 file to validate the converter’s functionality for the conversion to DSR format, which is the format used by upscale teams for simulations"
+    - export VBT_ALLURE_FEATURE="Use of the converted HDF5 file to validate the converter’s functionality for the conversion to DSR format, which is the format used by upscale teams for simulations"
+    - export VBT_ALLURE_STORY="Integration test for the conversion of the created HDF5 file to DSR format and validation of the results (https://tvb-projects.atlassian.net/browse/VT-233)"
+    - export VBT_ALLURE_LINK_JIRA="https://tvb-projects.atlassian.net/browse/VT-233"
+    - export VBT_DYNAMIC_TEST_NAME_SUFFIX="test_vbt_convert_hdf5_to_dsr"
+    - export VBT_ALLURE_TEST_TITLE="test_vbt_convert_hdf5_to_dsr"
     - export VBT_ALLURE_LINK_PIPELINE="${CI_PIPELINE_URL}"
     - export VBT_ALLURE_LINK_JOB="${CI_JOB_URL}"
     - export VBT_SUBMODULE_PATH="${CI_PROJECT_DIR}/ci/template_repo"
@@ -136,7 +122,7 @@ test_vbt_amu_convert_hdf5_to_dsr:
     expire_in: 1 week
 
 
-test_vbt_amu_convert_sweep_dir_to_dsr:
+test_vbt_convert_sweep_dir_to_dsr:
   extends: .VBT_RUN
   stage: test
   tags:
@@ -150,22 +136,18 @@ test_vbt_amu_convert_sweep_dir_to_dsr:
       artifacts: true
   variables:
     HDF5_DISABLE_VERSION_CHECK: "1"  # Avoid HDF5 version check warnings in the logs
-    VBT_ENABLE_INPUT_DIR_RECURSIVE_ATTACH: "false"
-    VBT_ENABLE_OUTPUT_DIR_RECURSIVE_ATTACH: "false"
-    # Allure results are written to `allure-results/`
-    # -----------------------------------------------------------------
-    # Allure / tests‑metadata – feel free to adapt the wording
-    # -----------------------------------------------------------------
-    VBT_ALLURE_PARENT_SUITE: "VBT‑converter CI/CD"
-    VBT_ALLURE_SUITE: "Integration Tests AMU Protocol Pipeline"
-    VBT_ALLURE_SUB_SUITE: "Conversion of the parameter sweep directory to HDF5 + NPZ format and validation of the results"
-    VBT_ALLURE_EPIC: "Use of the converted HDF5 file to validate the converter’s functionality for the conversion to DSR format, which is the format used by upscale teams for simulations"
-    VBT_ALLURE_FEATURE: "Use of the converted HDF5 file to validate the converter’s functionality for the conversion to DSR format, which is the format used by upscale teams for simulations"
-    VBT_ALLURE_STORY: "Integration test for the conversion of the sweep directory to HDF5 file & DSR format and validation of the results (https://tvb-projects.atlassian.net/browse/VT-233)"
-    VBT_ALLURE_LINK_JIRA: "https://tvb-projects.atlassian.net/browse/VT-233"
-    VBT_DYNAMIC_TEST_NAME_SUFFIX: "test_vbt_convert_sweep_directory_to_dsr"
-    VBT_ALLURE_TEST_TITLE: "test_vbt_convert_sweep_directory_to_dsr"
   before_script:
+    - export VBT_ENABLE_INPUT_DIR_RECURSIVE_ATTACH="false"
+    - export VBT_ENABLE_OUTPUT_DIR_RECURSIVE_ATTACH="false"
+    - export VBT_ALLURE_PARENT_SUITE="VBT‑converter CI/CD"
+    - export VBT_ALLURE_SUITE="Integration Tests AMU Protocol Pipeline"
+    - export VBT_ALLURE_SUB_SUITE="Conversion of the parameter sweep directory to HDF5 + NPZ format and validation of the results"
+    - export VBT_ALLURE_EPIC="Use of the converted HDF5 file to validate the converter’s functionality for the conversion to DSR format, which is the format used by upscale teams for simulations"
+    - export VBT_ALLURE_FEATURE="Use of the converted HDF5 file to validate the converter’s functionality for the conversion to DSR format, which is the format used by upscale teams for simulations"
+    - export VBT_ALLURE_STORY="Integration test for the conversion of the sweep directory to HDF5 file & DSR format and validation of the results (https://tvb-projects.atlassian.net/browse/VT-233)"
+    - export VBT_ALLURE_LINK_JIRA="https://tvb-projects.atlassian.net/browse/VT-233"
+    - export VBT_DYNAMIC_TEST_NAME_SUFFIX="test_vbt_convert_sweep_directory_to_dsr"
+    - export VBT_ALLURE_TEST_TITLE="test_vbt_convert_sweep_directory_to_dsr"
     - export VBT_ALLURE_LINK_PIPELINE="${CI_PIPELINE_URL}"
     - export VBT_ALLURE_LINK_JOB="${CI_JOB_URL}"
     - export VBT_SUBMODULE_PATH="${CI_PROJECT_DIR}/ci/template_repo"
@@ -191,13 +173,13 @@ test_vbt_amu_convert_sweep_dir_to_dsr:
       - "${CI_PROJECT_DIR}/converted/"
     expire_in: 1 week
 
-test_vbt_amu_publish_job:
+test_vbt_publish_job:
   extends: .VBT_PUBLISH
   stage: publish_report
   needs:
-    - job: test_vbt_amu_convert_hdf5_to_dsr
+    - job: test_vbt_convert_hdf5_to_dsr
       artifacts: true
-    - job: test_vbt_amu_convert_sweep_dir_to_dsr
+    - job: test_vbt_convert_sweep_dir_to_dsr
       artifacts: true
   before_script:
     - export VBT_ALLURE_LINK_PIPELINE="${CI_PIPELINE_URL}"

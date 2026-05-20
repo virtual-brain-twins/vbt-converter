@@ -257,21 +257,30 @@ def main() -> None:
     logger.info("Report written to %s", report_path)
 
     # Allure report gets burdened by input sweep directory, hence attaching it as an HTML entry with the actual directory attached to CI job
-    input_sweep = ci_root / "tests" / "test_data" / "parametersweep_8s_3d_orientation_selective_12012026"
-    dest_sweep_dir = Path(str(os.getenv("INPUT_SWEEP_DIR_PATH"))).expanduser().resolve()
-    dest_sweep_dir.parent.mkdir(parents=True, exist_ok=True)
-    # Move / rename the file
-    try:
-        input_sweep.replace(dest_sweep_dir)
-    except OSError:  # (different FS)
-        # Fall back to shutil.move which handles cross‑filesystem moves.
+    src_sweep = (
+            ci_root
+            / "tests"
+            / "test_data"
+            / "parametersweep_8s_3d_orientation_selective_12012026"
+    )
+    dest_sweep_dir = (
+        Path(os.getenv("INPUT_SWEEP_DIR_PATH", ""))
+        .expanduser()
+        .resolve()
+    )
+    if not src_sweep.is_dir():
+        logger.error("Source sweep directory does not exist: %s", src_sweep)
+        sys.exit(1)
+    dest_sweep_dir.mkdir(parents=True, exist_ok=True)
+    for entry in src_sweep.iterdir():
+        target = dest_sweep_dir / entry.name
         try:
-            shutil.move(str(input_sweep), str(dest_sweep_dir))
-        except OSError as exc:
-            logger.error("Could not move %s → %s: %s", input_sweep, dest_sweep_dir, exc)
-            sys.exit(1)
-
-    logger.info("Successfully moved %s → %s", input_sweep, dest_sweep_dir)
+            # fastest when on the same filesystem
+            entry.replace(target)
+        except OSError:
+            # fallback for cross‑filesystem moves
+            shutil.move(str(entry), str(target))
+    logger.info("Successfully moved contents of %s → %s", src_sweep, dest_sweep_dir)
     create_link_html(args.input_dir / "input_sweep_dir_link.html", "parametersweep_8s_3d_orientation_selective_12012026", "Parameter Sweep Directory", logger)
 
 def create_link_html(output_file: Path, attachment_name, link_text, logger: logging.Logger) -> None:

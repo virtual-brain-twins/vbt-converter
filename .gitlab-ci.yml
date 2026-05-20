@@ -73,6 +73,7 @@ trigger-integration-amu:
     strategy: depend
   variables:
     PARENT_PIPELINE_ID: "$CI_PIPELINE_ID"
+    VBT_ALLURE_PARENT_SUITE: "VBT‑converter CI/CD"
   rules:
     # Run automatically only if files inside pipeline_a folder change
     - changes:

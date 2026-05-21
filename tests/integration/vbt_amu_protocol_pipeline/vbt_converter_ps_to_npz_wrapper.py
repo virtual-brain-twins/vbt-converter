@@ -234,7 +234,7 @@ def run_comparisons(ci_root: Path,
     )
 
     # Build the HTML report
-    template_path = ci_root / "tests" / "integration" / "vbt_amu_protocol_pipeline" / "hdf5_npz_comparison_template.html"
+    template_path = ci_root / "tests" / "integration" / "utils" / "hdf5_npz_comparison_template.html"
     template = template_path.read_text(encoding="utf-8")
 
     def _html_escape(txt: str) -> str:

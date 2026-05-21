@@ -241,14 +241,14 @@ def main() -> None:
         status_message
     )
 
-    template_path = ci_root / "tests" / "integration" / "vbt_amu_protocol_pipeline" / "test_result.html"
+    template_path = ci_root / "tests" / "integration" / "utils" / "hdf5_comparison_template.html"
     template = template_path.read_text()
     filled = (
         template
-        .replace("{ground_truth}", str(ground_truth))
+        .replace("{ground_truth_h5}", str(ground_truth))
         .replace("{output_hdf}", str(converted_hdf5))
-        .replace("{status_class}", "success" if success else "failure")
-        .replace("{status_message}", status_message,
+        .replace("{status_class_h5}", "success" if success else "failure")
+        .replace("{status_message_h5}", status_message,
                  )
     )
     report_path: Path = args.output_dir / "test_result_report.html"

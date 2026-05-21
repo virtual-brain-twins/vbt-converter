@@ -202,7 +202,7 @@ def main() -> None:
             sys.exit(1)
 
         logger.info("Conversion successful – file copied to %s", converted_npz)
-    validate_script = ci_root / "tests" / "utils" / "validate_and_report.py"
+    validate_script = ci_root / "tests" / "integration" / "vbt_amu_protocol_pipeline" / "utils" / "validate_and_report.py"
     report_path: Path = args.output_dir / "test_result_report.html"
     ground_truth = (
             ci_root

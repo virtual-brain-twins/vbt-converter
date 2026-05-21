@@ -12,7 +12,7 @@ Utility to
    prints a success message,
 4. optionally compare the file with a ground‑truth .npz and report the
    comparison outcome,
-5. include a link to the stored artifact (`/artifacts/file/converted/converted.npz`)
+5. include a link to the stored artifact (`/artifacts/file/attachments/converted.npz`)
    in the generated HTML report.
 
 Usage
@@ -352,15 +352,15 @@ def build_artifact_section() -> str:
     Produce an HTML fragment that links to the stored NPZ artifact.
     The URL is constructed from the ``VBT_ALLURE_LINK_JOB`` environment
     variable (if present) and the fixed path
-    ``/artifacts/file/converted/converted.npz``.
+    ``/artifacts/file/attachments/converted.npz``.
     """
     base_url = os.getenv("VBT_ALLURE_LINK_JOB")
     if base_url:
-        artifact_url = f"{base_url.rstrip('/')}/artifacts/file/converted/converted.npz"
+        artifact_url = f"{base_url.rstrip('/')}/artifacts/file/attachments/converted.npz"
     else:
         # Fallback to the absolute path within the repository – this will still be a valid link in a
         # local filesystem view.
-        artifact_url = "/artifacts/file/converted/converted.npz"
+        artifact_url = "/artifacts/file/attachments/converted.npz"
 
     escaped_url = html.escape(artifact_url)
 

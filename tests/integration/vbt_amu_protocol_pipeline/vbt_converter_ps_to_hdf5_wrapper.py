@@ -241,7 +241,7 @@ def main() -> None:
         status_message
     )
 
-    template_path = ci_root / "tests"/ "integration"/ "vbt_amu_protocol_pipeline" / "test_result.html"
+    template_path = ci_root / "tests" / "integration" / "vbt_amu_protocol_pipeline" / "test_result.html"
     template = template_path.read_text()
     filled = (
         template
@@ -281,9 +281,14 @@ def main() -> None:
             # fallback for cross‑filesystem moves
             shutil.move(str(entry), str(target))
     logger.info("Successfully moved contents of %s → %s", src_sweep, dest_sweep_dir)
-    create_link_html(src_sweep / "input_sweep_dir_link.html", "parametersweep_8s_3d_orientation_selective_12012026", "Parameter Sweep Directory", logger)
+    create_link_html(src_sweep / "input_sweep_dir_link.html",
+                     "parametersweep_8s_3d_orientation_selective_12012026",
+                     "Parameter Sweep Directory",
+                     logger,
+                     is_file=False)
 
-def create_link_html(output_file: Path, attachment_name, link_text, logger: logging.Logger) -> None:
+
+def create_link_html(output_file: Path, attachment_name, link_text, logger: logging.Logger, is_file=True) -> None:
     """
     Write a minimal HTML file that contains a link to the attachment artifact.
     """
@@ -294,7 +299,7 @@ def create_link_html(output_file: Path, attachment_name, link_text, logger: logg
         )
 
     # Ensure we don't end up with a double slash when we concatenate.
-    artifact_url = f"{base_url.rstrip('/')}/artifacts/file/attachments/{attachment_name}"
+    artifact_url = f"{base_url.rstrip('/')}/artifacts/{"file" if is_file else "browse"}/attachments/{attachment_name}"
 
     html_content = f"""<!DOCTYPE html>
 <html lang="en">
@@ -312,6 +317,7 @@ def create_link_html(output_file: Path, attachment_name, link_text, logger: logg
     output_file.parent.mkdir(parents=True, exist_ok=True)
     output_file.write_text(html_content, encoding="utf-8")
     logger.info(f"HTML file created at: {output_file.resolve()}")
+
 
 # ----------------------------------------------------------------------
 # Script entry point

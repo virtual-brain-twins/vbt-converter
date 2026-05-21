@@ -18,8 +18,8 @@ variables:
 # -----------------------------------------------------------------
 include:
   - project: 'virtualbraintwin/VBT_protocol_template'   # full path of the source project
-    ref:    main                                         # branch / tag you want to use
-    file:   '/ci/template.yml'                          # path inside the source repo
+    ref: main                                         # branch / tag you want to use
+    file: '/ci/template.yml'                          # path inside the source repo
 
 test_vbt_convert_parameter_sweep_dir_to_hdf5:
   variables:
@@ -52,6 +52,7 @@ test_vbt_convert_parameter_sweep_dir_to_hdf5:
     - export VBT_ALLURE_TEST_TITLE="test_vbt_convert_parameter_sweep_dir_to_hdf5"
     - export VBT_ALLURE_LINK_PIPELINE="${CI_PIPELINE_URL}"
     - export VBT_ALLURE_LINK_JOB="${CI_JOB_URL}"
+    - export VBT_ALLURE_DESCRIPTION_HTML="${CI_PROJECT_DIR}/tests/integration/docs/vbt_converter_ps_to_hdf5_wrapper.html"
     - export VBT_SUBMODULE_PATH="${CI_PROJECT_DIR}/ci/template_repo"
     - export VBT_ENTRY_SCRIPT="${CI_PROJECT_DIR}/tests/integration/vbt_amu_protocol_pipeline/vbt_converter_ps_to_hdf5_wrapper.py"
     - export VBT_INPUT_PATH="${CI_PROJECT_DIR}/tests/test_data/parametersweep_8s_3d_orientation_selective_12012026"
@@ -104,6 +105,7 @@ test_vbt_convert_hdf5_to_dsr:
     - export VBT_ALLURE_TEST_TITLE="test_vbt_convert_hdf5_to_dsr"
     - export VBT_ALLURE_LINK_PIPELINE="${CI_PIPELINE_URL}"
     - export VBT_ALLURE_LINK_JOB="${CI_JOB_URL}"
+    - export VBT_ALLURE_DESCRIPTION_HTML="${CI_PROJECT_DIR}/tests/integration/docs/vbt_converter_hdf5_to_dsr_wrapper.html"
     - export VBT_SUBMODULE_PATH="${CI_PROJECT_DIR}/ci/template_repo"
     - export VBT_ENTRY_SCRIPT="${CI_PROJECT_DIR}/tests/integration/vbt_amu_protocol_pipeline/vbt_converter_hdf5_to_dsr_wrapper.py"
     - export VBT_INPUT_PATH="${CI_PROJECT_DIR}/input/"
@@ -156,6 +158,7 @@ test_vbt_convert_sweep_dir_to_dsr:
     - export VBT_ALLURE_TEST_TITLE="test_vbt_convert_sweep_directory_to_dsr"
     - export VBT_ALLURE_LINK_PIPELINE="${CI_PIPELINE_URL}"
     - export VBT_ALLURE_LINK_JOB="${CI_JOB_URL}"
+    - export VBT_ALLURE_DESCRIPTION_HTML="${CI_PROJECT_DIR}/tests/integration/docs/vbt_converter_ps_to_npz_wrapper.html"
     - export VBT_SUBMODULE_PATH="${CI_PROJECT_DIR}/ci/template_repo"
     - export VBT_ENTRY_SCRIPT="${CI_PROJECT_DIR}/tests/integration/vbt_amu_protocol_pipeline/vbt_converter_ps_to_npz_wrapper.py"
     - export VBT_INPUT_PATH="${CI_PROJECT_DIR}/tests/test_data/parametersweep_8s_3d_orientation_selective_12012026"

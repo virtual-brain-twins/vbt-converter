@@ -9,7 +9,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from ..utils.helper_functions import create_link_html
+from tests.integration.utils.helper_functions import create_link_html
 
 
 # ----------------------------------------------------------------------

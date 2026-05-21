@@ -12,7 +12,7 @@ from typing import Tuple
 
 import numpy as np
 
-from ..utils.helper_functions import create_link_html
+from tests.integration.utils.helper_functions import create_link_html
 
 
 # ----------------------------------------------------------------------
@@ -382,7 +382,14 @@ def main() -> None:
         output_dir=args.output_dir,
         logger=logger,
     )
-    create_link_html(args.output_dir / "converted_hdf5_&_npz_links.html", logger)
+    create_link_html(
+        output_file=args.output_dir / "converted_hdf5_&_npz_links.html",
+        logger=logger,
+        links=[
+            ("attachments/converted.npz", "Converted NPZ file", True),
+            ("attachments/converted.hdf5", "Converted HDF5 file", True),
+        ]
+    )
 
     # Allure report gets burdened by input sweep directory, hence attaching it as an HTML entry with the actual directory attached to CI job
     src_sweep = (

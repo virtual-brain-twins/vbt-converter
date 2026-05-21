@@ -13,8 +13,8 @@ variables:
 # Pull the generic VBT CI definition from the central template repo
 include:
   - project: 'virtualbraintwin/VBT_protocol_template'   # full path of the source project
-    ref:    main                                         # branch / tag you want to use
-    file:   '/ci/template.yml'                          # path inside the source repo
+    ref: main                                         # branch / tag you want to use
+    file: '/ci/template.yml'                          # path inside the source repo
 
 # SET‑UP – create a clean virtual environment and install deps
 vbt_setup_job:
@@ -141,7 +141,7 @@ update_cache_job:
   variables:
     # Optional defaults – they can be overridden in the CI UI.
     MINIO_SOURCE_PATH: "ground_truth/"
-    LOCAL_DEST_PATH:   "tests/test_data/ground_truth/"
+    LOCAL_DEST_PATH: "tests/test_data/ground_truth/"
   before_script:
     # Install required binaries (curl + MinIO client)
     - echo "▶ Installing runtime dependencies …"
@@ -151,13 +151,31 @@ update_cache_job:
       curl -L ${MC_URL} -o /usr/local/bin/mc && chmod +x /usr/local/bin/mc
     # Verify that **all** required CI variables are present
     - |
-      required_vars="MINIO_ENDPOINT MINIO_ACCESS_KEY MINIO_SECRET_KEY MINIO_BUCKET MINIO_SOURCE_PATH LOCAL_DEST_PATH"
-      for v in $required_vars; do
-        if [ -z "${!v}" ]; then
-          echo "CI variable '\$${v}' is not defined. Abort."
-          exit 1
+      # List of required environment variables.
+      required_vars=(
+        MINIO_ENDPOINT
+        MINIO_ACCESS_KEY
+        MINIO_SECRET_KEY
+        MINIO_BUCKET
+        MINIO_SOURCE_PATH
+        LOCAL_DEST_PATH
+      )
+      missing=()
+      for var_name in "${required_vars[@]}"; do
+        # Indirect expansion – get the value of $var_name.
+        # This never invokes the shell parser; it just returns the raw value.
+        var_value=${!var_name-}
+        # If the variable is empty (unset or explicitly set to ""), remember it.
+        if [ -z "$var_value" ]; then
+          missing+=("$var_name")
         fi
       done
+      if ((${#missing[@]})); then
+        printf 'Error: the following CI variable(s) are not defined or are empty:\n'
+        printf '  - %s\n' "${missing[@]}"
+        printf 'Aborting.\n' >&2
+        exit 1
+      fi
     # Configure MinIO client alias
     - |
       echo "▶ Configuring MinIO alias ‘minio’ …"

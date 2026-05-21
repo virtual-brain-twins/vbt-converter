@@ -9,6 +9,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from tests.integration.utils.helper_functions import create_link_html
+
 
 # ----------------------------------------------------------------------
 # Logging helpers
@@ -253,7 +255,13 @@ def main() -> None:
     )
     report_path: Path = args.output_dir / "test_result_report.html"
     report_path.write_text(filled)
-    create_link_html(args.output_dir / "converted_hdf5_link.html", "converted.hdf5", "Converted HDF5 File", logger)
+    create_link_html(
+        output_file=args.output_dir / "converted_hdf5_link.html",
+        logger=logger,
+        links=[
+            ("attachments/converted.hdf5", "Converted HDF5 File", True),
+        ]
+    )
     logger.info("Report written to %s", report_path)
 
     # Allure report gets burdened by input sweep directory, hence attaching it as an HTML entry with the actual directory attached to CI job
@@ -281,42 +289,13 @@ def main() -> None:
             # fallback for cross‑filesystem moves
             shutil.move(str(entry), str(target))
     logger.info("Successfully moved contents of %s → %s", src_sweep, dest_sweep_dir)
-    create_link_html(src_sweep / "input_sweep_dir_link.html",
-                     "parametersweep_8s_3d_orientation_selective_12012026",
-                     "Parameter Sweep Directory",
-                     logger,
-                     is_file=False)
-
-
-def create_link_html(output_file: Path, attachment_name, link_text, logger: logging.Logger, is_file=True) -> None:
-    """
-    Write a minimal HTML file that contains a link to the attachment artifact.
-    """
-    base_url = os.getenv("VBT_ALLURE_LINK_JOB")
-    if not base_url:
-        raise RuntimeError(
-            "Environment variable 'VBT_ALLURE_LINK_JOB' is not set."
-        )
-
-    # Ensure we don't end up with a double slash when we concatenate.
-    artifact_url = f"{base_url.rstrip('/')}/artifacts/{"file" if is_file else "browse"}/attachments/{attachment_name}"
-
-    html_content = f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <title>{link_text}</title>
-</head>
-<body>
-    <p><a href="{artifact_url}" target="_blank" rel="noopener noreferrer">{link_text}</a></p>
-</body>
-</html>
-"""
-
-    # Write the file (parents are created automatically if they do not exist)
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-    output_file.write_text(html_content, encoding="utf-8")
-    logger.info(f"HTML file created at: {output_file.resolve()}")
+    create_link_html(
+        output_file=src_sweep / "input_sweep_dir_link.html",
+        logger=logger,
+        links=[
+            ("attachments/parametersweep_8s_3d_orientation_selective_12012026", "Parameter Sweep Directory", False),
+        ]
+    )
 
 
 # ----------------------------------------------------------------------

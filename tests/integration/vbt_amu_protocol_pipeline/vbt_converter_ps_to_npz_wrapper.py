@@ -12,6 +12,8 @@ from typing import Tuple
 
 import numpy as np
 
+from tests.integration.utils.helper_functions import create_link_html
+
 
 # ----------------------------------------------------------------------
 # Logging helpers
@@ -382,59 +384,38 @@ def main() -> None:
     )
     create_link_html(args.output_dir / "converted_hdf5_&_npz_links.html", logger)
 
-
-def create_link_html(output_file: Path, logger: logging.Logger) -> None:
-    """
-    Write a minimal HTML file that contains a link to the converted HDF5 artifact.
-
-    The URL is built from the environment variable ``VBT_ALLURE_LINK_JOB`` and the
-    fixed path ``/artifacts/file/converted/converted.hdf5``.  If the environment variable
-    is not defined the function raises a clear ``RuntimeError``.
-    """
-    base_url = os.getenv("VBT_ALLURE_LINK_JOB")
-    if not base_url:
-        raise RuntimeError(
-            "Environment variable 'VBT_ALLURE_LINK_JOB' is not set."
-        )
-
-    # Ensure we don't end up with a double slash when we concatenate.
-    # Build the URLs for the two artifacts
-    artifact_hdf5 = f"{base_url.rstrip('/')}/artifacts/file/converted/converted.hdf5"
-    artifact_npz = f"{base_url.rstrip('/')}/artifacts/file/converted/converted.npz"
-
-    # Create the HTML page with both links
-    html_content = f"""<!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="utf-8">
-        <title>Converted Artifacts</title>
-        <style>
-            body {{ font-family: Arial, sans-serif; line-height: 1.6; margin: 2rem; }}
-            a   {{ color:#0066CC; text-decoration:none; }}
-            a:hover {{ text-decoration:underline; }}
-            .artifact-list {{ margin-top: 1rem; }}
-        </style>
-    </head>
-    <body>
-        <h1>Converted Artifacts</h1>
-        <p class="artifact-list">
-            • <a href="{artifact_hdf5}" target="_blank" rel="noopener noreferrer">
-                Converted HDF5 File
-              </a>
-        </p>
-        <p class="artifact-list">
-            • <a href="{artifact_npz}" target="_blank" rel="noopener noreferrer">
-                Generated NPZ File
-              </a>
-        </p>
-    </body>
-    </html>
-    """
-
-    # Write the file (parents are created automatically if they do not exist)
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-    output_file.write_text(html_content, encoding="utf-8")
-    logger.info(f"HTML file created at: {output_file.resolve()}")
+    # Allure report gets burdened by input sweep directory, hence attaching it as an HTML entry with the actual directory attached to CI job
+    src_sweep = (
+            ci_root
+            / "tests"
+            / "test_data"
+            / "parametersweep_8s_3d_orientation_selective_12012026"
+    )
+    dest_sweep_dir = (
+        Path(os.getenv("INPUT_SWEEP_DIR_PATH", ""))
+        .expanduser()
+        .resolve()
+    )
+    if not src_sweep.is_dir():
+        logger.error("Source sweep directory does not exist: %s", src_sweep)
+        sys.exit(1)
+    dest_sweep_dir.mkdir(parents=True, exist_ok=True)
+    for entry in src_sweep.iterdir():
+        target = dest_sweep_dir / entry.name
+        try:
+            # fastest when on the same filesystem
+            entry.replace(target)
+        except OSError:
+            # fallback for cross‑filesystem moves
+            shutil.move(str(entry), str(target))
+    logger.info("Successfully moved contents of %s → %s", src_sweep, dest_sweep_dir)
+    create_link_html(
+        output_file=src_sweep / "input_sweep_dir_link.html",
+        logger=logger,
+        links=[
+            ("attachments/parametersweep_8s_3d_orientation_selective_12012026", "Parameter Sweep Directory", False),
+        ]
+    )
 
 
 # ----------------------------------------------------------------------

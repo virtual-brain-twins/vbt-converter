@@ -9,6 +9,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from tests.integration.utils.helper_functions import create_link_html
+
 
 # Logging helpers
 def _setup_logging() -> logging.Logger:
@@ -265,39 +267,14 @@ def main() -> None:
         )
         sys.exit(1)
     logger.info("Input HDF5 file moved from %s → %s", input_file, input_hdf5_target_path)
-    create_link_html(ci_root / "input" / "input_hdf5_link.html", "input.hdf5", "Input HDF5 File", logger)
+    create_link_html(
+        output_file=ci_root / "input" / "input_hdf5_link.html",
+        logger=logger,
+        links=[
+            ("attachments/input.hdf5", "Input HDF5 File", True),
+        ]
+    )
     logger.info("Report written to %s", report_path)
-
-
-def create_link_html(output_file: Path, attachment_name, link_name, logger: logging.Logger) -> None:
-    """
-    Write a minimal HTML file that contains a link to the attached artifact.
-    """
-    base_url = os.getenv("VBT_ALLURE_LINK_JOB")
-    if not base_url:
-        raise RuntimeError(
-            "Environment variable 'VBT_ALLURE_LINK_JOB' is not set."
-        )
-
-    # Ensure we don't end up with a double slash when we concatenate.
-    artifact_url = f"{base_url.rstrip('/')}/artifacts/file/attachments/{attachment_name}"
-
-    html_content = f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <title>{link_name}</title>
-</head>
-<body>
-    <p><a href="{artifact_url}" target="_blank" rel="noopener noreferrer">{link_name}</a></p>
-</body>
-</html>
-"""
-
-    # Write the file (parents are created automatically if they do not exist)
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-    output_file.write_text(html_content, encoding="utf-8")
-    logger.info(f"HTML file created at: {output_file.resolve()}")
 
 
 # ----------------------------------------------------------------------

@@ -221,7 +221,7 @@ vbt_cleanup_job:
 update_cache_job:
   extends: .fetch_minio_cache_template
 
-update_other_cache:
+create_new_cache:
   extends: .fetch_minio_cache_template
   variables:
     CACHE_KEY: "$CI_CACHE_KEY"

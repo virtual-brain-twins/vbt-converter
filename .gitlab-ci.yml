@@ -130,7 +130,7 @@ update_cache_job:
     - docker
     - jsc-cloud
     - fenix
-  image: docker:cli                     # keep the original container
+  image: docker:cli
   when: manual
   # -------------------------------------------------------------------------
   # CI variables that **must** be defined in the project settings:
@@ -145,7 +145,7 @@ update_cache_job:
   before_script:
     # Install required binaries (curl + MinIO client)
     - echo "▶ Installing runtime dependencies …"
-    - apk add --no-cache curl
+    - apk add --no-cache bash curl
     - |
       MC_URL="https://dl.min.io/client/mc/release/linux-amd64/mc"
       curl -L ${MC_URL} -o /usr/local/bin/mc && chmod +x /usr/local/bin/mc

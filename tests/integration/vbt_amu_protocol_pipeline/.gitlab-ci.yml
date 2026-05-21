@@ -59,7 +59,6 @@ test_vbt_convert_parameter_sweep_dir_to_hdf5:
     - export VBT_OUTPUT_PATH="${CI_PROJECT_DIR}/data/"
     - export INPUT_SWEEP_DIR_PATH="${CI_PROJECT_DIR}/attachments/parametersweep_8s_3d_orientation_selective_12012026"
     - export OUTPUT_HDF5_PATH="${CI_PROJECT_DIR}/attachments/converted.hdf5"
-    - export VBT_ALLURE_DESCRIPTION_HTML="${CI_PROJECT_DIR}/tests/docs/convert_direc_to_hdf_description.html"
     - echo "Installing dependencies in the docker runner …"
     - apk add --no-cache jq python3 bash perl gettext curl hdf5-tools
     - !reference [ .VBT_RUN, before_script ]  # Calls the base "method"
@@ -112,7 +111,6 @@ test_vbt_convert_hdf5_to_dsr:
     - export VBT_OUTPUT_PATH="${CI_PROJECT_DIR}/output/"
     - export INPUT_HDF5_PATH="${CI_PROJECT_DIR}/attachments/input.hdf5"
     - export OUTPUT_NPZ_PATH="${CI_PROJECT_DIR}/attachments/converted.npz" # Path to the converted numpy file (which is the only output artifact we want to attach to CI Job)
-    - export VBT_ALLURE_DESCRIPTION_HTML="${CI_PROJECT_DIR}/tests/docs/convert_direc_to_hdf_description.html"
     - echo "Installing dependencies in the docker runner …"
     - apk add --no-cache jq python3 bash perl gettext curl
     - !reference [ .VBT_RUN, before_script ]  # Calls the base "method"
@@ -166,7 +164,6 @@ test_vbt_convert_sweep_dir_to_dsr:
     - export INPUT_SWEEP_DIR_PATH="${CI_PROJECT_DIR}/attachments/parametersweep_8s_3d_orientation_selective_12012026"
     - export OUTPUT_NPZ_PATH="${CI_PROJECT_DIR}/attachments/converted.npz" # Path to the converted numpy file (which is the only output artifact we want to attach to CI Job)
     - export OUTPUT_HDF5_PATH="${CI_PROJECT_DIR}/attachments/converted.hdf5" # Path to the converted hdf5 file (which is the only output artifact we want to attach to CI Job)
-    - export VBT_ALLURE_DESCRIPTION_HTML="${CI_PROJECT_DIR}/tests/docs/convert_direc_to_hdf_description.html"
     - echo "Installing dependencies in the docker runner …"
     - apk add --no-cache jq python3 bash perl gettext curl hdf5-tools
     - !reference [ .VBT_RUN, before_script ]  # Calls the base "method"
@@ -181,7 +178,7 @@ test_vbt_convert_sweep_dir_to_dsr:
     paths:
       - allure-results/
       - "${CI_PROJECT_DIR}/attachments/"
-    expire_in: 1 week
+    expire_in: 6 week
 
 test_vbt_publish_job:
   extends: .VBT_PUBLISH

@@ -12,7 +12,7 @@ from typing import Tuple
 
 import numpy as np
 
-from tests.integration.utils.helper_functions import create_link_html
+from ..utils.helper_functions import create_link_html
 
 
 # ----------------------------------------------------------------------

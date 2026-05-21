@@ -32,6 +32,7 @@ vbt_setup_job:
     - jsc-cloud
     - fenix
   before_script:
+    - export VBT_SUBMODULE_PATH="${CI_PROJECT_DIR}/ci/template_repo"
     - export VBT_SETUP_SCRIPT="${CI_PROJECT_DIR}/ci/template_repo/ci/scripts/setup_environment.sh"
     - export VBT_REQUIREMENTS="${CI_PROJECT_DIR}/requirements.txt"
     - echo "Installing jq and Python in the Alpine runner …"
@@ -111,5 +112,6 @@ vbt_cleanup_job:
   variables:
     VBT_CLEANUP_SCRIPT: "${CI_PROJECT_DIR}/ci/template_repo/ci/scripts/cleanup_environment.sh"
   before_script:
+    - export VBT_SUBMODULE_PATH="${CI_PROJECT_DIR}/ci/template_repo"
     - export VBT_CLEANUP_SCRIPT="${CI_PROJECT_DIR}/ci/template_repo/ci/scripts/cleanup_environment.sh"
     - !reference [ .VBT_RUN, before_script ]  # Calls the base "method"

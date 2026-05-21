@@ -130,45 +130,63 @@ update_cache_job:
     - docker
     - jsc-cloud
     - fenix
-  image: docker:cli                           # keeps the original container
+  image: docker:cli                     # keep the original container
   when: manual
-  # Install deps + MinIO client (mc) and fetch the file
+  # -------------------------------------------------------------------------
+  # CI variables that **must** be defined in the project settings:
+  #   MINIO_ENDPOINT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY, MINIO_BUCKET
+  #   MINIO_SOURCE_PATH   – path inside the bucket (folder or file)
+  #   LOCAL_DEST_PATH     – local path under the repo (e.g. tests/test_data/ground_truth/)
+  # -------------------------------------------------------------------------
   variables:
-    DATA: "test_convert_output.npz"
-    TARGET: "tests/test_data/ground_truth/test_convert_output.npz"
+    # Optional defaults – they can be overridden in the CI UI.
+    MINIO_SOURCE_PATH: "ground_truth/"
+    LOCAL_DEST_PATH:   "tests/test_data/ground_truth/"
   before_script:
-    - echo "Installing dependencies in the docker runner"
+    # Install required binaries (curl + MinIO client)
+    - echo "▶ Installing runtime dependencies …"
     - apk add --no-cache curl
     - |
-      # Install the 'mc' binary (official release)
-      # Install MinIO client (mc)
       MC_URL="https://dl.min.io/client/mc/release/linux-amd64/mc"
       curl -L ${MC_URL} -o /usr/local/bin/mc && chmod +x /usr/local/bin/mc
+    # Verify that **all** required CI variables are present
     - |
-      # ---- Configure MinIO access (use CI variables----
-      #   MINIO_ENDPOINT  – e.g.   https://vbt-minio.fz-juelich.de/
-      #   MINIO_ACCESS_KEY    – access key with read permission on the cache bucket
-      #   MINIO_SECRET_KEY    – secret key
-      #   MINIO_BUCKET        – bucket name that stores the cache (e.g. “ci-temp-cache”)
-      #
-      #   All four variables should be defined in *Settings → CI/CD → Variables*.
-      #
+      required_vars="MINIO_ENDPOINT MINIO_ACCESS_KEY MINIO_SECRET_KEY MINIO_BUCKET MINIO_SOURCE_PATH LOCAL_DEST_PATH"
+      for v in $required_vars; do
+        if [ -z "${!v}" ]; then
+          echo "CI variable '\$${v}' is not defined. Abort."
+          exit 1
+        fi
+      done
+    # Configure MinIO client alias
+    - |
+      echo "▶ Configuring MinIO alias ‘minio’ …"
       mc alias set minio "${MINIO_ENDPOINT}" "${MINIO_ACCESS_KEY}" "${MINIO_SECRET_KEY}" --api S3v4
+    # Verify that the source path exists on MinIO
     - |
-      # ---- Pull the required file -------------------------------------------------
-      mkdir -p "$(dirname "${TARGET}")"               # make sure the dir exists
-      ls -l "tests/test_data/ground_truth/"           # list existing files in the target dir for debugging
-      mc cp "minio/${MINIO_BUCKET}/${DATA}" "${TARGET}"
-      
-
-  # Cache configuration – pull existing cache and push any changes back
+      echo "▶ Checking existence of minio/${MINIO_BUCKET}/${MINIO_SOURCE_PATH} …"
+      if ! mc ls "minio/${MINIO_BUCKET}/${MINIO_SOURCE_PATH}" > /dev/null 2>&1; then
+        echo "Source path 'minio/${MINIO_BUCKET}/${MINIO_SOURCE_PATH}' does NOT exist on MinIO."
+        exit 1
+      fi
+    # Prepare the local destination directory
+    - |
+      echo "▶ Ensuring local destination folder exists: ${LOCAL_DEST_PATH}"
+      mkdir -p "${LOCAL_DEST_PATH}"
+    # Copy the folder (or single file) from MinIO to the repo
+    - |
+      echo "▶ Copying from MinIO …"
+      # If the source is a folder we need the recursive flag,
+      # otherwise mc cp works fine for a single object as well.
+      mc cp --recursive "minio/${MINIO_BUCKET}/${MINIO_SOURCE_PATH}" "${LOCAL_DEST_PATH}"
+  # Cache – pull the existing test data cache, push back any changes made above
   cache:
     - key: vbt-converter-test-cache
       paths:
         - tests/test_data/
-      policy: pull-push                      # pull at start, push at end
-
-  # (Optional) script – just a sanity echo
+      policy: pull-push
   script:
-    - echo "${DATA} has been copied from MinIO into tests/test_data/ground_truth/"
-    - ls -l "tests/test_data/ground_truth/"           # list files in the target dir after copying for debugging
+    # Simple sanity‑check: list the files that have just been fetched.
+    - echo "'${MINIO_SOURCE_PATH}' has been copied to '${LOCAL_DEST_PATH}'."
+    - echo "Contents of '${LOCAL_DEST_PATH}':"
+    - ls -l "${LOCAL_DEST_PATH}"

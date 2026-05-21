@@ -34,7 +34,7 @@ vbt_setup_job:
     - jsc-cloud
     - fenix
   before_script:
-    - echo "Installing jq and Python in the Alpine runner …"
+  echo "Installing jq and Python in the Alpine runner …"
     - apk add --no-cache jq python3 bash curl
     - !reference [ .VBT_SETUP, before_script ]  # Calls the base "method"
   variables:
@@ -96,8 +96,8 @@ trigger-integration-bg:
   trigger:
     include: tests/integration/vbt_kth_bg_protocol_pipeline/.gitlab-ci.yml
     strategy: depend
-  variables:
-    PARENT_PIPELINE_ID: "$CI_PIPELINE_ID"
+#  variables:
+#    PARENT_PIPELINE_ID: "$CI_PIPELINE_ID"
   rules:
     - changes:
         - tests/integration/vbt_kth_bg_protocol_pipeline/**/*

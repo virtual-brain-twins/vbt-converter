@@ -3,8 +3,10 @@
 # -------------------------------------------------
 # Stages
 stages:
+  - setup_environment
   - test
   - publish_report
+  - cleanup
 
 # -----------------------------------------------------------------
 # Global variables – keep the same behavior as the original template
@@ -21,6 +23,24 @@ include:
     ref:    main                                         # branch / tag you want to use
     file:   '/ci/template.yml'                          # path inside the source repo
 
+vbt_setup_job:
+  extends: .VBT_SETUP                     # provided by the template
+  stage: setup_environment
+  image: docker:cli
+  tags:
+    - docker
+    - jsc-cloud
+    - fenix
+  before_script:
+    - echo "VBT_SETUP_SCRIPT= ${VBT_SETUP_SCRIPT}"
+    - echo "Installing jq and Python in the Alpine runner …"
+    - apk add --no-cache jq python3 bash curl
+    - !reference [ .VBT_SETUP, before_script ]  # Calls the base "method"
+  variables:
+    VBT_SETUP_SCRIPT: "${CI_PROJECT_DIR}/ci/template_repo/ci/scripts/setup_environment.sh"
+    # Use the project's own requirements (which must contain pytest, h5py, pandas, pyyaml, tqdm, numpy, allure‑pytest‑plugin)
+    VBT_REQUIREMENTS: "${CI_PROJECT_DIR}/requirements.txt"
+
 test_vbt_convert_parameter_sweep_dir_to_hdf5:
   extends: .VBT_RUN                       # provided by the template
   stage: test
@@ -30,11 +50,7 @@ test_vbt_convert_parameter_sweep_dir_to_hdf5:
     - fenix
   image: docker:cli
   needs:
-    - pipeline: $PARENT_PIPELINE_ID
-      job: vbt_setup_job
-      artifacts: true
-    - pipeline: $PARENT_PIPELINE_ID
-      job: unit_tests
+    - job: vbt_setup_job
       artifacts: true
   variables:
     # The entry‑script for the tests stage is simply “pytest”
@@ -53,17 +69,17 @@ test_vbt_convert_parameter_sweep_dir_to_hdf5:
     - export VBT_ALLURE_LINK_PIPELINE="${CI_PIPELINE_URL}"
     - export VBT_ALLURE_LINK_JOB="${CI_JOB_URL}"
     - export VBT_SUBMODULE_PATH="${CI_PROJECT_DIR}/ci/template_repo"
-    - export VBT_ENTRY_SCRIPT="${CI_PROJECT_DIR}/tests/integration/vbt_amu_protocol_pipeline/vbt_converter_ps_to_hdf5_wrapper.py"
-    - export VBT_INPUT_PATH="${CI_PROJECT_DIR}/tests/test_data/parametersweep_8s_3d_orientation_selective_12012026"
+    - export VBT_ENTRY_SCRIPT="${CI_PROJECT_DIR}/tests/integration/vbt_kth_bg_protocol_pipeline/vbt_converter_ps_to_npz_wrapper.py"
+    - export VBT_INPUT_PATH="${CI_PROJECT_DIR}/tests/test_data/VBT_KTH_BG_Protocol/"
     - export VBT_OUTPUT_PATH="${CI_PROJECT_DIR}/data/"
-    - export OUTPUT_HDF5_PATH="${CI_PROJECT_DIR}/converted/converted.hdf5"
+    - export OUTPUT_HDF5_PATH="${CI_PROJECT_DIR}/attachments/converted.hdf5"
     - export VBT_ALLURE_DESCRIPTION_HTML="${CI_PROJECT_DIR}/tests/docs/convert_direc_to_hdf_description.html"
     - echo "Installing dependencies in the docker runner …"
     - apk add --no-cache jq python3 bash perl gettext curl hdf5-tools
     - !reference [ .VBT_RUN, before_script ]  # Calls the base "method"
   # The artifacts are needed by the publishing stage (Allure results)
   cache:
-    - key: vbt-converter-test-cache
+    - key: vbt-kth-bg-protocol-cache
       paths:
         - tests/test_data/
       policy: pull
@@ -71,7 +87,7 @@ test_vbt_convert_parameter_sweep_dir_to_hdf5:
     when: always
     paths:
       - allure-results/
-      - "${CI_PROJECT_DIR}/converted"
+      - "${CI_PROJECT_DIR}/attachments"
     expire_in: 1 week
 
 vbt_publish_job:
@@ -88,3 +104,12 @@ vbt_publish_job:
     - echo "Installing dependencies in the Alpine runner …"
     - apk add --no-cache jq unzip
     - !reference [ .VBT_PUBLISH, before_script ]  # Calls the base "method"
+
+vbt_cleanup_job:
+  extends: .VBT_CLEANUP
+  stage: cleanup
+  needs:
+    - job: vbt_publish_job
+      artifacts: false
+  variables:
+    VBT_CLEANUP_SCRIPT: "${CI_PROJECT_DIR}/ci/template_repo/ci/scripts/cleanup_environment.sh"

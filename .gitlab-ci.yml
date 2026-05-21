@@ -140,6 +140,7 @@ update_cache_job:
   # -------------------------------------------------------------------------
   variables:
     # Optional defaults – they can be overridden in the CI UI.
+    SHELL: /bin/bash
     MINIO_SOURCE_PATH: "ground_truth/"
     LOCAL_DEST_PATH: "tests/test_data/ground_truth/"
   before_script:

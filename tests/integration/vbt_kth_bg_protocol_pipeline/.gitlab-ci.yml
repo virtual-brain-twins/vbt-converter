@@ -46,6 +46,7 @@ test_vbt_convert_parameter_sweep_dir_to_hdf5:
     - docker
     - jsc-cloud
     - fenix
+    - vbt-test-vm02
   image: docker:cli
   needs:
     - job: vbt_setup_job

@@ -120,10 +120,17 @@ vbt_publish_job:
 # CLEAN‑UP – tear‑down the temporary virtual environment
 vbt_cleanup_job:
   extends: .VBT_CLEANUP
+  tags:
+    - docker
+    - jsc-cloud
+    - fenix
   stage: cleanup
   needs:
     - job: vbt_publish_job
       artifacts: false
+  before_script:
+    - apk add --no-cache jq bash
+    - !reference [ .VBT_RUN, before_script ]  # Calls the base "method"
   variables:
     VBT_CLEANUP_SCRIPT: "${CI_PROJECT_DIR}/ci/template_repo/ci/scripts/cleanup_environment.sh"
 

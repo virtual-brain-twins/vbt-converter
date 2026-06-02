@@ -127,4 +127,5 @@ vbt_cleanup_job:
   before_script:
     - export VBT_SUBMODULE_PATH="${CI_PROJECT_DIR}/ci/template_repo"
     - export VBT_CLEANUP_SCRIPT="${CI_PROJECT_DIR}/ci/template_repo/ci/scripts/cleanup_environment.sh"
+    - apk add --no-cache jq bash
     - !reference [ .VBT_RUN, before_script ]  # Calls the base "method"

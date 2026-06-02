@@ -171,6 +171,10 @@ def main() -> None:
 
         logger.info("Conversion successful – directory copied to %s", converted_bundle)
 
+    # Delete every file in input directory, since its heavy for the final allure report
+    for entry in(args.input_dir.resolve() / "VBT_KTH_BG_Protocol").expanduser().resolve().iterdir():
+        # shutil.rmtree handles both files and directories (and follows symlinks safely)
+        shutil.rmtree(entry, ignore_errors=True)  # ignore_errors to keep it fast & non‑blocking
     # ------------------------------------------------------------------
     # Compare with ground‑truth using h5diff and generate a tiny HTML report
     # ------------------------------------------------------------------

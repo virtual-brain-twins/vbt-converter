@@ -56,6 +56,7 @@ test_vbt_convert_parameter_sweep_dir_to_hdf5:
   before_script:
     - export PYTHONPATH="${PYTHONPATH}:${CI_PROJECT_DIR}"
     - export VBT_ENABLE_OUTPUT_DIR_RECURSIVE_ATTACH="false" # Do not attach the whole output dir as artifact
+    - export VBT_ENABLE_INPUT_DIR_RECURSIVE_ATTACH="false" # Do not attach the whole input dir as artifact
     - export VBT_ALLURE_PARENT_SUITE="VBT‑converter CI/CD"
     - export VBT_ALLURE_SUITE="Integration Tests BG Protocol Pipeline"
     - export VBT_ALLURE_SUB_SUITE="Conversion of parameter‑sweep‑style directories to HDF5 file and validation of the converted file against the ground‑truth HDF5 file"
@@ -72,7 +73,7 @@ test_vbt_convert_parameter_sweep_dir_to_hdf5:
     - export VBT_INPUT_PATH="${CI_PROJECT_DIR}/tests/test_data/VBT_KTH_BG_Protocol/"
     - export VBT_OUTPUT_PATH="${CI_PROJECT_DIR}/data/"
     - export OUTPUT_BUNDLE_PATH="${CI_PROJECT_DIR}/attachments/bundle"
-    - export VBT_ALLURE_DESCRIPTION_HTML="${CI_PROJECT_DIR}/tests/docs/convert_direc_to_hdf_description.html"
+    - export VBT_ALLURE_DESCRIPTION_HTML="${CI_PROJECT_DIR}/tests/integration/docs/vbt_bg_protocol/vbt_converter_ps_to_hdf5_wrapper.html"
     - echo "Installing dependencies in the docker runner …"
     - apk add --no-cache jq python3 bash perl gettext curl hdf5-tools
     - !reference [ .VBT_RUN, before_script ]  # Calls the base "method"
@@ -95,6 +96,10 @@ test_vbt_convert_parameter_sweep_dir_to_hdf5:
 vbt_publish_job:
   extends: .VBT_PUBLISH
   stage: publish_report
+  tags:
+    - docker
+    - jsc-cloud
+    - fenix
   needs:
     - job: test_vbt_convert_parameter_sweep_dir_to_hdf5
       artifacts: true
@@ -110,6 +115,10 @@ vbt_publish_job:
 vbt_cleanup_job:
   extends: .VBT_CLEANUP
   stage: cleanup
+  tags:
+    - docker
+    - jsc-cloud
+    - fenix
   needs:
     - job: vbt_publish_job
       artifacts: false

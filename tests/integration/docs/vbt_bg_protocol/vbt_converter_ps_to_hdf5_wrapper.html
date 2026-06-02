@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Parameter sweep to HDF5 conversion – Overview</title>
+  <style>
+    body {font-family:Arial,Helvetica,sans-serif; line-height:1.5; margin:2rem;}
+    h1 {color:#2c3e50;}
+    h2 {color:#34495e; margin-top:1.5rem;}
+    pre, code {background:#f8f8f8; padding:0.2rem 0.4rem; border-radius:4px;}
+    ul {margin-left:1.2rem;}
+    .env, .cli, .artefacts {font-family:monospace;}
+  </style>
+</head>
+<body>
+
+<h1>Parameter sweep to HDF5 conversion – Overview</h1>
+
+<h2>Purpose</h2>
+<p>Execute the <code>convert_direc_to_hdf.py</code> converter, copy the generated <code>.h5</code> file, compare it with the ground‑truth, and produce a tiny HTML report for Allure.</p>
+
+<h2>Required environment variables</h2>
+<ul class="env">
+  <li><strong>VBT_JOB_LOGS</strong> – directory for the log file.</li>
+  <li><strong>CI_PROJECT_DIR</strong> – path to the repository root.</li>
+  <li><strong>OUTPUT_HDF5_PATH</strong> – absolute destination for the resulting <code>.h5</code>.</li>
+  <li><strong>INPUT_SWEEP_DIR_PATH</strong> – (optional) location where the raw sweep directory should be attached to the CI job.</li>
+</ul>
+
+<h2>Command‑line interface</h2>
+<ul class="cli">
+  <li><code>--input-dir &lt;Path&gt;</code> (default: <code>input</code>) – folder containing the parameter‑sweep data.</li>
+  <li><code>--output-dir &lt;Path&gt;</code> (default: <code>output</code>) – folder for the HTML report and link files.</li>
+</ul>
+
+<h2>High‑level workflow</h2>
+<ol>
+  <li>Set up logging (file + stderr).</li>
+  <li>Resolve <code>CI_PROJECT_DIR</code> → <code>ci_root</code>.</li>
+  <li>Locate <code>converters/convert_direc_to_hdf.py</code>.</li>
+  <li>Create a temporary directory; expected output:
+    <pre>…/parametersweep_…/.hdf5</pre>
+  </li>
+  <li>Run the converter:
+    <pre>python convert_direc_to_hdf.py --input_dir &lt;input‑sweep&gt; --output_file &lt;hdf5&gt;</pre>
+  </li>
+  <li>Copy the produced file to <code>OUTPUT_HDF5_PATH</code>.</li>
+  <li>Run <code>h5diff -q</code> against the ground‑truth file
+    <code>tests/test_data/ground_truth/test_convert_output.h5</code>.</li>
+  <li>Render <code>hdf5_comparison_template.html</code> → <code>{output‑dir}/test_result_report.html</code>.</li>
+  <li>Generate a link HTML file (<code>converted_hdf5_link.html</code>) using <code>create_link_html</code>.</li>
+  <li>Move the original sweep directory to <code>INPUT_SWEEP_DIR_PATH</code> (rename or <code>shutil.move</code>).</li>
+  <li>Create <code>input_sweep_dir_link.html</code> for the attached directory.</li>
+</ol>
+
+<h2>Produced artefacts (in <code>--output-dir</code>)</h2>
+<ul class="artefacts">
+  <li><code>test_result_report.html</code> – result of the <code>h5diff</code> comparison.</li>
+  <li><code>converted_hdf5_link.html</code> – download link for the copied <code>.h5</code>.</li>
+  <li><code>input_sweep_dir_link.html</code> – link to the uploaded sweep folder.</li>
+</ul>
+
+</body>
+</html>

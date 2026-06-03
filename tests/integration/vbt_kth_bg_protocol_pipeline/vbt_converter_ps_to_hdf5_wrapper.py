@@ -170,11 +170,6 @@ def main() -> None:
             sys.exit(1)
 
         logger.info("Conversion successful – directory copied to %s", converted_bundle)
-
-    # Delete every file in input directory, since its heavy for the final allure report
-    for entry in(args.input_dir.resolve() / "VBT_KTH_BG_Protocol").expanduser().resolve().iterdir():
-        # shutil.rmtree handles both files and directories (and follows symlinks safely)
-        shutil.rmtree(entry, ignore_errors=True)  # ignore_errors to keep it fast & non‑blocking
     # ------------------------------------------------------------------
     # Compare with ground‑truth using h5diff and generate a tiny HTML report
     # ------------------------------------------------------------------
@@ -287,6 +282,10 @@ def main() -> None:
     #         ("attachments/parametersweep_8s_3d_orientation_selective_12012026", "Parameter Sweep Directory", False),
     #     ]
     # )
+    # Delete every file in input directory, since its heavy for the final allure report
+    for entry in Path(str(os.getenv("VBT_INPUT_PATH"))).expanduser().resolve().iterdir():
+        # shutil.rmtree handles both files and directories (and follows symlinks safely)
+        shutil.rmtree(entry, ignore_errors=True)  # ignore_errors to keep it fast & non‑blocking
 
 
 # ----------------------------------------------------------------------

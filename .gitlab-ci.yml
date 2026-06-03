@@ -223,11 +223,13 @@ vbt_cleanup_job:
 
 
 # Concrete job(s) that *use* the template
-update_cache_job:
+update_or_create_new_cache_job:
   extends: .fetch_minio_cache_template
-
-create_new_cache:
-  extends: .fetch_minio_cache_template
+  # You can override the default variables in CI or give the below defaults via the new job variables section. Just make sure to set them correctly according to your needs:
+  # "$CI_CACHE_KEY": If you use the existing key, then the cache will be updated with the new content, otherwise a new cache entry will be created (but note that the old cache will still exist and can be used by other jobs that reference the same key until it is pruned by GitLab).
+  # "$CI_CACHE_DIR": This is the default cache path provided by GitLab, which is typically something like "${CI_PROJECT_DIR}/tests/test_data/". You can change it if you want, but using the default one is usually fine as long as it matches the path used in the cache definition above.
+  # "$MINIO_SRC_PATH": This should point to the file or folder in the dedicated temp MinIO bucket (https://vbt-minio.fz-juelich.de/console/browser/ci-temp-cache) that you want to cache locally for the tests. Make sure it matches the actual structure in your bucket.
+  # "$LOCAL_DEST_DIR": This should point to the local folder where you want the cached file/folder to be copied to. It should match the path used in the script above for the local destination. Make sure it is within the cache path: "$CI_CACHE_DIR" if you want it to be cached by GitLab.
   variables:
     CACHE_KEY: "$CI_CACHE_KEY"
     CACHE_PATH: "$CI_CACHE_DIR"

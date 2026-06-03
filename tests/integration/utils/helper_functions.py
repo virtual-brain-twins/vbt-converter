@@ -7,8 +7,8 @@ from typing import List, Tuple, Sequence
 from typing import Union
 
 LinkSpec = Union[
-    Tuple[str, str],  # (relative_path, link_text) → uses default `file`
-    Tuple[str, str, bool],  # (relative_path, link_text, is_file)
+    Tuple[str, str],  # (path, link_text) → uses default `file`
+    Tuple[str, str, bool, bool],  # (path, link_text, is_file, is_path_absolute)
 ]
 
 
@@ -34,14 +34,16 @@ def create_link_html(
         once the file has been written.
 
     links:
-        A sequence of ``(relative_path, link_text)`` **or**
-        ``(relative_path, link_text, is_file)`` tuples.
+        A sequence of ``(path, link_text)`` **or**
+        ``(path, link_text, is_file, is_path_absolute)`` tuples.
 
-        * ``relative_path`` is interpreted **relative to** the Allure
+        * ``path`` is interpreted **relative to** the Allure
           ``/artifacts/<segment>/`` directory.
-        * If a 3‑tuple is supplied, ``is_file`` determines whether the URL
+        * If a 4‑tuple is supplied, ``is_file`` determines whether the URL
           contains the ``file`` segment (``True``) or the ``browse`` segment
           (``False``).  If omitted, the value of ``default_is_file`` is used.
+        * The ``is_path_absolute`` flag determines whether the path is
+          interpreted as absolute (``True``) or relative (``False``).
 
         If ``None`` (the default) the function falls back to the *converted
         artefacts* use‑case and generates two links:
@@ -94,8 +96,8 @@ def create_link_html(
         )
         # ``default_is_file`` is deliberately ignored for the historic
         # default case – the original helper always used the “file” segment.
-        link_data: List[Tuple[str, str, bool]] = [
-            (rel_path, text, True) for rel_path, text in default_paths
+        link_data: List[Tuple[str, str, bool, bool]] = [
+            (rel_path, text, True, False) for rel_path, text in default_paths
         ]
     else:
         # Normalise the user‑supplied collection to the 3‑tuple form.
@@ -118,23 +120,26 @@ def create_link_html(
             link_data.append((rel_path, text, is_file))
 
     # ------------------------------------------------------------------- #
-    # Helper that turns a (relative_path, is_file) pair into a full URL.
+    # Helper that turns a (relative_path, is_file, is_path_absolute: bool) pair into a full URL.
     # ------------------------------------------------------------------- #
-    def _full_url(rel_path: str, is_file: bool) -> str:
-        # Ensure the relative part does **not** start with a slash,
-        # otherwise ``urljoin``‑style concatenation would drop the segment.
-        rel_path = rel_path.lstrip("/")
-        segment = "file" if is_file else "browse"
-        return f"{base_url}/artifacts/{segment}/{rel_path}"
+    def _full_url(rel_path: str, is_file: bool, is_path_absolute: bool) -> str:
+        # If the caller gave us an absolute URL/path we simply hand it back.
+        # Otherwise strip any leading “/” (so url‑joining works) and prepend the
+        # appropriate artifact segment.
+        return (
+            rel_path
+            if is_path_absolute
+            else f"{base_url}/artifacts/{'file' if is_file else 'browse'}/{rel_path.lstrip('/')}"
+        )
 
     # ------------------------------------------------------------------- #
     # Build the <p>…</p> blocks – one per link.
     # ------------------------------------------------------------------- #
     link_paragraphs = "\n".join(
         f'        <p class="artifact-list">• '
-        f'<a href="{_full_url(path, is_file)}" target="_blank" '
+        f'<a href="{_full_url(path, is_file, is_path_absolute)}" target="_blank" '
         f'rel="noopener noreferrer">{text}</a></p>'
-        for path, text, is_file in link_data
+        for path, text, is_file, is_path_absolute in link_data
     )
 
     # ------------------------------------------------------------------- #

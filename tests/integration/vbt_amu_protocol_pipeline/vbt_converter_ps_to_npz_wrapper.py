@@ -386,8 +386,8 @@ def main() -> None:
         output_file=args.output_dir / "converted_hdf5_&_npz_links.html",
         logger=logger,
         links=[
-            ("attachments/converted.npz", "Converted NPZ file", True),
-            ("attachments/converted.hdf5", "Converted HDF5 file", True),
+            ("attachments/converted.npz", "Converted NPZ file", True, False),
+            ("attachments/converted.hdf5", "Converted HDF5 file", True, False)
         ]
     )
 

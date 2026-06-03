@@ -259,7 +259,7 @@ def main() -> None:
         output_file=args.output_dir / "converted_hdf5_link.html",
         logger=logger,
         links=[
-            ("attachments/converted.hdf5", "Converted HDF5 File", True),
+            ("attachments/converted.hdf5", "Converted HDF5 File", True, False)
         ]
     )
     logger.info("Report written to %s", report_path)
@@ -293,7 +293,7 @@ def main() -> None:
         output_file=src_sweep / "input_sweep_dir_link.html",
         logger=logger,
         links=[
-            ("attachments/parametersweep_8s_3d_orientation_selective_12012026", "Parameter Sweep Directory", False),
+            ("attachments/parametersweep_8s_3d_orientation_selective_12012026", "Parameter Sweep Directory", False, False)
         ]
     )
 

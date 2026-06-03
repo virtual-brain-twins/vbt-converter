@@ -271,7 +271,7 @@ def main() -> None:
         output_file=ci_root / "input" / "input_hdf5_link.html",
         logger=logger,
         links=[
-            ("attachments/input.hdf5", "Input HDF5 File", True),
+            ("attachments/input.hdf5", "Input HDF5 File", True, False)
         ]
     )
     logger.info("Report written to %s", report_path)

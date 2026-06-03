@@ -8,6 +8,7 @@ from typing import Union
 
 LinkSpec = Union[
     Tuple[str, str],  # (path, link_text) → uses default `file`
+    Tuple[str, str, bool],  # (path, link_text, is_file, is_path_absolute)
     Tuple[str, str, bool, bool],  # (path, link_text, is_file, is_path_absolute)
 ]
 
@@ -106,18 +107,27 @@ def create_link_html(
             if len(spec) == 2:
                 rel_path, text = spec  # type: ignore[assignment]
                 is_file = default_is_file
+                is_path_absolute = False
             elif len(spec) == 3:
-                rel_path, text, is_file = spec  # type: ignore[assignment]
+                rel_path, text, is_file = spec
+                is_path_absolute = False
+            elif len(spec) == 4:
+                rel_path, text, is_file, is_path_absolute = spec  # type: ignore[assignment]
                 if not isinstance(is_file, bool):
                     raise TypeError(
                         f"is_file flag must be bool, got {type(is_file)!r} "
                         f"for link {spec!r}"
                     )
+                if not isinstance(is_path_absolute, bool):
+                    raise TypeError(
+                        f"is_path_absolute flag must be bool, got {type(is_path_absolute)!r} "
+                        f"for link {spec!r}"
+                    )
             else:
                 raise ValueError(
-                    f"Link spec must be a 2‑ or 3‑tuple, got {spec!r}"
+                    f"Link spec must be a 2‑ or 4‑tuple, got {spec!r}"
                 )
-            link_data.append((rel_path, text, is_file))
+            link_data.append((rel_path, text, is_file, is_path_absolute))
 
     # ------------------------------------------------------------------- #
     # Helper that turns a (relative_path, is_file, is_path_absolute: bool) pair into a full URL.

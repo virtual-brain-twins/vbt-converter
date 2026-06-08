@@ -176,7 +176,12 @@ def main() -> None:
             / "ground_truth"
             / "master.h5"
     )
+    output_master_h5 = (
+            Path(converted_bundle)
+            / "master.h5"
+    )
     logger.debug("Ground‑truth file: %s", ground_truth)
+    logger.debug("Output file: %s", output_master_h5)
 
     result = subprocess.run(
         ["h5diff", "-q", str(ground_truth), str(output_master_h5)],

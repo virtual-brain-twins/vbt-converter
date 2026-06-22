@@ -73,11 +73,12 @@ class DataSection(abc.ABC):
         _make_dataset(grp, name, arr, compress=compress)
 
     @staticmethod
-    def _read_binary_blob(dset: h5py.Dataset) -> bytes:
+    def read_binary_blob(dset: h5py.Dataset) -> bytes:
         """Read a binary (uint8) dataset back to ``bytes``."""
         return dset[()].tobytes()
 
-    def _store_external_path(
+    @staticmethod
+    def store_external_path(
             grp: h5py.Group,
             name: str,
             path: Path,
@@ -85,25 +86,56 @@ class DataSection(abc.ABC):
             make_link: bool = True,
     ) -> None:
         """
-        Store a *reference* to a file that lives on the filesystem.
+        Store a reference to a file that lives on the filesystem.
 
-        * If ``make_link`` is True, an **HDF5 external link** is created.  The
-          linked file can be opened directly with ``h5py.File(linked_path)``.
-        * If ``make_link`` is False, we simply store the string path as a
-          UTF‑8 scalar dataset (so the reference survives when the HDF5 file is
-          moved to a different machine; the user can decide later how to resolve it).
-
-        The function does **not** read the target file at all.
+        Parameters
+        ----------
+        grp : h5py.Group
+            The group in which the reference will be stored.
+        name : str
+            Name of the reference object.
+        path : pathlib.Path
+            Path to the external file (relative to the HDF5 file's parent directory
+            is recommended).
+        make_link : bool, optional
+            If True **and** ``path`` points to an HDF5 file, create an HDF5 external
+            link.  If False (or ``path`` is not an HDF5 file) a plain text dataset
+            is created instead.
         """
-        if make_link:
-            # ``target`` is the absolute path against which the link is interpreted.
-            # ``source`` is the group that will contain the link.
-            # ``external_link`` creates an object that behaves like a dataset but
-            # lives in another file.
+
+        # Helper that decides whether we are dealing with a *real* HDF5 file
+        def _is_hdf5_file(p: Path) -> bool:
+            if not p.is_file():
+                return False
+            try:
+                with h5py.File(p, "r"):
+                    return True
+            except (OSError, IOError):
+                return False
+
+        # When we are allowed to make a link andthe target is an HDF5 file
+        if make_link and _is_hdf5_file(path):
+            # ExternalLink stores only the *file name* (or absolute path). The
+            # object name inside the file is supplied as the second argument.
+            # We link to the root group of the target file (`/`).
             external_link = h5py.ExternalLink(str(path), "/")
-            # HDF5 stores external links as *soft objects* – they have no data payload.
             grp[name] = external_link
-            grp[name].attrs["link_target"] = str(path)  # for humans / JSON dumps
-        else:
-            # Store the path as a tiny vlen string dataset (still < 1 kB)
-            DataSection._store_text_blob(grp, name, str(path), compress=False)
+            # NOTE: you cannot attach attributes to the link itself.
+            # If you need to keep a human‑readable copy of the path, store it
+            # somewhere else, e.g. as an attribute of the *parent* group.
+            grp[name].attrs["link_type"] = "external_hdf5"
+            # (optionally) also store the path as a separate attribute for easier
+            # inspection – this works because attributes belong to the *parent*
+            # group, not the link object.
+            grp.attrs[f"{name}_target"] = str(path)
+            return
+
+        # Fallback: store the path as a tiny variable‑length string dataset
+        # (a) always keep a human‑readable attribute
+        grp.attrs[f"{name}_path"] = str(path)
+
+        # (b) also create a tiny dataset – shape (1,) → not scalar → safe
+        dt = h5py.string_dtype(encoding="utf-8")
+        data = np.array([str(path)], dtype=dt)
+        dset = grp.create_dataset(name, data=data, dtype=dt, compression=None)
+        dset.attrs["reference_type"] = "plain_path"

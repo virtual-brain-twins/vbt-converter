@@ -14,9 +14,11 @@ import h5py
 
 from converters.bundles.amu_bundle import AMUBundle
 from converters.bundles.basal_ganglia_bundle import BasalGangliaBundle
+from converters.interfaces.data_section import DataSection
 from converters.interfaces.simulation_bundle import SimulationBundle
 from converters.utils.bg_protocol_helper import stream_csv_as_dicts, group_by_memory
 from converters.utils.common import configure_logging
+from converters.utils.zip_helper import zip_directory_stream
 
 logger = configure_logging(
     __name__,
@@ -25,16 +27,30 @@ logger = configure_logging(
 )
 
 
-def build_master_h5(bundles: list[SimulationBundle], out_path: Path, *, embed_raw: bool = True) -> None:
+def build_master_h5(bundles: list[SimulationBundle], input_dir: Path, out_path: Path, *,
+                    embed_raw: bool = True) -> None:
     """Create a master HDF5 with *one* top‑level group per simulation."""
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with h5py.File(out_path, "w") as hf:
         hf.attrs["format_version"] = "1.0"
         for b in bundles:
-            b.to_hdf5(hf, embed_raw_bundle=embed_raw)
+            b.to_hdf5(hf)
+        if embed_raw:
+            out_dir = out_path if out_path.is_dir() else out_path.parent
+            raw_zip = out_dir / f"raw_data.zip"
+            zip_directory_stream(input_dir, raw_zip)
+            # User supplies an *already* created zip → just store a reference.
+            DataSection.store_external_path(
+                hf,
+                name="raw_bundle",
+                path=raw_zip.relative_to(out_dir),
+                make_link=True,
+            )
+            hf["raw_bundle"].attrs["format"] = "zip"
+            hf["raw_bundle"].attrs["original_root"] = str(input_dir)
 
 
-def discover_basal_ganglia(csv_path: Path) -> list[SimulationBundle]:
+def discover_basal_ganglia(csv_path: Path, output_dir: Path) -> list[SimulationBundle]:
     """
     Very small wrapper around the original CSV → dict logic.
     Turn each row into a ``BasalGangliaBundle``.
@@ -50,18 +66,18 @@ def discover_basal_ganglia(csv_path: Path) -> list[SimulationBundle]:
     bundles = []
     for state, sim_rows in groups.items():
         for row in sim_rows:
-            bundles.append(BasalGangliaBundle(row, csv_path.parent))
+            bundles.append(BasalGangliaBundle(row, csv_path.parent, output_dir))
     return bundles
 
 
-def discover_amu(root_dir: Path) -> list[SimulationBundle]:
+def discover_amu(root_dir: Path, output_dir: Path) -> list[SimulationBundle]:
     """
     Each immediate sub‑directory of ``root_dir`` is assumed to be a separate AMU simulation.
     """
     bundles = []
     for sub in sorted(root_dir.iterdir()):
         if sub.is_dir():
-            bundles.append(AMUBundle(sub))
+            bundles.append(AMUBundle(sub, output_dir=output_dir))
     return bundles
 
 
@@ -86,15 +102,16 @@ def main() -> None:
     out_path = Path(args.output).expanduser().resolve()
 
     if args.protocol == "basal":
-        bundles = discover_basal_ganglia(input_path)
+        bundles = discover_basal_ganglia(input_path, out_path if out_path.is_dir() else out_path.parent)
     else:
-        bundles = discover_amu(input_path)
+        bundles = discover_amu(input_path, out_path if out_path.is_dir() else out_path.parent)
 
     if not bundles:
         logger.error("No simulations discovered – aborting.")
         sys.exit(1)
 
-    build_master_h5(bundles, out_path, embed_raw=not args.no_raw_bundle)
+    build_master_h5(bundles, input_path if input_path.is_dir() else input_path.parent, out_path,
+                    embed_raw=not args.no_raw_bundle)
     logger.info("Finished – master file written to %s", out_path)
 
 

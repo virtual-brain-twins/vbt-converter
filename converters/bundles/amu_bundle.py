@@ -17,8 +17,9 @@ class AMUBundle(SimulationBundle):
     All of those are covered by the generic sections.
     """
 
-    def __init__(self, sim_dir: Path) -> None:
+    def __init__(self, sim_dir: Path, output_dir: Path = Path(".")) -> None:
         super().__init__()
+        self._output_dir: Path = output_dir
         self._orig_root = sim_dir
         self._sim_id = sim_dir.name
 
@@ -53,7 +54,7 @@ class AMUBundle(SimulationBundle):
         stim_files = list(sim_dir.glob("random_input_*.npz"))
         for f in stim_files:
             aux[f.name] = f
-        self.register_section("aux_files", AuxiliaryFileSection(aux))
+        self.register_section("aux_files", AuxiliaryFileSection(aux, self._output_dir))
 
     # ------------------------------------------------------------------
     @property

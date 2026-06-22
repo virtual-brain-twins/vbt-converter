@@ -1,4 +1,6 @@
 import logging
+import os
+import shutil
 from pathlib import Path
 from typing import Mapping, Dict
 
@@ -17,17 +19,18 @@ class AuxiliaryFileSection(DataSection):
     """
     Keeps an *exact copy* of arbitrary text‑based files.  Small files (<8 MiB)
     are stored directly as a variable‑length string dataset; larger files are
-    stored as a binary blob (uint8) – still fully self‑contained.
+    stored as external references within th output folder – still fully self‑contained.
     """
-    MAX_INLINE = 8 * 1024 * 1024  # 8 MiB
+    MAX_INLINE = 8 * 1024 * 1024  # 8MiB
 
-    def __init__(self, mapping: Mapping[str, Path] | None = None):
+    def __init__(self, mapping: Mapping[str, Path] | None = None, output_dir: Path = Path(".")) -> None:
         """
         ``mapping``: logical-name → absolute path of the source file.
         The class does **not** read the files at construction time – that is
         deferred to ``to_hdf5`` so that you can reuse the same object for
         multiple bundles if you wish.
         """
+        self.output_dir: Path = output_dir
         self.mapping: Dict[str, Path] = {k: Path(v) for k, v in (mapping or {}).items()}
 
     # ------------------------------------------------------------------
@@ -36,18 +39,33 @@ class AuxiliaryFileSection(DataSection):
             if not src_path.is_file():
                 logger.warning("Aux file %s does not exist – skipping.", src_path)
                 continue
-            data = src_path.read_bytes()
-            if len(data) <= self.MAX_INLINE:
-                try:
-                    txt = data.decode("utf-8")
-                    self._store_text_blob(grp, logical_name, txt, compress=True)
-                except UnicodeDecodeError:
-                    # binary, fall back to blob
-                    self._store_binary_blob(grp, logical_name, data, compress=True)
-            else:
-                self._store_binary_blob(grp, logical_name, data, compress=True)
 
-            # Keep a tiny attribute to know where the file originally lived
+            # Decide if we keep the file *in* the bundle or as a link.
+            # A simple heuristic – files larger than 8MiB become external links.
+            # The threshold is exposed via an environment variable so that a
+            # user can tune it without touching the code.
+            ext_thresh = int(os.getenv("VBT_AUX_LINK_THRESHOLD", str(self.MAX_INLINE)))
+            make_link = src_path.stat().st_size > ext_thresh
+
+            if make_link:
+                # Fast, zero‑copy reference
+                dst = Path(self.output_dir) / Path(src_path).relative_to(Path(src_path).anchor)
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src_path, dst) if Path(src_path).is_file() else shutil.copytree(src_path, dst,
+                                                                                             dirs_exist_ok=True)
+                DataSection.store_external_path(grp, logical_name, Path(dst).relative_to(self.output_dir), make_link=True)
+            else:
+                # Keep small files inline (current behaviour)
+                data = src_path.read_bytes()
+                if len(data) <= self.MAX_INLINE:
+                    try:
+                        txt = data.decode("utf-8")
+                        self._store_text_blob(grp, logical_name, txt, compress=True)
+                    except UnicodeDecodeError:
+                        self._store_binary_blob(grp, logical_name, data, compress=True)
+                else:   # fall‑back for binary >MAX_INLINE
+                    self._store_binary_blob(grp, logical_name, data, compress=True)
+
             grp[logical_name].attrs["original_path"] = str(src_path)
 
     # ------------------------------------------------------------------

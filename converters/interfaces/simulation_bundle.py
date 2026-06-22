@@ -1,6 +1,7 @@
 #  BUNDLE INTERFACE
 import abc
 import logging
+import pathlib
 import tempfile
 import zipfile
 from pathlib import Path
@@ -59,37 +60,23 @@ class SimulationBundle(abc.ABC):
         self.sections[name] = section
 
     # High‑level (de)serialisation
-    def to_hdf5(self, h5file: h5py.File, *, embed_raw_bundle: bool = True) -> None:
+    def to_hdf5(self, h5file: h5py.File) -> None:
         """
-        Write the whole bundle into ``h5file`` under ``/sim_<id>``.
-
         Parameters
         ----------
-        embed_raw_bundle: bool
-            If ``True`` (default) the original directory is zipped and stored
-            as a binary blob named ``raw_bundle``.  Set to ``False`` when you
-            want a *pure* metadata‑only file and keep the original data on disk.
+
+        raw_bundle_path : pathlib.Path | None
+            Absolute or relative path to an already‑created zip archive that contains
+            the original simulation directory.  When supplied the bundle stores only a
+            reference (using ``DataSection._store_external_path``).  ``embed_raw_bundle``
+            is ignored in this mode.
         """
         grp = h5file.create_group(f"sim_{self.sim_id}")
-        logger.debug("Creating group %s for simulation %s", grp.name, self.sim_id)
 
-        # Write each registered section
+        # --- write all registered sections -------------------------------------------------
         for name, sec in self.sections.items():
             sub = grp.create_group(name)
-            logger.debug("→ writing section '%s' (%s)", name, sub.name)
             sec.to_hdf5(sub)
-
-        # Store a compact zip of the raw directory (optional)
-        # if embed_raw_bundle:
-        #     raw_blob = self._make_raw_bundle_blob()
-        #     DataSection._store_binary_blob(
-        #         grp,
-        #         name="raw_bundle",
-        #         blob=raw_blob,
-        #         compress=True,
-        #     )
-        #     grp["raw_bundle"].attrs["format"] = "zip"
-        #     grp["raw_bundle"].attrs["original_root"] = str(self.original_root)
 
     @classmethod
     def from_hdf5(cls: Type["SimulationBundle"], h5file: h5py.File, sim_id: str) -> "SimulationBundle":
@@ -116,7 +103,7 @@ class SimulationBundle(abc.ABC):
 
         # (optional) unpack raw bundle to a temporary directory
         if "raw_bundle" in grp:
-            raw_blob = DataSection._read_binary_blob(grp["raw_bundle"])
+            raw_blob = DataSection.read_binary_blob(grp["raw_bundle"])
             tmp_dir = Path(tempfile.mkdtemp(prefix=f"sim_{sim_id}_"))
             with tempfile.TemporaryDirectory() as td:
                 zip_path = Path(td) / "bundle.zip"

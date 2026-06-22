@@ -43,8 +43,9 @@ class BasalGangliaBundle(SimulationBundle):
     the *output spikes* are now represented by the new ``OutputSpikesSection``.
     """
 
-    def __init__(self, sim_dict: Mapping[str, str], simulation_dir: Path) -> None:
+    def __init__(self, sim_dict: Mapping[str, str], simulation_dir: Path, output_dir: Path = Path(".")) -> None:
         super().__init__()
+        self._output_dir = output_dir
         self._sim_dict = dict(sim_dict)  # shallow copy for later use
         self._sim_id = Path(sim_dict["sim_info_file"]).stem
         self._orig_root = simulation_dir / Path(sim_dict["network_path"])
@@ -79,12 +80,12 @@ class BasalGangliaBundle(SimulationBundle):
 
         # Auxiliary files (unchanged)
         aux_map = {
-            #"network_file": Path(sim_dict["network_file"]),
+            "network_file": Path(sim_dict["network_file"]),
             "input_config": Path(sim_dict["input_config"]),
             "virtual_input_file": Path(sim_dict["virtual_input_file"]),
             "virtual_input_mapping": Path(sim_dict["virtual_input_mapping"]),
         }
-        self.register_section("aux_files", AuxiliaryFileSection(aux_map))
+        self.register_section("aux_files", AuxiliaryFileSection(aux_map, self._output_dir))
 
     # Required abstract properties
     @property

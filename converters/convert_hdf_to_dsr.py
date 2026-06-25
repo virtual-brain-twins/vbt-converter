@@ -78,7 +78,7 @@ def convert(input_file, output_file, bin_size):
         for name, sim_grp in h["simulations"].items():
             param_values = np.array([float(sim_grp.attrs[p]) for p in parameters])
 
-            t, firing_rate = get_firing_rates(sim_grp['spike_times'], bin_size,
+            _, firing_rate = get_firing_rates(sim_grp['spike_times'], bin_size,
                                               0, sim_grp.attrs['t_sim'] / 1000.,
                                               sim_grp['record_neurons'])
             stim = get_discretized_stimulus(sim_grp['stimulus'], bin_size)

@@ -4,7 +4,7 @@ from pathlib import Path
 import h5py
 import numpy as np
 
-from converters.utils.data_section_helper import _make_dataset
+from converters.utils.data_section_helper import make_dataset
 
 
 class DataSection(abc.ABC):
@@ -45,7 +45,7 @@ class DataSection(abc.ABC):
         compress: bool = True,
     ) -> None:
         """Thin wrapper around ``_make_dataset`` that also stores a tiny attr."""
-        dset = _make_dataset(grp, name, arr, compress=compress)
+        dset = make_dataset(grp, name, arr, compress=compress)
         dset.attrs["dtype"] = str(arr.dtype)
 
     @staticmethod
@@ -70,7 +70,7 @@ class DataSection(abc.ABC):
         compress: bool = True,
     ) -> None:
         arr = np.frombuffer(blob, dtype=np.uint8)
-        _make_dataset(grp, name, arr, compress=compress)
+        make_dataset(grp, name, arr, compress=compress)
 
     @staticmethod
     def read_binary_blob(dset: h5py.Dataset) -> bytes:

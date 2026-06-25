@@ -1,9 +1,3 @@
-# --------------------------------------------------------------
-#  convert_any_to_hdf5.py
-# --------------------------------------------------------------
-# !/usr/bin/env python
-# -*- coding: utf-8 -*-
-
 import argparse
 import logging
 import os
@@ -39,7 +33,6 @@ def build_master_h5(bundles: list[SimulationBundle], input_dir: Path, out_path: 
             out_dir = out_path if out_path.is_dir() else out_path.parent
             raw_zip = out_dir / f"raw_data.zip"
             zip_directory_stream(input_dir, raw_zip)
-            # User supplies an *already* created zip → just store a reference.
             DataSection.store_external_path(
                 hf,
                 name="raw_bundle",

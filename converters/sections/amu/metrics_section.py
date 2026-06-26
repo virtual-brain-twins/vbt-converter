@@ -21,7 +21,6 @@ class MetricsSection(DataSection):
     def __init__(self, data: Mapping[str, float] | None = None):
         self.data: Dict[str, float] = dict(data or {})
 
-    # ------------------------------------------------------------------
     def to_hdf5(self, grp: h5py.Group) -> None:
         dtype = np.dtype(
             [("label", h5py.string_dtype(encoding="utf-8")), ("value", np.float64)]
@@ -34,7 +33,6 @@ class MetricsSection(DataSection):
         # ``Avg Firing Rate Hz`` – we keep exactly that name for compatibility.
         make_dataset(grp, "Avg Firing Rate Hz", arr, compress=True)
 
-    # ------------------------------------------------------------------
     @classmethod
     def from_group(cls, grp: h5py.Group) -> "MetricsSection":
         raw = grp["Avg Firing Rate Hz"][()]

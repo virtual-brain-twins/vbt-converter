@@ -1,6 +1,3 @@
-# ------------------------------------------------------------------
-# Helpers that are used by many sections
-# ------------------------------------------------------------------
 from pathlib import Path
 from typing import Union, Optional, Tuple, MutableMapping, Any
 

@@ -112,7 +112,6 @@ class AuxiliaryFileSection(DataSection):
                 # Continue with the next file
                 continue
 
-    # ------------------------------------------------------------------
     @classmethod
     def from_group(cls, grp: h5py.Group) -> "AuxiliaryFileSection":
         """

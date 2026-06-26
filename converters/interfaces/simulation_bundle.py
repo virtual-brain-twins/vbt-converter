@@ -1,9 +1,10 @@
-#  BUNDLE INTERFACE
 import abc
 import logging
+import os
 import pathlib
 import tempfile
 import zipfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Dict, Type
 
@@ -63,17 +64,12 @@ class SimulationBundle(abc.ABC):
     def to_hdf5(self, h5file: h5py.File) -> None:
         """
         Parameters
-        ----------
-
-        raw_bundle_path : pathlib.Path | None
-            Absolute or relative path to an already‑created zip archive that contains
-            the original simulation directory.  When supplied the bundle stores only a
-            reference (using ``DataSection._store_external_path``).  ``embed_raw_bundle``
-            is ignored in this mode.
+            h5file: h5py.File
+                Open HDF5 file (write mode) where the bundle will be stored.
         """
         grp = h5file.create_group(f"sim_{self.sim_id}")
 
-        # --- write all registered sections -------------------------------------------------
+        # write all registered sections
         for name, sec in self.sections.items():
             sub = grp.create_group(name)
             sec.to_hdf5(sub)
@@ -81,10 +77,10 @@ class SimulationBundle(abc.ABC):
     @classmethod
     def from_hdf5(cls: Type["SimulationBundle"], h5file: h5py.File, sim_id: str) -> "SimulationBundle":
         """
-        Re‑create a concrete ``SimulationBundle`` from a file.
+        Re‑create a concrete SimulationBundle from a file.
 
-        The concrete subclass must provide a ``_factory`` class‑method that
-        knows how to instantiate itself from the *metadata* section.
+        The concrete subclass must provide a _factory class‑method that
+        knows how to instantiate itself from the metadata section.
         """
         grp = h5file[f"sim_{sim_id}"]
         # Pull metadata – every concrete bundle stores at least a ``metadata`` section
@@ -113,27 +109,9 @@ class SimulationBundle(abc.ABC):
             bundle._raw_extracted_path = tmp_dir  # just for convenience
         return bundle
 
-    # Private helpers
-    def _make_raw_bundle_blob(self) -> bytes:
-        """
-        Zip the whole ``original_root`` directory (preserving the internal layout)
-        and return the bytes.  Uses the *deflate* algorithm (the same as a normal
-        ``zip`` file) which yields good compression for text / json / csv and
-        is fast for binary NumPy ``.npz`` files.
-        """
-        with tempfile.TemporaryDirectory() as td:
-            zip_path = Path(td) / f"{self.sim_id}.zip"
-            with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-                for f in self.original_root.rglob("*"):
-                    if f.is_file():
-                        # store the path *relative* to the original root
-                        rel = f.relative_to(self.original_root)
-                        zf.write(f, arcname=str(rel))
-            return zip_path.read_bytes()
-
     # Sub‑class hook – create a bundle from the (already parsed) metadata
     @classmethod
     @abc.abstractmethod
     def _factory_from_metadata(cls, meta: "MetadataSection") -> "SimulationBundle":
-        """Instantiate the concrete bundle class *without* any sections populated."""
+        """Instantiate the concrete bundle class without any sections populated."""
         ...

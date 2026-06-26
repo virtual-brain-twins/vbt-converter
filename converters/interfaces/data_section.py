@@ -20,9 +20,7 @@ class DataSection(abc.ABC):
     NumPy arrays).
     """
 
-    # ------------------------------------------------------------------
-    #  Public API
-    # ------------------------------------------------------------------
+    # Public API
     @abc.abstractmethod
     def to_hdf5(self, grp: h5py.Group) -> None:
         """Write the whole section into the supplied ``grp``."""
@@ -33,16 +31,14 @@ class DataSection(abc.ABC):
         """Populate the section from an existing ``grp``."""
         ...
 
-    # ------------------------------------------------------------------
-    #  Helper methods – you can call them from your concrete subclass
-    # ------------------------------------------------------------------
+    # Helper methods – you can call them from your concrete subclass
     @staticmethod
     def _store_numpy_array(
-        grp: h5py.Group,
-        name: str,
-        arr: np.ndarray,
-        *,
-        compress: bool = True,
+            grp: h5py.Group,
+            name: str,
+            arr: np.ndarray,
+            *,
+            compress: bool = True,
     ) -> None:
         """Thin wrapper around ``_make_dataset`` that also stores a tiny attr."""
         dset = make_dataset(grp, name, arr, compress=compress)
@@ -50,11 +46,11 @@ class DataSection(abc.ABC):
 
     @staticmethod
     def _store_text_blob(
-        grp: h5py.Group,
-        name: str,
-        text: str,
-        *,
-        compress: bool = True,
+            grp: h5py.Group,
+            name: str,
+            text: str,
+            *,
+            compress: bool = True,
     ) -> None:
         """Store a UTF‑8 string as a variable‑length dataset."""
         vlen = h5py.string_dtype(encoding="utf-8")
@@ -63,11 +59,11 @@ class DataSection(abc.ABC):
 
     @staticmethod
     def _store_binary_blob(
-        grp: h5py.Group,
-        name: str,
-        blob: bytes,
-        *,
-        compress: bool = True,
+            grp: h5py.Group,
+            name: str,
+            blob: bytes,
+            *,
+            compress: bool = True,
     ) -> None:
         arr = np.frombuffer(blob, dtype=np.uint8)
         make_dataset(grp, name, arr, compress=compress)
@@ -113,19 +109,19 @@ class DataSection(abc.ABC):
             except (OSError, IOError):
                 return False
 
-        # When we are allowed to make a link andthe target is an HDF5 file
+        # When we are allowed to make a link and the target is an HDF5 file
         if make_link and _is_hdf5_file(path):
-            # ExternalLink stores only the *file name* (or absolute path). The
+            # ExternalLink stores only the file name (or absolute path). The
             # object name inside the file is supplied as the second argument.
             # We link to the root group of the target file (`/`).
             external_link = h5py.ExternalLink(str(path), "/")
             grp[name] = external_link
             # NOTE: you cannot attach attributes to the link itself.
             # If you need to keep a human‑readable copy of the path, store it
-            # somewhere else, e.g. as an attribute of the *parent* group.
+            # somewhere else, e.g. as an attribute of the parent group.
             grp[name].attrs["link_type"] = "external_hdf5"
             # (optionally) also store the path as a separate attribute for easier
-            # inspection – this works because attributes belong to the *parent*
+            # inspection – this works because attributes belong to the parent
             # group, not the link object.
             grp.attrs[f"{name}_target"] = str(path)
             return

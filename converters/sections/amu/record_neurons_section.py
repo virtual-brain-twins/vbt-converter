@@ -1,4 +1,3 @@
-# converters/sections/amu/record_neurons_section.py
 from __future__ import annotations
 
 from typing import Mapping, Dict

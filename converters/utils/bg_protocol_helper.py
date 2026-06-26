@@ -4,9 +4,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Iterable, Dict, MutableMapping, Mapping, List
 
-# ----------------------------------------------------------------------
 # Path handling helpers
-# ----------------------------------------------------------------------
 PATH_COLUMNS = {
     "network_path",
     "sim_info_file",
@@ -63,7 +61,6 @@ def relative_row(
         row[col] = _relative_path(row[col], base_dir, fallback_anchor=fallback)
 
 
-
 def stream_csv_as_dicts(
         csv_path: Path,
         delimiter: str = ",",
@@ -107,7 +104,7 @@ def stream_csv_as_dicts(
             )
             # Fast, in‑place type conversion for the selected columns
             for key, fn in _conv.items():
-                if (val := row.get(key)) is not None:      # guard missing columns
+                if (val := row.get(key)) is not None:  # guard missing columns
                     row[key] = fn(val)
             yield row
 

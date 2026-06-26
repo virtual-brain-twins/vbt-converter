@@ -40,7 +40,6 @@ class StimulusSection(DataSection):
         # values – plain float dataset
         make_dataset(grp, "values", self.values, compress=False)
 
-    # ------------------------------------------------------------------
     @classmethod
     def from_group(cls, grp: h5py.Group) -> "StimulusSection":
         stim_type = grp.attrs.get("type", "piecewise_constant")

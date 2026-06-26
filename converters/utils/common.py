@@ -10,9 +10,9 @@ __all__ = ["configure_logging"]
 
 
 def _make_log_path(
-    env_var: str = "VBT_JOB_LOGS",
-    default_dir: str | os.PathLike = ".",
-    log_file_name: str = "default_name.log",
+        env_var: str = "VBT_JOB_LOGS",
+        default_dir: str | os.PathLike = ".",
+        log_file_name: str = "default_name.log",
 ) -> Path:
     """
     Resolve the directory in which the log file will be created.
@@ -37,14 +37,14 @@ def _make_log_path(
 
 
 def configure_logging(
-    module_name: str,
-    *,
-    level: int = logging.INFO,
-    env_var: str = "VBT_JOB_LOGS",
-    default_dir: str | os.PathLike = ".",
-    log_file_name: str = "convert_direc_to_hdf5.log",
-    fmt: str = "%(asctime)s [%(levelname)s] %(message)s",
-    stream: Optional[object] = sys.stderr,
+        module_name: str,
+        *,
+        level: int = logging.INFO,
+        env_var: str = "VBT_JOB_LOGS",
+        default_dir: str | os.PathLike = ".",
+        log_file_name: str = "convert_direc_to_hdf5.log",
+        fmt: str = "%(asctime)s [%(levelname)s] %(message)s",
+        stream: Optional[object] = sys.stderr,
 ) -> logging.Logger:
     """
     Set up a consistent logging configuration and return a module‑specific logger.
@@ -85,22 +85,22 @@ def configure_logging(
     """
     # Build the (singleton) root handlers only once.
     root_logger = logging.getLogger()
-    if not root_logger.handlers:                     # first call only
+    if not root_logger.handlers:  # first call only
         # Formatter shared by both handlers
         formatter = logging.Formatter(fmt)
 
-        # ---- File handler -------------------------------------------------
+        #  File handler
         log_path = _make_log_path(env_var, default_dir, log_file_name)
         file_handler = logging.FileHandler(log_path, encoding="utf-8")
         file_handler.setFormatter(formatter)
         root_logger.addHandler(file_handler)
 
-        # ---- Stream (stderr) handler --------------------------------------
+        # Stream (stderr) handler
         stream_handler = logging.StreamHandler(stream)
         stream_handler.setFormatter(formatter)
         root_logger.addHandler(stream_handler)
 
-        # ---- Global configuration -----------------------------------------
+        # Global configuration
         root_logger.setLevel(level)
 
     # Return a child logger for the calling module.

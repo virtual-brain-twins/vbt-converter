@@ -26,7 +26,6 @@ class SpikeTrainSection(DataSection):
         self.max_inline_bytes = max_inline_bytes  # <-- decides embed vs link
         self.data: Dict[str, Tuple[np.ndarray | None, np.ndarray]] = dict(data or {})
 
-    # ------------------------------------------------------------------
     def to_hdf5(self, grp: h5py.Group) -> None:
         for pop, (idx, times) in self.data.items():
             pop_grp = grp.create_group(pop)
@@ -34,7 +33,6 @@ class SpikeTrainSection(DataSection):
                 make_dataset(pop_grp, "indices", idx.astype(np.int64), compress=False)
             make_dataset(pop_grp, "times", times.astype(np.float64), compress=True)
 
-    # ------------------------------------------------------------------
     @classmethod
     def from_group(cls, grp: h5py.Group) -> "SpikeTrainSection":
         out = {}

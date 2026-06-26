@@ -1,4 +1,3 @@
-# converters/bundles/basal_ganglia_bundle.py
 import json
 from pathlib import Path
 from typing import Mapping

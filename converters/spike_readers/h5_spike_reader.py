@@ -32,19 +32,17 @@ class H5SpikeReader(BaseSpikeReader):
     """
 
     def __init__(
-        self,
-        file_path: Union[str, pathlib.Path],
-        *,
-        idx_dset: Optional[str] = "/spikes/indices",
-        time_dset: str = "/spikes/times",
+            self,
+            file_path: Union[str, pathlib.Path],
+            *,
+            idx_dset: Optional[str] = "/spikes/indices",
+            time_dset: str = "/spikes/times",
     ):
         self.file_path = pathlib.Path(file_path)
         self.idx_dset = idx_dset
         self.time_dset = time_dset
 
-    # -----------------------------------------------------------------
     # Private helpers
-    # -----------------------------------------------------------------
     def _open(self):
         """Open the file for read‑only, fast‑cache SWMR access."""
         return h5py.File(self.file_path, "r", libver="latest", swmr=True)
@@ -65,7 +63,7 @@ class H5SpikeReader(BaseSpikeReader):
         gid_list = []
         for gid_str, grp in neurons.items():
             dset = grp["spikes"]
-            n = dset.shape[1]                 # shape is (1, N_spikes)
+            n = dset.shape[1]  # shape is (1, N_spikes)
             total_spikes += n
             gid_list.append((int(gid_str), n))
 
@@ -79,15 +77,13 @@ class H5SpikeReader(BaseSpikeReader):
             dset = neurons[str(gid)]["spikes"]
             # ``read_direct`` copies straight into the target slice without an
             # intermediate Python object.
-            dset.read_direct(times[pos : pos + n])
-            indices[pos : pos + n] = gid
+            dset.read_direct(times[pos: pos + n])
+            indices[pos: pos + n] = gid
             pos += n
 
         return indices, times
 
-    # -----------------------------------------------------------------
     # Public API
-    # -----------------------------------------------------------------
     def get_spike_arrays(self) -> Tuple[Optional[np.ndarray], np.ndarray]:
         """
         Return the spike arrays *lazily*:
@@ -104,22 +100,18 @@ class H5SpikeReader(BaseSpikeReader):
             return None, np.empty(0, dtype=float)
 
         with self._open() as f:
-            # -----------------------------------------------------------------
             # Detect which layout we have.
-            # -----------------------------------------------------------------
-            if "neurons" in f:                     # per‑neuron layout
+            if "neurons" in f:  # per‑neuron layout
                 log.debug("Detected per‑neuron spike layout in %s", self.file_path)
                 return self._flatten_per_neuron_group(f)
 
-            # -----------------------------------------------------------------
             # Classic flat layout – just return the datasets (no copy).
-            # -----------------------------------------------------------------
             if self.time_dset not in f:
                 raise KeyError(
                     f"Dataset '{self.time_dset}' not found in {self.file_path!s}. "
                     f"Available top‑level keys: {list(f.keys())}"
                 )
-            times = f[self.time_dset]               # h5py.Dataset – lazy
+            times = f[self.time_dset]  # h5py.Dataset – lazy
 
             if self.idx_dset is None:
                 indices = None
@@ -130,6 +122,6 @@ class H5SpikeReader(BaseSpikeReader):
                     )
                     indices = None
                 else:
-                    indices = f[self.idx_dset]      # also lazy
+                    indices = f[self.idx_dset]  # also lazy
 
             return indices, times

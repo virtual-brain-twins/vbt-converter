@@ -1,6 +1,3 @@
-# ------------------------------------------------------------
-#  Concrete DataSection that represents the HDF5 file you posted.
-# ------------------------------------------------------------
 import pathlib
 from pathlib import Path
 from typing import Dict, List, Mapping, Optional, Union
@@ -40,9 +37,6 @@ class OutputSpikesSection(DataSection):
       (e.g. ``PKAc`` or modulation‑factor tables).
     """
 
-    # ------------------------------------------------------------------
-    # Construction ----------------------------------------------------
-    # ------------------------------------------------------------------
     def __init__(self, src_file: Optional[Union[str, Path]] = None):
         """
         Parameters
@@ -61,9 +55,7 @@ class OutputSpikesSection(DataSection):
         self._time_cache: Optional[np.ndarray] = None
         self._neuron_ids_cache: Optional[List[int]] = None
 
-    # ------------------------------------------------------------------
-    # Internal helpers ------------------------------------------------
-    # ------------------------------------------------------------------
+    # Internal helpers
     @staticmethod
     def _ensure_file(path: Path) -> None:
         if not path.is_file():
@@ -81,9 +73,7 @@ class OutputSpikesSection(DataSection):
         # ``swmr=True`` lets the reader coexist with a writer if the simulation is still running.
         return h5py.File(self._src_path, "r", libver="latest", swmr=True)
 
-    # ------------------------------------------------------------------
-    # Public API – lazy read helpers -----------------------------------
-    # ------------------------------------------------------------------
+    # Public API – lazy read helpers
     def _populate_caches(self) -> None:
         """Read the minimal amount of data needed for the cheap helper methods."""
         if self._group is None:
@@ -96,9 +86,7 @@ class OutputSpikesSection(DataSection):
         # 3) neuron ids
         self._neuron_ids_cache = sorted(int(k) for k in self._group["neurons"].keys())
 
-    # ------------------------------------------------------------------
-    # User‑facing read methods ----------------------------------------
-    # ------------------------------------------------------------------
+    # User‑facing read methods
     def metadata(self) -> Dict[str, np.ndarray]:
         """Return a shallow copy of all ``/meta_data/*`` datasets."""
         if self._metadata_cache is None:
@@ -150,9 +138,7 @@ class OutputSpikesSection(DataSection):
             raise KeyError(f"Dataset '{name}' not found for neuron {neuron_id}")
         return grp[name][...]
 
-    # ------------------------------------------------------------------
-    # DataSection implementation ---------------------------------------
-    # ------------------------------------------------------------------
+    # DataSection implementation
     def to_hdf5(self, grp: h5py.Group) -> None:
         """
         Write the whole section into ``grp`` **without** materialising the data.

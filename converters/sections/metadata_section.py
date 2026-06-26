@@ -15,7 +15,6 @@ class MetadataSection(DataSection):
     def __init__(self, data: Mapping[str, Any] | None = None):
         self.data: Dict[str, Any] = dict(data or {})
 
-    # ---- writing -------------------------------------------------
     def to_hdf5(self, grp: h5py.Group) -> None:
         for k, v in self.data.items():
             # Prefer native HDF5 scalar types; fallback to JSON string.
@@ -25,7 +24,6 @@ class MetadataSection(DataSection):
                 # store JSON‑encoded string – easy to retrieve later
                 grp.attrs[k] = json.dumps(v)
 
-    # ---- reading -------------------------------------------------
     @classmethod
     def from_group(cls, grp: h5py.Group) -> "MetadataSection":
         out = {}

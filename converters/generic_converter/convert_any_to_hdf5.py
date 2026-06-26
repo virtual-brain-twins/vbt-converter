@@ -12,7 +12,7 @@ from converters.interfaces.data_section import DataSection
 from converters.interfaces.simulation_bundle import SimulationBundle
 from converters.utils.bg_protocol_helper import stream_csv_as_dicts, group_by_memory
 from converters.utils.common import configure_logging
-from converters.utils.zip_helper import zip_directory_stream
+from converters.utils.zip_helper import zip_directory
 
 logger = configure_logging(
     __name__,
@@ -32,7 +32,8 @@ def build_master_h5(bundles: list[SimulationBundle], input_dir: Path, out_path: 
         if embed_raw:
             out_dir = out_path if out_path.is_dir() else out_path.parent
             raw_zip = out_dir / f"raw_data.zip"
-            zip_directory_stream(input_dir, raw_zip)
+            zip_directory(src_root=input_dir,
+                          dst_zip=raw_zip)
             DataSection.store_external_path(
                 hf,
                 name="raw_bundle",

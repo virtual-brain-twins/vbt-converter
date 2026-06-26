@@ -140,7 +140,7 @@ def main() -> None:
     move_converted_hdf5(logger, ci_root, args.input_dir)
 
     # Build paths to the converter script and the expected HDF5 output
-    converter_script = ci_root / "converters" / "convert_hdf_to_dsr.py"
+    converter_script = ci_root / "converters" / "generic_converter" / "convert_hdf5_to_format.py"
     if not converter_script.is_file():
         logger.error("Converter script not found: %s", converter_script)
         sys.exit(1)
@@ -149,24 +149,24 @@ def main() -> None:
     converted_npz = None
 
     with tempfile.TemporaryDirectory() as tmp_dir_str:
-        output_npz = (
+        output_npz_dir = (
                 Path(tmp_dir_str)
                 / "data"
                 / "converted"
-                / "output_dsr.npz"
         )
-        output_npz.parent.mkdir(parents=True, exist_ok=True)  # ensure target folder exists
-        logger.debug("Temporary numpy output will be written to %s", output_npz)
+        output_npz_dir.parent.mkdir(parents=True, exist_ok=True)  # ensure target folder exists
+        logger.debug("Temporary numpy output will be written to %s", output_npz_dir)
 
         # Assemble the command line for the converter
         cmd = [
             sys.executable,  # use the same Python interpreter
             str(converter_script),
-            "--input_file",
+            "--input",
             str(args.input_dir.resolve() / "attachments" / "converted.hdf5"),
-            "--output_file",
-            str(output_npz),
-            "--bin_size",
+            "--output-dir",
+            str(output_npz_dir),
+            "amu"
+            "--bin-size",
             "0.1"
         ]
 
@@ -184,6 +184,7 @@ def main() -> None:
             sys.exit(1)
 
         # Verify that the converter produced the expected file
+        output_npz = output_npz_dir / "amu.dsr.npz"
         if not output_npz.is_file():
             logger.error("Expected output file was not created: %s", output_npz)
             sys.exit(1)

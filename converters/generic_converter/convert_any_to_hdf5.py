@@ -82,7 +82,7 @@ def main() -> None:
     parser.add_argument("-o", "--output", required=True, help="Path to the master *.h5* file that will be created.")
     parser.add_argument("--protocol", choices=["basal", "amu"], required=True,
                         help="Which protocol to interpret the input as.")
-    parser.add_argument("--no-raw-bundle", action="store_true", help="Do NOT embed the zipped original directory.")
+    parser.add_argument("--no-raw-bundle", action="store_true", help="Do NOT add the zipped original directory.")
     parser.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
     args = parser.parse_args()
 

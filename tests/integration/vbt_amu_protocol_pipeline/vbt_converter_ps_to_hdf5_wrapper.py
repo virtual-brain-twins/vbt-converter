@@ -113,7 +113,7 @@ def main() -> None:
     # ------------------------------------------------------------------
     # Build paths to the converter script and the expected HDF5 output
     # ------------------------------------------------------------------
-    converter_script = ci_root / "converters" / "convert_direc_to_hdf.py"
+    converter_script = ci_root / "converters" / "converters" / "generic_converter" / "convert_any_to_hdf5.py"
     if not converter_script.is_file():
         logger.error("Converter script not found: %s", converter_script)
         sys.exit(1)
@@ -137,10 +137,12 @@ def main() -> None:
         cmd = [
             sys.executable,  # use the same Python interpreter
             str(converter_script),
-            "--input_dir",
+            "--input",
             str(args.input_dir.resolve() / "parametersweep_8s_3d_orientation_selective_12012026"),
-            "--output_file",
+            "--output",
             str(output_hdf5),
+            "--protocol",
+            "amu"
         ]
 
         # ------------------------------------------------------------------
@@ -204,7 +206,6 @@ def main() -> None:
     )
     success = result.returncode == 0
     # Build the status_message string
-    # --------------------------------------------------------------
     if result.returncode == 0:
         # Files are identical – nothing else to report
         status_message = "✅  Files are identical."

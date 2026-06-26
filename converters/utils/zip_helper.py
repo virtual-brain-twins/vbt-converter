@@ -5,9 +5,29 @@ import zipfile
 from typing import Final
 
 # Public constants
-DEFAULT_COMPRESSION_METHOD: Final[int] = getattr(zipfile, 'ZIP_ZSTANDARD', zipfile.ZIP_DEFLATED)
-DEFAULT_COMPRESSION_LEVEL: Final[int] = 15 if DEFAULT_COMPRESSION_METHOD == getattr(zipfile, 'ZIP_ZSTANDARD',
-                                                                                    None) else 6
+def _zstd_available() -> bool:
+    """
+    Return ``True`` if the optional ``compression.zstd`` module can be imported.
+    """
+    try:
+        # The module lives under ``zipfile`` as a private import.  Importing it
+        # directly will raise ImportError if the third‑party ``zstandard`` wheel
+        # (or compiled extension) is missing.
+        from zipfile import compression  # noqa: F401  (import for side‑effect)
+        return True
+    except Exception:  # pragma: no cover – any error means “no ZSTD”
+        return False
+
+
+# Public constants – decide defaults once at import time.
+if hasattr(zipfile, "ZIP_ZSTANDARD") and _zstd_available():
+    # zstandard is both present as a flag and the runtime module is importable.
+    DEFAULT_COMPRESSION_METHOD: Final[int] = zipfile.ZIP_ZSTANDARD
+    DEFAULT_COMPRESSION_LEVEL: Final[int] = 15          # ZSTD level range: 1‑22
+else:
+    # Either the flag does not exist (Python < 3.14) or the optional module is missing.
+    DEFAULT_COMPRESSION_METHOD: Final[int] = zipfile.ZIP_DEFLATED
+    DEFAULT_COMPRESSION_LEVEL: Final[int] = 6           # DEFLATE default (1‑9)
 
 
 def zip_directory(

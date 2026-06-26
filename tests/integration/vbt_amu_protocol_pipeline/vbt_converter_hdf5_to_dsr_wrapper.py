@@ -165,7 +165,7 @@ def main() -> None:
             str(args.input_dir.resolve() / "attachments" / "converted.hdf5"),
             "--output-dir",
             str(output_npz_dir),
-            "amu"
+            "amu",
             "--bin-size",
             "0.1"
         ]

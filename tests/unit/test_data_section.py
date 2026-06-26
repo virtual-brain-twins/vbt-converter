@@ -22,6 +22,10 @@ def h5file(tmp_path: pathlib.Path) -> h5py.File:
     # file is closed when leaving the context manager
 
 
+@allure.parent_suite("VBT‑converter CI/CD")
+@allure.suite("Unit tests")
+@allure.sub_suite("Tests for DataSection helper methods")
+@allure.description("Unit tests for the static helper methods of DataSection.")
 @allure.feature("DataSection – Helper utilities")
 class TestDataSection:
     """

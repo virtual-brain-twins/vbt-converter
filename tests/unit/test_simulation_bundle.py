@@ -57,6 +57,10 @@ class DummyBundle(SimulationBundle):
 # The actual pytest test class (Allure‑instrumented)
 # ----------------------------------------------------------------------
 @allure.feature("Simulation bundle (HDF5) handling")
+@allure.parent_suite("VBT‑converter CI/CD")
+@allure.suite("Unit tests")
+@allure.sub_suite("Tests for Simulation bundle (HDF5) handling")
+@allure.description("Unit tests for the SimulationBundle class and its (de)serialisation logic.")
 class TestSimulationBundle:
     """
     Test‑suite that validates the high‑level (de)serialisation logic of

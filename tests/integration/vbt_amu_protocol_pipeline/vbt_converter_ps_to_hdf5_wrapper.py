@@ -113,7 +113,7 @@ def main() -> None:
     # ------------------------------------------------------------------
     # Build paths to the converter script and the expected HDF5 output
     # ------------------------------------------------------------------
-    converter_script = ci_root / "converters" / "converters" / "generic_converter" / "convert_any_to_hdf5.py"
+    converter_script = ci_root / "converters" / "generic_converter" / "convert_any_to_hdf5.py"
     if not converter_script.is_file():
         logger.error("Converter script not found: %s", converter_script)
         sys.exit(1)

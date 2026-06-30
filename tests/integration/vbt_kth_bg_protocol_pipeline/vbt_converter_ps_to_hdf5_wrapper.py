@@ -105,7 +105,7 @@ def main() -> None:
     logger.info("CI project root resolved to %s", ci_root)
 
     # Build paths to the converter script and the expected HDF5 output
-    converter_script = ci_root / "converters" / "vbt_bg_protocol" / "convert_direc_to_hdf5.py"
+    converter_script = ci_root / "converters" / "generic_converter" / "convert_any_to_hdf5.py"
     if not converter_script.is_file():
         logger.error("Converter script not found: %s", converter_script)
         sys.exit(1)
@@ -117,17 +117,23 @@ def main() -> None:
                 / "output"
                 / "bundle"
         )
-        output_bundle.parent.mkdir(parents=True, exist_ok=True)  # ensure target folder exists
+        output_master_h5 = (
+                Path(output_bundle)
+                / "master.h5"
+        )
+        output_master_h5.parent.mkdir(parents=True, exist_ok=True)  # ensure target folder exists
         logger.debug("Temporary bundle directory: %s", output_bundle)
 
         # Assemble the command line for the converter
         cmd = [
             sys.executable,  # use the same Python interpreter
             str(converter_script),
-            "--metadata-csv",
+            "--input",
             str(args.input_dir.resolve() / "VBT_KTH_BG_Protocol" / "run_list.csv"),
-            "--bundle-root",
-            str(output_bundle),
+            "--output",
+            str(output_master_h5),
+            "--protocol",
+            "basal"
         ]
 
         # Execute the converter
@@ -143,11 +149,6 @@ def main() -> None:
             logger.error("Failed to start converter: %s", exc)
             sys.exit(1)
 
-        # Verify that the converter produced the expected file
-        output_master_h5 = (
-                Path(output_bundle)
-                / "master.h5"
-        )
         if not output_master_h5.is_file():
             logger.error("Expected output file was not created: %s", output_master_h5)
             sys.exit(1)
@@ -246,7 +247,8 @@ def main() -> None:
         output_file=args.output_dir / "converted_hdf5_link.html",
         logger=logger,
         links=[
-            ("https://vbt-minio.fz-juelich.de/console/browser/vbt-gitlab-cache/project%2F8681%2Fvbt-kth-bg-protocol-cache-bundle-protected", "Converted output bundle including the master HDF5", True, True)
+            ("https://vbt-minio.fz-juelich.de/console/browser/vbt-gitlab-cache/project%2F8681%2Fvbt-kth-bg-protocol-cache-bundle-protected",
+             "Converted output bundle including the master HDF5", True, True)
         ]
     )
     logger.info("Report written to %s", report_path)
@@ -261,9 +263,11 @@ def main() -> None:
         output_file=src_sweep / "input_sweep_dir_link.html",
         logger=logger,
         links=[
-            ("https://vbt-minio.fz-juelich.de/console/browser/vbt-gitlab-cache/project%2F8681%2Fvbt-kth-bg-protocol-cache-protected", "Input Parameter Sweep Directory", False, True)
+            ("https://vbt-minio.fz-juelich.de/console/browser/vbt-gitlab-cache/project%2F8681%2Fvbt-kth-bg-protocol-cache-protected",
+             "Input Parameter Sweep Directory", False, True)
         ]
     )
+
 
 # ----------------------------------------------------------------------
 # Script entry point

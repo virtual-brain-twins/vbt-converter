@@ -83,7 +83,7 @@ class AuxiliaryFileSection(DataSection):
 
                     # Create an *ExternalLink* that points to the copied file.
                     # The link lives inside *grp* under the logical name.
-                    ext_link = h5py.ExternalLink(str(dst), "")
+                    ext_link = h5py.ExternalLink(str(dst), "/")
                     grp[logical_name] = ext_link
 
                     # Mark the dataset as external.

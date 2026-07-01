@@ -172,17 +172,17 @@ def validate_npz(npz_path: pathlib.Path) -> dict:
 # ----------------------------------------------------------------------
 # Comparison logic
 # ----------------------------------------------------------------------
-def compare_npz(file1: pathlib.Path, file2: pathlib.Path,
+def compare_npz(numpy_file1: pathlib.Path, numpy_file2: pathlib.Path,
                 rtol: float = 1e-04, atol: float = 1e-08) -> Tuple[bool, str]:
     """
-    Consistently and optimally compares two npz files.
+    Consistently and optimally compares two numpy files.
 
     Returns a tuple `(are_equal, message)`.  `are_equal` is ``True`` if the
     files match within the given tolerances, otherwise ``False`` with an
     explanatory message.
     """
     try:
-        with np.load(file1) as data1, np.load(file2) as data2:
+        with np.load(numpy_file1) as data1, np.load(numpy_file2) as data2:
             # 1. Check if both have the same keys
             if sorted(data1.files) != sorted(data2.files):
                 return False, "Key mismatch"

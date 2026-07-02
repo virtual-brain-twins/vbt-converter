@@ -1,0 +1,237 @@
+stages:
+  - setup_environment
+  - test
+  - integration-pipelines
+  - publish_report
+  - cleanup
+
+# Global variables – keep the same behavior as the original template
+variables:
+  # Force the runner to check out sub‑modules (normal)
+  GIT_SUBMODULE_STRATEGY: "normal"
+
+  # ---- Default source / destination (can be overridden per‑job) ----
+  MINIO_SOURCE_PATH: "ground_truth/"               # folder OR file inside the bucket
+  LOCAL_DEST_PATH: "tests/test_data/ground_truth/"
+
+  # ---- Cache configuration (the part you asked for) -----------------
+  CACHE_KEY: "vbt-converter-test-cache"
+  CACHE_PATH: "tests/test_data/"
+
+# Pull the generic VBT CI definition from the central template repo
+include:
+  - project: 'virtualbraintwin/VBT_protocol_template'   # full path of the source project
+    ref: main                                         # branch / tag you want to use
+    file: '/ci/template.yml'                          # path inside the source repo
+
+# SET‑UP – create a clean virtual environment and install deps
+vbt_setup_job:
+  extends: .VBT_SETUP                     # provided by the template
+  stage: setup_environment
+  image: docker:cli
+  tags:
+    - docker
+    - jsc-cloud
+    - fenix
+  before_script:
+    - echo "Installing jq and Python in the Alpine runner …"
+    - apk add --no-cache jq python3 bash curl
+    - !reference [ .VBT_SETUP, before_script ]  # Calls the base "method"
+  variables:
+    VBT_SETUP_SCRIPT: "${CI_PROJECT_DIR}/ci/template_repo/ci/scripts/setup_environment.sh"
+    # Use the project's own requirements (which must contain pytest, h5py, pandas, pyyaml, tqdm, numpy, allure‑pytest‑plugin)
+    VBT_REQUIREMENTS: "${CI_PROJECT_DIR}/requirements.txt"
+
+# 1. Unit Tests: Runs automatically on every commit
+unit_tests:
+  extends: .VBT_RUN
+  stage: test
+  tags:
+    - docker
+    - jsc-cloud
+    - fenix
+  image: docker:cli
+  needs:
+    - job: vbt_setup_job
+      artifacts: true
+  before_script:
+    - echo "Installing dependencies in the docker runner …"
+    - apk add --no-cache jq python3 bash perl gettext curl
+    - !reference [ .VBT_RUN, before_script ]  # Calls the base "method"
+  variables:
+    VBT_ALLURE_PARENT_SUITE: "VBT‑converter CI/CD"
+    VBT_ALLURE_SUITE: "Unit Tests"
+    VBT_ALLURE_EPIC: "Guarantee that the converter works for every possible input layout"
+    VBT_ALLURE_FEATURE: "Use of cached test data to validate the converter’s functionality for a directory layout that is representative of real‑world use cases"
+    VBT_ALLURE_STORY: "Unit test suite for the conversion of parameter‑sweep‑style directories to HDF5 file and validation of the converted file against the ground‑truth HDF5 file (https://tvb-projects.atlassian.net/browse/VT-233). Also conversion of the HDf5 file to NPZ format and their tests."
+    VBT_ALLURE_LINK_JIRA: "https://tvb-projects.atlassian.net/browse/VT-233"
+    VBT_DYNAMIC_TEST_NAME_SUFFIX: "unit_tests_parameter_sweep_dir_to_hdf5_to_upstream_formats"
+    VBT_TEST_PATHS: "tests/unit"  # Override the default test suite path to point to the unit tests
+  artifacts:
+    when: always
+    paths:
+      - allure-results/
+    expire_in: 1 week
+
+# 2. Integration Pipeline AMU data conversion: Triggered manually via UI or automatically if Pipeline files change
+trigger-integration-amu:
+  stage: integration-pipelines
+  trigger:
+    include: tests/integration/vbt_amu_protocol_pipeline/.gitlab-ci.yml
+    strategy: depend
+  variables:
+    PARENT_PIPELINE_ID: "$CI_PIPELINE_ID"
+  rules:
+    # Run automatically only if files inside pipeline_a folder change
+    - changes:
+        - tests/integration/vbt_amu_protocol_pipeline/**/*
+      when: on_success
+    # Allow manual execution from the GitLab UI at any time
+    - when: manual
+      allow_failure: true
+
+# 3. Integration Pipeline for BG protocol: Triggered manually via UI or automatically if Pipeline files change
+trigger-integration-bg:
+  stage: integration-pipelines
+  trigger:
+    include: tests/integration/vbt_kth_bg_protocol_pipeline/.gitlab-ci.yml
+    strategy: depend
+  rules:
+    - changes:
+        - tests/integration/vbt_kth_bg_protocol_pipeline/**/*
+      when: on_success
+    - when: manual
+      allow_failure: true
+
+# PUBLISH – push the Allure report to the VBT‑template publish job
+vbt_publish_job:
+  extends: .VBT_PUBLISH
+  stage: publish_report
+  needs:
+    - job: unit_tests
+      artifacts: true
+  variables:
+    VBT_PUBLISH_SCRIPT: "${CI_PROJECT_DIR}/ci/template_repo/ci/scripts/publish_report.sh"
+  before_script:
+    - echo "Installing dependencies in the Alpine runner …"
+    - apk add --no-cache jq unzip
+    - !reference [ .VBT_PUBLISH, before_script ]  # Calls the base "method"
+
+# CLEAN‑UP – tear‑down the temporary virtual environment
+vbt_cleanup_job:
+  extends: .VBT_CLEANUP
+  tags:
+    - docker
+    - jsc-cloud
+    - fenix
+  stage: cleanup
+  needs:
+    - job: vbt_publish_job
+      artifacts: false
+  before_script:
+    - apk add --no-cache jq bash
+    - !reference [ .VBT_RUN, before_script ]  # Calls the base "method"
+  variables:
+    VBT_CLEANUP_SCRIPT: "${CI_PROJECT_DIR}/ci/template_repo/ci/scripts/cleanup_environment.sh"
+
+# Manual job to update the cache in MinIO with a new version of the ground‑truth file or folder (e.g. after fixing a bug in the converter that caused the old ground‑truth file to be incorrect).
+# This job is not part of the regular pipeline run, but can be triggered manually when needed.
+# Re‑usable job definition (template)
+.fetch_minio_cache_template:                # <-- “anchor” (not a real job)
+  stage: setup_environment
+  tags:
+    - docker
+    - jsc-cloud
+    - fenix
+  image: docker:cli
+  when: manual                               # keep it manual, you can change to `on_success`
+  variables:
+    # The template itself does **not** set CACHE_KEY / CACHE_PATH;
+    # they are expected to be injected by the concrete job (or fall back to the globals above).
+    # Likewise MINIO_* can be overridden per‑job if needed.
+    # (You can add more optional defaults here.)
+  before_script:
+    # Install runtime deps (bash, curl, mc)
+    - echo "▶ Installing runtime dependencies …"
+    - apk add --no-cache curl
+    - |
+      MC_URL="https://dl.min.io/client/mc/release/linux-amd64/mc"
+      curl -L "${MC_URL}" -o /usr/local/bin/mc && chmod +x /usr/local/bin/mc
+
+    # Validate **all** required variables (fail fast)
+    - |
+      missing=""
+
+      for var_name in \
+        MINIO_ENDPOINT \
+        MINIO_ACCESS_KEY \
+        MINIO_SECRET_KEY \
+        MINIO_BUCKET \
+        MINIO_SOURCE_PATH \
+        LOCAL_DEST_PATH
+      do
+        eval "var_value=\${$var_name}"
+
+        if [ -z "$var_value" ]; then
+          missing="$missing\n  - $var_name"
+        fi
+      done
+
+      if [ -n "$missing" ]; then
+        printf "Error: the following CI variable(s) are not defined or are empty:\n"
+        printf "%b\n" "$missing"
+        printf "Aborting.\n" >&2
+        exit 1
+      fi
+
+    # Configure MinIO client alias
+    - |
+      echo "▶ Configuring MinIO alias ‘minio’ …"
+      mc alias set minio "${MINIO_ENDPOINT}" "${MINIO_ACCESS_KEY}" "${MINIO_SECRET_KEY}" --api S3v4
+
+    # Verify the source path exists on MinIO
+    - |
+      echo "▶ Checking existence of minio/${MINIO_BUCKET}/${MINIO_SOURCE_PATH} …"
+      if ! mc ls "minio/${MINIO_BUCKET}/${MINIO_SOURCE_PATH}" >/dev/null 2>&1; then
+        echo "Source path 'minio/${MINIO_BUCKET}/${MINIO_SOURCE_PATH}' does NOT exist on MinIO."
+        exit 1
+      fi
+
+    # Prepare the local destination folder (mkdir -p is idempotent)
+    - |
+      echo "▶ Ensuring local destination folder exists: ${LOCAL_DEST_PATH}"
+      mkdir -p "${LOCAL_DEST_PATH}"
+
+    # Pull from MinIO (recursive works also for a single object)
+    - |
+      echo "▶ Copying from MinIO …"
+      mc cp --recursive "minio/${MINIO_BUCKET}/${MINIO_SOURCE_PATH}" "${LOCAL_DEST_PATH}"
+
+  # Cache definition – **key & path are variable‑driven**
+  cache:
+    - key: "$CACHE_KEY"
+      paths:
+        - "$CACHE_PATH"
+      policy: pull-push          # change to pull only / push only if you need
+
+  # Minimal sanity‑check (you can add more if you wish)
+  script:
+    - |
+      echo "'${MINIO_SOURCE_PATH}' has been copied to '${LOCAL_DEST_PATH}'."
+      echo "Contents of '${LOCAL_DEST_PATH}':"
+      ls -l "${LOCAL_DEST_PATH}"
+
+
+# Concrete job(s) that *use* the template
+update_or_create_new_cache_job:
+  extends: .fetch_minio_cache_template
+  # You can override the default variables in CI or give the below defaults via the new job variables section. Just make sure to set them correctly according to your needs:
+  # "$CI_CACHE_KEY": If you use the existing key, then the cache will be updated with the new content, otherwise a new cache entry will be created (but note that the old cache will still exist and can be used by other jobs that reference the same key until it is pruned by GitLab).
+  # "$CI_CACHE_DIR": This is the default cache path provided by GitLab, which is typically something like "${CI_PROJECT_DIR}/tests/test_data/". You can change it if you want, but using the default one is usually fine as long as it matches the path used in the cache definition above.
+  # "$MINIO_SRC_PATH": This should point to the file or folder in the dedicated temp MinIO bucket (https://vbt-minio.fz-juelich.de/console/browser/ci-temp-cache) that you want to cache locally for the tests. Make sure it matches the actual structure in your bucket.
+  # "$LOCAL_DEST_DIR": This should point to the local folder where you want the cached file/folder to be copied to. It should match the path used in the script above for the local destination. Make sure it is within the cache path: "$CI_CACHE_DIR" if you want it to be cached by GitLab.
+  variables:
+    CACHE_KEY: "$CI_CACHE_KEY"
+    CACHE_PATH: "$CI_CACHE_DIR"
+    MINIO_SOURCE_PATH: "$MINIO_SRC_PATH"
+    LOCAL_DEST_PATH: "$LOCAL_DEST_DIR"

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Direct parameter sweep to NPZ format conversion – Overview</title>
+  <style>
+    body {font-family:Arial,Helvetica,sans-serif; line-height:1.5; margin:2rem;}
+    h1 {color:#2c3e50;}
+    h2 {color:#34495e; margin-top:1.5rem;}
+    pre, code {background:#f8f8f8; padding:0.2rem 0.4rem; border-radius:4px;}
+    ul {margin-left:1.2rem;}
+    .env, .cli, .artefacts {font-family:monospace;}
+  </style>
+</head>
+<body>
+
+<h1>Direct parameter sweep to NPZ format conversion – Overview</h1>
+
+<h2>Purpose</h2>
+<p>Run the <code>convert_direc_to_npz.py</code> converter, copy the resulting <code>.npz</code> and intermediate <code>.h5</code> files to user‑specified locations, compare them against ground‑truth artefacts, and generate an HTML report for Allure.</p>
+
+<h2>Required environment variables</h2>
+<ul class="env">
+  <li><strong>VBT_JOB_LOGS</strong> – directory where the script writes its log file.</li>
+  <li><strong>CI_PROJECT_DIR</strong> – root of the repository (used to locate converters, ground‑truth data, etc.).</li>
+  <li><strong>OUTPUT_HDF5_PATH</strong> – absolute path where the generated <code>.h5</code> should be copied.</li>
+  <li><strong>OUTPUT_NPZ_PATH</strong> – absolute path where the generated <code>.npz</code> should be copied.</li>
+  <li><strong>INPUT_SWEEP_DIR_PATH</strong> – (optional) destination for the raw sweep directory that is attached to the CI job.</li>
+</ul>
+
+<h2>Command‑line interface</h2>
+<ul class="cli">
+  <li><code>--input-dir &lt;Path&gt;</code>  (default: <code>input</code>) – folder that contains the raw sweep data.</li>
+  <li><code>--output-dir &lt;Path&gt;</code> (default: <code>output</code>) – folder where the HTML report and link files are written.</li>
+</ul>
+
+<h2>High‑level workflow</h2>
+<ol>
+  <li>Initialise logging (file + stderr).</li>
+  <li>Resolve <code>CI_PROJECT_DIR</code> → <code>ci_root</code>.</li>
+  <li>Locate the converter script <code>converters/convert_direc_to_npz.py</code>.</li>
+  <li>Create a temporary directory and build the expected output paths:
+    <ul>
+      <li><code>…/parametersweep_…/.npz</code></li>
+      <li><code>…/parametersweep_…/.h5</code></li>
+    </ul>
+  </li>
+  <li>Run the converter with arguments:
+    <pre>python convert_direc_to_npz.py --input_dir &lt;input‑sweep&gt; --output_file &lt;npz&gt; --intermediate_hdf5 &lt;h5&gt; --bin_size 0.1</pre>
+  </li>
+  <li>Copy the produced artefacts to <code>OUTPUT_NPZ_PATH</code> and <code>OUTPUT_HDF5_PATH</code>.</li>
+  <li>Compare:
+    <ul>
+      <li>HDF5 → <code>h5diff</code> against <code>tests/test_data/ground_truth/test_convert_output.h5</code></li>
+      <li>NPZ → custom <code>compare_npz</code> against <code>…/test_convert_output.npz</code></li>
+    </ul>
+  </li>
+  <li>Render <code>hdf5_npz_comparison_template.html</code> → <code>{output‑dir}/test_result_report.html</code>.</li>
+  <li>Generate small “download‑links” HTML files with <code>create_link_html</code>.</li>
+  <li>Move the original sweep directory to <code>INPUT_SWEEP_DIR_PATH</code> (fast rename or safe <code>shutil.move</code>).</li>
+</ol>
+
+<h2>Produced artefacts (relative to <code>--output-dir</code>)</h2>
+<ul class="artefacts">
+  <li><code>test_result_report.html</code> – comparison summary.</li>
+  <li><code>converted_hdf5_&_npz_links.html</code> – links to the copied <code>.h5</code> and <code>.npz</code>.</li>
+  <li><code>input_sweep_dir_link.html</code> – link to the uploaded sweep directory.</li>
+</ul>
+
+</body>
+</html>

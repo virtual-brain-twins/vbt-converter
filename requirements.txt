@@ -1,0 +1,14 @@
+pytest
+allure-pytest
+allure-python-commons
+pytest-cov
+pytest-xdist
+pytest-ordering
+requests
+behave
+h5py
+pandas
+pyyaml
+tqdm
+numpy
+zstandard

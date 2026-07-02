@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>HDF5 to NPZ conversion – Overview</title>
+  <style>
+    body {font-family:Arial,Helvetica,sans-serif; line-height:1.5; margin:2rem;}
+    h1 {color:#2c3e50;}
+    h2 {color:#34495e; margin-top:1.5rem;}
+    pre, code {background:#f8f8f8; padding:0.2rem 0.4rem; border-radius:4px;}
+    ul {margin-left:1.2rem;}
+    .env, .cli, .artefacts {font-family:monospace;}
+  </style>
+</head>
+<body>
+
+<h1>HDF5 to NPZ conversion – Overview</h1>
+
+<h2>Purpose</h2>
+<p>Take an already‑converted HDF5 file, run <code>convert_hdf_to_dsr.py</code> to produce a DSR <code>.npz</code> file, validate it against a ground‑truth NPZ artefact, and publish an HTML validation report together with small link pages.</p>
+
+<h2>Required environment variables</h2>
+<ul class="env">
+  <li><strong>VBT_JOB_LOGS</strong> – directory for log file.</li>
+  <li><strong>CI_PROJECT_DIR</strong> – repository root.</li>
+  <li><strong>OUTPUT_NPZ_PATH</strong> – absolute path where the resulting <code>.npz</code> must be stored.</li>
+  <li><strong>INPUT_HDF5_PATH</strong> – destination for the original HDF5 that will be attached to the CI job.</li>
+</ul>
+
+<h2>Command‑line interface</h2>
+<ul class="cli">
+  <li><code>--input-dir &lt;Path&gt;</code> (default: <code>input</code>) – folder that contains the <code>attachments/converted.hdf5</code> file (the file is placed there by the previous step).</li>
+  <li><code>--output-dir &lt;Path&gt;</code> (default: <code>output</code>) – where the validation HTML report and link files are written.</li>
+</ul>
+
+<h2>High‑level workflow</h2>
+<ol>
+  <li>Initialise logging.</li>
+  <li>Resolve <code>CI_PROJECT_DIR</code> → <code>ci_root</code>.</li>
+  <li>Move <code>ci_root/attachments/converted.hdf5</code> into the location expected by the converter:
+    <pre>{input‑dir}/attachments/converted.hdf5</pre>
+    (uses <code>Path.replace</code> with fallback to <code>shutil.move</code>).</li>
+  <li>Locate the converter script <code>converters/convert_hdf_to_dsr.py</code>.</li>
+  <li>Create a temporary directory; expected NPZ output:
+    <pre>…/output_dsr.npz</pre>
+  </li>
+  <li>Run the converter:
+    <pre>python convert_hdf_to_dsr.py --input_file &lt;input‑dir&gt;/attachments/converted.hdf5 --output_file &lt;npz&gt; --bin_size 0.1</pre>
+  </li>
+  <li>Copy the produced NPZ to <code>OUTPUT_NPZ_PATH</code>.</li>
+  <li>Validate the NPZ against ground‑truth:
+    <ul>
+      <li>Validator script: <code>tests/integration/vbt_amu_protocol_pipeline/utils/validate_and_report.py</code></li>
+      <li>Ground‑truth file: <code>tests/test_data/ground_truth/test_convert_output.npz</code></li>
+    </ul>
+    The validator writes its own HTML report to <code>{output‑dir}/test_result_report.html</code>.</li>
+  <li>Move the original HDF5 file to the location required by the CI job:
+    <pre>INPUT_HDF5_PATH</pre></li>
+  <li>Generate a small link page (<code>input_hdf5_link.html</code>) that points to the attached HDF5.</li>
+</ol>
+
+<h2>Produced artefacts (in <code>--output-dir</code>)</h2>
+<ul class="artefacts">
+  <li><code>test_result_report.html</code> – validation summary (green check / red cross).</li>
+  <li><code>input_hdf5_link.html</code> – download link for the HDF5 that was fed into the DSR conversion.</li>
+</ul>
+
+</body>
+</html>

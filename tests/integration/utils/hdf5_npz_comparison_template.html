@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>HDF5 &amp; NPZ Comparison Result</title>
+    <style>
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            margin: 2rem;
+            background-color: #f9f9f9;
+            color: #333;
+        }
+        h1 { color: #2c3e50; }
+        .info {
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: 5px;
+            background-color: #fff;
+            box-shadow: 0 2px 5px rgba(0,0,0,.1);
+        }
+        .status {
+            font-weight: bold;
+            padding: .5rem 1rem;
+            border-radius: 4px;
+            display: inline-block;
+            margin-top: .5rem;
+        }
+        .success { background:#dff0d8; color:#3c763d; }
+        .failure { background:#f2dede; color:#a94442; }
+        .path { font-family: monospace; }
+        pre {   /* keeps new‑lines from the diff/error messages */
+            white‑space: pre-wrap;
+            word‑wrap: break-word;
+            background:#f5f5f5;
+            padding: .5rem;
+            border-radius: 4px;
+            margin-top:.5rem;
+        }
+    </style>
+</head>
+<body>
+
+<h1>HDF5 &amp; NPZ Comparison Result</h1>
+
+<div class="info">
+    <p><strong>Ground‑truth HDF5 file:</strong> <span class="path">{ground_truth_h5}</span></p>
+    <p><strong>Test‑generated HDF5 file:</strong> <span class="path">{output_hdf}</span></p>
+    <p class="status {status_class_h5}">HDF5 comparison:</p>
+    <pre class="{status_class_h5}">{status_message_h5}</pre>
+
+    <hr/>
+
+    <p><strong>Ground‑truth NPZ file:</strong> <span class="path">{ground_truth_npz}</span></p>
+    <p><strong>Test‑generated NPZ file:</strong> <span class="path">{output_npz}</span></p>
+    <p class="status {status_class_npz}">NPZ comparison:</p>
+    <pre class="{status_class_npz}">{status_message_npz}</pre>
+</div>
+
+</body>
+</html>

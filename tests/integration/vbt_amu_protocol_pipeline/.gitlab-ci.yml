@@ -1,0 +1,145 @@
+# -------------------------------------------------
+# .gitlab-ci.yml – VBT‑converter CI pipeline
+# -------------------------------------------------
+# Stages
+stages:
+  - test
+  - publish_report
+
+# -----------------------------------------------------------------
+# Global variables – keep the same behavior as the original template
+# -----------------------------------------------------------------
+variables:
+  # Force the runner to check out sub‑modules (normal)
+  GIT_SUBMODULE_STRATEGY: "normal"
+
+# -----------------------------------------------------------------
+# Pull the generic VBT CI definition from the central template repo
+# -----------------------------------------------------------------
+include:
+  - project: 'virtualbraintwin/VBT_protocol_template'   # full path of the source project
+    ref: main                                         # branch / tag you want to use
+    file: '/ci/template.yml'                          # path inside the source repo
+
+test_vbt_convert_parameter_sweep_dir_to_hdf5:
+  variables:
+    # The entry‑script for the tests stage is simply “pytest”
+    HDF5_DISABLE_VERSION_CHECK: "1"  # Avoid HDF5 version check warnings in the logs
+  extends: .VBT_RUN                       # provided by the template
+  stage: test
+  tags:
+    - docker
+    - jsc-cloud
+    - fenix
+  image: docker:cli
+  needs:
+    - pipeline: $PARENT_PIPELINE_ID
+      job: vbt_setup_job
+      artifacts: true
+  before_script:
+    - export PYTHONPATH="${PYTHONPATH}:${CI_PROJECT_DIR}"
+    - export VBT_ENABLE_OUTPUT_DIR_RECURSIVE_ATTACH="false" # Do not attach the whole output dir as artifact
+    - export VBT_ENABLE_INPUT_DIR_RECURSIVE_ATTACH="false" # Do not attach the whole output dir as artifact
+    - export VBT_ALLURE_PARENT_SUITE="VBT‑converter CI/CD"
+    - export VBT_TEST_CHECK="VBT‑Test Check"
+    - export VBT_ALLURE_SUITE="Integration Tests AMU Protocol Pipeline"
+    - export VBT_ALLURE_SUB_SUITE="Conversion of parameter‑sweep‑style directories to HDF5 file and validation of the converted file against the ground‑truth HDF5 file"
+    - export VBT_ALLURE_EPIC="Guarantee that the converter works for every possible input layout"
+    - export VBT_ALLURE_FEATURE="Use of cached test data to validate the converter’s functionality for a directory layout that is representative of real‑world use cases"
+    - export VBT_ALLURE_STORY="Integration test for the conversion of parameter‑sweep‑style directories to HDF5 file and validation of the converted file against the ground‑truth HDF5 file (https://tvb-projects.atlassian.net/browse/VT-233)"
+    - export VBT_ALLURE_LINK_JIRA="https://tvb-projects.atlassian.net/browse/VT-233"
+    - export VBT_DYNAMIC_TEST_NAME_SUFFIX="test_vbt_convert_parameter_sweep_dir_to_hdf5"
+    - export VBT_ALLURE_TEST_TITLE="test_vbt_convert_parameter_sweep_dir_to_hdf5"
+    - export VBT_ALLURE_LINK_PIPELINE="${CI_PIPELINE_URL}"
+    - export VBT_ALLURE_LINK_JOB="${CI_JOB_URL}"
+    - export VBT_ALLURE_DESCRIPTION_HTML="${CI_PROJECT_DIR}/tests/integration/docs/vbt_converter_ps_to_hdf5_wrapper.html"
+    - export VBT_SUBMODULE_PATH="${CI_PROJECT_DIR}/ci/template_repo"
+    - export VBT_ENTRY_SCRIPT="${CI_PROJECT_DIR}/tests/integration/vbt_amu_protocol_pipeline/vbt_converter_ps_to_hdf5_wrapper.py"
+    - export VBT_INPUT_PATH="${CI_PROJECT_DIR}/tests/test_data/parametersweep_8s_3d_orientation_selective_12012026"
+    - export VBT_OUTPUT_PATH="${CI_PROJECT_DIR}/data/"
+    - export INPUT_SWEEP_DIR_PATH="${CI_PROJECT_DIR}/attachments/parametersweep_8s_3d_orientation_selective_12012026"
+    - export OUTPUT_HDF5_PATH="${CI_PROJECT_DIR}/attachments/converted.hdf5"
+    - echo "Installing dependencies in the docker runner …"
+    - apk add --no-cache jq python3 bash perl gettext curl hdf5-tools
+    - !reference [ .VBT_RUN, before_script ]  # Calls the base "method"
+  # The artifacts are needed by the publishing stage (Allure results)
+  cache:
+    - key: vbt-converter-test-cache
+      paths:
+        - tests/test_data/
+      policy: pull
+  artifacts:
+    when: always
+    paths:
+      - allure-results/
+      - "${CI_PROJECT_DIR}/attachments/"
+    expire_in: 6 week
+
+test_vbt_convert_hdf5_to_dsr:
+  extends: .VBT_RUN
+  stage: test
+  tags:
+    - docker
+    - jsc-cloud
+    - fenix
+  image: docker:cli
+  needs:
+    - pipeline: $PARENT_PIPELINE_ID
+      job: vbt_setup_job
+      artifacts: true
+    - job: test_vbt_convert_parameter_sweep_dir_to_hdf5
+      artifacts: true
+  before_script:
+    - export PYTHONPATH="${PYTHONPATH}:${CI_PROJECT_DIR}"
+    - export VBT_ENABLE_INPUT_DIR_RECURSIVE_ATTACH="false"
+    - export VBT_ENABLE_OUTPUT_DIR_RECURSIVE_ATTACH="false"
+    - export VBT_ALLURE_PARENT_SUITE="VBT‑converter CI/CD"
+    - export VBT_ALLURE_SUITE="Integration Tests AMU Protocol Pipeline"
+    - export VBT_ALLURE_SUB_SUITE="Conversion of the created HDF5 file to DSR format and validation of the results"
+    - export VBT_ALLURE_EPIC="Use of the converted HDF5 file to validate the converter’s functionality for the conversion to DSR format, which is the format used by upscale teams for simulations"
+    - export VBT_ALLURE_FEATURE="Use of the converted HDF5 file to validate the converter’s functionality for the conversion to DSR format, which is the format used by upscale teams for simulations"
+    - export VBT_ALLURE_STORY="Integration test for the conversion of the created HDF5 file to DSR format and validation of the results (https://tvb-projects.atlassian.net/browse/VT-233)"
+    - export VBT_ALLURE_LINK_JIRA="https://tvb-projects.atlassian.net/browse/VT-233"
+    - export VBT_DYNAMIC_TEST_NAME_SUFFIX="test_vbt_convert_hdf5_to_dsr"
+    - export VBT_ALLURE_TEST_TITLE="test_vbt_convert_hdf5_to_dsr"
+    - export VBT_ALLURE_LINK_PIPELINE="${CI_PIPELINE_URL}"
+    - export VBT_ALLURE_LINK_JOB="${CI_JOB_URL}"
+    - export VBT_ALLURE_DESCRIPTION_HTML="${CI_PROJECT_DIR}/tests/integration/docs/vbt_converter_hdf5_to_dsr_wrapper.html"
+    - export VBT_SUBMODULE_PATH="${CI_PROJECT_DIR}/ci/template_repo"
+    - export VBT_ENTRY_SCRIPT="${CI_PROJECT_DIR}/tests/integration/vbt_amu_protocol_pipeline/vbt_converter_hdf5_to_dsr_wrapper.py"
+    - export VBT_INPUT_PATH="${CI_PROJECT_DIR}/input/"
+    - export VBT_OUTPUT_PATH="${CI_PROJECT_DIR}/output/"
+    - export INPUT_HDF5_PATH="${CI_PROJECT_DIR}/attachments/input.hdf5"
+    - export OUTPUT_NPZ_PATH="${CI_PROJECT_DIR}/attachments/converted.npz" # Path to the converted numpy file (which is the only output artifact we want to attach to CI Job)
+    - echo "Installing dependencies in the docker runner …"
+    - apk add --no-cache jq python3 bash perl gettext curl
+    - !reference [ .VBT_RUN, before_script ]  # Calls the base "method"
+  cache:
+    - key: vbt-converter-test-cache
+      paths:
+        - tests/test_data/
+      policy: pull
+  artifacts:
+    when: always
+    paths:
+      - allure-results/
+      - "${CI_PROJECT_DIR}/attachments/"
+    expire_in: 6 week
+
+test_vbt_publish_job:
+  extends: .VBT_PUBLISH
+  stage: publish_report
+  needs:
+    - job: test_vbt_convert_parameter_sweep_dir_to_hdf5
+      artifacts: true
+    - job: test_vbt_convert_hdf5_to_dsr
+      artifacts: true
+  before_script:
+    - export PYTHONPATH="${PYTHONPATH}:${CI_PROJECT_DIR}"
+    - export VBT_ALLURE_LINK_PIPELINE="${CI_PIPELINE_URL}"
+    - export VBT_ALLURE_LINK_JOB="${CI_JOB_URL}"
+    - export VBT_SUBMODULE_PATH="${CI_PROJECT_DIR}/ci/template_repo"
+    - export VBT_PUBLISH_SCRIPT="${CI_PROJECT_DIR}/ci/template_repo/ci/scripts/publish_report.sh"
+    - echo "Installing dependencies in the Alpine runner …"
+    - apk add --no-cache jq unzip
+    - !reference [ .VBT_PUBLISH, before_script ]  # Calls the base "method"

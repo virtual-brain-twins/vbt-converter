@@ -2,6 +2,7 @@ stages:
   - setup_environment
   - test
   - integration-pipelines
+  - conversion
   - publish_report
   - cleanup
 
@@ -235,3 +236,170 @@ update_or_create_new_cache_job:
     CACHE_PATH: "$CI_CACHE_DIR"
     MINIO_SOURCE_PATH: "$MINIO_SRC_PATH"
     LOCAL_DEST_PATH: "$LOCAL_DEST_DIR"
+
+vbt_convert_job:
+  # Convert raw VBT data to a master HDF5 file and then to the protocol‑specific
+  # NumPy format.  The job activates the `vbt-data` project, validates the
+  # supplied directories, runs both conversion scripts and stores the
+  # resulting artefacts.
+
+  # Job metadata
+  extends: .VBT_RUN
+  stage: conversion
+  id_tokens:
+    SITE_ID_TOKEN:
+      aud: "https://gitlab.jsc.fz-juelich.de"
+  when: manual  # allow manual triggering of the conversion job
+  tags:
+    - juwels
+    - shell
+  needs:
+    - job: vbt_setup_job            # reuse the virtual‑env created earlier
+      artifacts: true
+  variables:
+    # expose the common VBT variables (they are already defined globally)
+    VBT_SUBMODULE_PATH: "${CI_PROJECT_DIR}/ci/template_repo"
+    VBT_CONVERT_PROTOCOL: "amu"
+    VBT_CONVERT_INPUT: "$DATA/VBT_T4-1_UvA_Protocol1/parametersweep_8s_3d_orientation_selective_12012026/"
+    VBT_CONVERT_ANY_ARGS: '{"log-level":"INFO","no-raw-bundle":null}'
+    VBT_CONVERT_HDF5_ARGS: '{"bin-size":0.001}'
+  before_script:
+    - !reference [ .VBT_RUN, before_script ]
+    # Common helpers (fail‑fast, nice output)
+    - set -euo pipefail
+    - |
+      log() {
+        echo "[${CI_JOB_ID}] $*"
+      }
+    # Activate the **vbt‑data** project (the command blocks until the
+    #     environment is ready; we abort if it never succeeds)
+    - log "Activating the 'vbt-data' project …"
+    - |
+      # jutil returns 0 when the environment is ready.
+      # We retry a few times because the data project may still be
+      # mounting remote storage on the first attempt.
+      max_attempts=10
+      attempt=1
+      while ! jutil env activate --project vbt-data; do
+        if (( attempt >= max_attempts )); then
+          log " Unable to activate vbt‑data after ${max_attempts} attempts – aborting."
+          exit 1
+        fi
+        log "⚠️  Attempt ${attempt}/${max_attempts} failed – sleeping 10 s and retrying …"
+        sleep 10
+        ((attempt++))
+      done
+    # Helper that expands a JSON object into a Bash array of
+    #     “--key value” pairs (skips keys whose value is null/empty)
+    - |
+      json_to_args() {
+        # $1 → JSON string
+        # Echo a space‑separated list that can be expanded with:
+        #   eval set -- $(json_to_args "$JSON")
+        echo "$1" | jq -r 'to_entries|map(if (.value|type)=="string" then "--\(.key) \(.value|@sh)" else "--\(.key) \(.value)" end) | join(" ")'
+      }
+  script:
+    # Resolve / validate the $DATA variable that is exported by the
+    #     vbt‑data environment.  All paths must be *children* of $DATA.
+    - |
+      # $DATA is set by the vbt‑data project – abort if it disappeared.
+      if [[ -z "${DATA:-}" ]]; then
+        log "\$DATA is not defined – the vbt‑data environment did not initialise correctly."
+        exit 1
+      fi
+      log "\$DATA = ${DATA}"
+
+      # Input directory
+      INPUT="${DATA}/${VBT_CONVERT_INPUT}"
+      if [[ ! -d "${INPUT}" ]]; then
+        log " Input directory '${INPUT}' does not exist."
+        exit 1
+      fi
+      log " Input directory resolved to '${INPUT}'"
+
+      # Output HDF5 directory
+      if [[ -n "${VBT_CONVERT_OUTPUT_HDF5:-}" ]]; then
+        OUT_H5="${DATA}/${VBT_CONVERT_OUTPUT_HDF5}"
+      else
+        OUT_H5="${DATA}/${VBT_CONVERT_PROTOCOL}/converted/h5"
+      fi
+      mkdir -p "${OUT_H5}"
+      log "HDF5 output will be written to '${OUT_H5}'"
+
+      # Output NumPy directory
+      if [[ -n "${VBT_CONVERT_OUTPUT_NUMPY:-}" ]]; then
+        OUT_NPY="${DATA}/${VBT_CONVERT_OUTPUT_NUMPY}"
+      else
+        OUT_NPY="${DATA}/${VBT_CONVERT_PROTOCOL}/converted/numpy"
+      fi
+      mkdir -p "${OUT_NPY}"
+      log "NumPy output will be written to '${OUT_NPY}'"
+
+    # Build the *extra* argument strings for the two conversion tools.
+    - |
+      # Convert the JSON variables to a Bash‑compatible argument list.
+      # If the variable is empty we simply pass an empty string.
+      EXTRA_ANY_ARGS="$(json_to_args "${VBT_CONVERT_ANY_ARGS:-{}}")"
+      EXTRA_H5_ARGS="$(json_to_args "${VBT_CONVERT_HDF5_ARGS:-{}}")"
+
+      log "Extra arguments for convert_any_to_hdf5.py → ${EXTRA_ANY_ARGS}"
+      log "Extra arguments for convert_hdf5_to_format.py → ${EXTRA_H5_ARGS}"
+    # Convert any → master HDF5**
+    - |
+      MASTER_H5="${OUT_H5}/master.h5"
+      log "Running convert_any_to_hdf5.py"
+      log "   input      : ${INPUT}"
+      log "   output h5  : ${MASTER_H5}"
+      log "   protocol   : ${VBT_CONVERT_PROTOCOL}"
+      # shellcheck disable=SC2086  # we *want* word‑splitting for the JSON‑derived args
+      python converters/generic_converter/convert_any_to_hdf5.py \
+        -i "${INPUT}" \
+        -o "${MASTER_H5}" \
+        --protocol "${VBT_CONVERT_PROTOCOL}" \
+        ${EXTRA_ANY_ARGS}
+
+      if [[ ! -f "${MASTER_H5}" ]]; then
+        log "Expected master file '${MASTER_H5}' was not created."
+        exit 1
+      fi
+      log "Master HDF5 created at '${MASTER_H5}'"
+    # Convert master HDF5 → protocol‑specific NumPy**
+    - |
+      log "Running convert_hdf5_to_format.py"
+      log "   input      : ${MASTER_H5}"
+      log "   output dir : ${OUT_NPY}"
+      # Again we deliberately allow word‑splitting for the JSON‑derived args.
+      python converters/generic_converter/convert_hdf5_to_format.py \
+        -i "${MASTER_H5}" \
+        -o "${OUT_NPY}" \
+        ${EXTRA_H5_ARGS} \
+        "${VBT_CONVERT_PROTOCOL}"
+
+      # The exporter writes a single *.npz* file inside the output dir.
+      # Verify that at least one file is present.
+      if [[ -z "$(find "${OUT_NPY}" -maxdepth 1 -type f -name '*.npz' -print -quit)" ]]; then
+        log "No NumPy (*.npz) files were created in '${OUT_NPY}'."
+        exit 1
+      fi
+      log "NumPy export completed – files are in '${OUT_NPY}'"
+    # Write the paths to a tiny text file (later attached as artefact)
+    - |
+      PATHS_FILE="${CI_PROJECT_DIR}/conversion-paths.txt"
+      {
+        echo "MASTER_H5=${MASTER_H5}"
+        echo "NUMPY_OUTPUT=${OUT_NPY}"
+      } > "${PATHS_FILE}"
+      log "Paths recorded in '${PATHS_FILE}'"
+  artifacts:
+    # -----------------------------------------------------------------
+    # The artefacts we want to keep after the job finishes:
+    #   • the generated master.h5   (so the next stage can reuse it if needed)
+    #   • the whole NumPy output dir
+    #   • the tiny text file that records the two absolute paths
+    # -----------------------------------------------------------------
+    when: always
+    paths:
+      - "${OUT_H5}/master.h5"
+      - "${OUT_NPY}/"
+      - "conversion-paths.txt"
+    expire_in: 1 week

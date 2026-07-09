@@ -6,6 +6,8 @@ import h5py
 import numpy as np
 
 from .protocol_exporter import ProtocolExporter
+from ..schema.simulation_parameters import SimulationParameters
+from ..schema.spike_map import SpikeMap
 
 
 class BasalGangliaExporter(ProtocolExporter):
@@ -22,8 +24,28 @@ class BasalGangliaExporter(ProtocolExporter):
         metadata      : JSON‑encoded string with all scalar metadata
     """
 
-    def extract_one_simulation(self, sim_id: str, sim_group: h5py.Group) -> Any:
-        pass
+    def extract_one_simulation(self, sim_id: str, sim_group: h5py.Group) -> dict[str, Any]:
+        """
+        For the Basal‑Ganglia protocol we keep the *raw* per‑population
+        (indices, times) arrays exactly as they appear in the new schema.
+        """
+        # ---- metadata -------------------------------------------------
+        meta = SimulationParameters.from_hdf5(sim_group["parameters"]).kv_pairs
+
+        # ---- spikes ----------------------------------------------------
+        spike_map = SpikeMap.from_hdf5(sim_group["OutputSpike"])
+        # Convert back to the legacy ``{pop: (indices, times)}`` format that the
+        # downstream analysis expects.
+        spikes: dict[str, tuple[np.ndarray | None, np.ndarray]] = {}
+        for pop in spike_map.populations:
+            # All neurons in a population are concatenated.
+            # ``indices`` are the original neuron IDs (re‑expanded).
+            all_idx = np.concatenate([np.full(len(neu.times), neu.index, dtype=np.int64) for neu in pop.neurons]) \
+                if pop.neurons else np.empty(0, dtype=np.int64)
+            all_times = np.concatenate([neu.times for neu in pop.neurons]) if pop.neurons else np.empty(0, dtype=np.float64)
+            spikes[pop.population_name] = (all_idx if all_idx.size else None, all_times)
+
+        return {"metadata": meta, "spike_trains": spikes}
 
     protocol_name = "basal-ganglia"
     output_suffix = ".basal.npz"

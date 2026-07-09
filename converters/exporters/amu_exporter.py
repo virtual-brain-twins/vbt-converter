@@ -30,16 +30,11 @@ import h5py
 import numpy as np
 
 from .protocol_exporter import ProtocolExporter
-from .utils import (
-    AMU_POPULATIONS,  # list of population names used by the pipeline
-    get_discretized_stimulus,
-    get_firing_rates,
-    normalize,
-)
-from ..sections.amu.record_neurons_section import RecordNeuronsSection
-from ..sections.amu.spiketrain_section import SpikeTrainSection
-from ..sections.amu.stimulus_section import StimulusSection
-from ..sections.metadata_section import MetadataSection
+from ..schema.simulation_parameters import SimulationParameters
+from ..schema.spike_map import SpikeMap
+from ..schema.stimulus import Stimulus
+from ..schema.stimulus_set import StimulusSet
+from ..utils.helpers import normalize, AMU_POPULATIONS, get_discretized_stimulus, get_firing_rates
 
 # Fixed definitions – they must stay identical to the reference script
 PARAMETERS = ["scale_num_neurons", "scale_syn_strength", "scale_nmda_efficacy"]
@@ -59,7 +54,7 @@ class AMUExporter(ProtocolExporter):
 
     # Public protocol information (used by the generic driver)
     protocol_name = "amu"
-    output_suffix = ".dsr.npz"
+    output_suffix = ".amu.npz"
 
     # Argument handling
     @classmethod
@@ -100,7 +95,7 @@ class AMUExporter(ProtocolExporter):
 
     def run(self) -> None:
         """Iterate over all `sim_<id>` groups and hand each to the concrete exporter."""
-        sim_groups = [g for n, g in self.master.items() if n.startswith("sim_")]
+        sim_groups = [g for n, g in self.master["StandardFormat"]["Simulations"].items() if n.startswith("Sim_")]
         if not sim_groups:
             self.log.error("No simulation groups (sim_*) found in the master HDF5.")
             return
@@ -111,7 +106,7 @@ class AMUExporter(ProtocolExporter):
         u = []
         theta = []
         for sim_grp in sim_groups:
-            sim_id = sim_grp.name.split("/", 1)[-1].replace("sim_", "")
+            sim_id = sim_grp.name.split("/", 1)[-1].replace("Sim_", "")
             try:
                 result = self.extract_one_simulation(sim_id, sim_grp)
                 r.append(result["firing_rate"].T)
@@ -148,51 +143,53 @@ class AMUExporter(ProtocolExporter):
     # Core conversion per simulation
     def extract_one_simulation(self, sim_id: str, sim_group: h5py.Group) -> dict[str, np.ndarray]:
         """
-        Convert a single simulation group into a .
-
-        Expected layout (produced by :class:`AMUBundle`):
-
-        ``sim_<id>/``
-            ├─ attributes                – scalar parameters (e.g. ``scale_num_neurons``)
-            ├─ ``spike_trains``          – per‑population spike times
-            ├─ ``record_neurons``        – binary payload (structured array)
-            ├─ ``stimulus``              – piece‑wise‑constant input
-            └─ (other sections that are ignored by the exporter)
+        The *sim_group* is now a ``Sim_<id>`` group that follows the new schema.
         """
-
-        # Read the metadata section of the simulation and extract the scalar parameters
-        metadata_section = MetadataSection.from_group(sim_group["metadata"])  # validate metadata section
+        # ---- parameters -------------------------------------------------
+        param_section = SimulationParameters.from_hdf5(sim_group["Parameters"])
         param_vals = np.array(
-            [float(metadata_section.data.get(p, np.nan)) for p in PARAMETERS],
+            [float(param_section.kv_pairs.get(p, np.nan)) for p in PARAMETERS],
             dtype=float,
         )
 
-        # Load the spike‑train data
-        spikes = SpikeTrainSection.from_group(sim_group["spike_trains"]).data
+        # ---- stimulus ---------------------------------------------------
+        stimulus_set = StimulusSet.from_hdf5(sim_group["Stimulus"])
+        disc_stim = get_discretized_stimulus(stimulus_set, self.bin_size)
 
-        # Load the neuron‑count table
-        nneurons = RecordNeuronsSection.from_group(sim_group["record_neurons"]).data
+        # ---- spikes ------------------------------------------------------
+        spike_map = SpikeMap.from_hdf5(sim_group["OutputSpike"])
+        # Build the ``pop → {times, indices}`` dict expected by the utils.
+        spikes: dict = {}
+        neurons_count: dict = param_section.kv_pairs.get("record_neurons", {})
+        for pop in spike_map.populations:
+            # Concatenate all neuron spike‑times for this population.
+            all_times = np.concatenate([n.times for n in pop.neurons]) if pop.neurons else np.empty(0)
+            # AMU expects *indices* relative to the population – we create a dummy array.
+            # (Indices are not used later in the calculation of get_firing_rates, only the times matter.)
+            spikes[pop.population_name] = {"times": all_times, "indices": None}
 
-        # Compute firing‑rates (Hz) for each population
+        # ---- compute firing‑rate -----------------------------------------
         t0 = 0.0
-        # ``t_sim`` is stored in *milliseconds* as an attribute of the simulation group.
-        t_sim_ms = float(metadata_section.data.get("t_sim", 1000.0))
-        t1 = t_sim_ms / 1000.0  # convert to seconds
+        t_sim_ms = float(param_section.kv_pairs.get("t_sim", 1000.0))
+        t1 = t_sim_ms / 1000.0
 
         _, firing_rate = get_firing_rates(
-            spikes,
-            self.bin_size,
+            spikes=spikes,
+            dt=self.bin_size,
             t0=t0,
             t1=t1,
-            nneurons=nneurons,
+            nneurons=neurons_count,
         )
 
-        # Discretize the stimulus
-        external_stimulus = StimulusSection.from_group(sim_group["stimulus"])
-        stimulus = get_discretized_stimulus(external_stimulus, self.bin_size)
-        self.log.info("Simulation %s: firing_rate shape=%s, stimulus shape=%s, param_values=%s",)
+        self.log.info(
+            "Simulation %s: firing_rate shape=%s, stimulus shape=%s, param_values=%s",
+            sim_id,
+            firing_rate.shape,
+            disc_stim.shape,
+            param_vals,
+        )
         return {
             "firing_rate": firing_rate,
-            "stimulus": stimulus,
-            "param_values": param_vals
+            "stimulus": disc_stim,
+            "param_values": param_vals,
         }

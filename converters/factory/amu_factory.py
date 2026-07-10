@@ -225,7 +225,8 @@ def _parse_stimulus_set(cfg: dict[Any, Any] | Any, run_dir: Path) -> StimulusSet
     limits_arr = np.array(limits, dtype=np.float64)
     values_arr = np.array(values, dtype=np.float64)
     max_val = float(values_arr.max()) if values_arr.size else 0.0
-    # The same stimulus is used for all populations in the simulation, hence just keep the stimulus set with all the
+    # A single stimulus is applied uniformly across all populations in the simulation,
+    # serving as the default sub-stimulus for each population.
     stimulus_set = StimulusSet(
         populations=[
             PopulationStimulus(

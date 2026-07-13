@@ -17,7 +17,6 @@ import allure
 import pytest
 
 from converters.schema.master_bundle import MasterBundle
-from tests.integration.utils.helper_functions import _build_hdf5_tree_html
 
 
 # --------------------------------------------------------------------------- #
@@ -31,9 +30,11 @@ def _fake_path(tmp_dir: pathlib.Path, filename: str) -> pathlib.Path:
     """
     return tmp_dir / filename
 
+
 @pytest.fixture(autouse=True)
 def patched_inner_groups():
     yield MagicMock()
+
 
 # --------------------------------------------------------------------------- #
 #   Test class – fully instrumented with Allure
@@ -347,7 +348,3 @@ class TestMasterBundle:
                     name="Resulting MasterBundle",
                     attachment_type=allure.attachment_type.TEXT,
                 )
-def test_12():
-    html_tree = _build_hdf5_tree_html(
-        pathlib.Path("/home/jmurugan/work/Artefacts/VT-233/vbt-converter/test_output/amu/test.h5"))
-    print(html_tree)

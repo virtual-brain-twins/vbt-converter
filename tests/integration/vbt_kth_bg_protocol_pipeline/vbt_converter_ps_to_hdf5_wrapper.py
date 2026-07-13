@@ -133,7 +133,7 @@ def main() -> None:
             "--output",
             str(output_master_h5),
             "--protocol",
-            "basal"
+            "basal-ganglia"
         ]
 
         # Execute the converter

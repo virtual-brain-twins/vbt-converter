@@ -216,7 +216,7 @@ def _format_attrs(attrs: h5py.AttributeManager) -> str:
     if not attrs:
         return ""
 
-    lines: List[str] = ['<dl class="attrs">']
+    lines: List[str] = ['<dl style="display:none;" class="attrs">']
     for key, val in attrs.items():
         # ``val`` may be a NumPy scalar / array – try to turn it into JSON.
         try:
@@ -279,10 +279,6 @@ def _render_dataset(name: str, ds: h5py.Dataset) -> str:
         f'</li>'
     )
 
-
-# --------------------------------------------------------------------------- #
-# Group rendering – the part that needed a speed‑up
-# --------------------------------------------------------------------------- #
 def _render_group(name: str, grp: h5py.Group, depth: int = 0) -> str:
     """
     Render a group and (recursively) its children.
@@ -314,9 +310,6 @@ def _render_group(name: str, grp: h5py.Group, depth: int = 0) -> str:
                 f"<li>Unsupported object: {_escape(child_name)} ({type(child_obj)})</li>"
             )
 
-    # -------------------------------------------------------------------- #
-    #   Truncation placeholder (if needed)
-    # -------------------------------------------------------------------- #
     if total > MAX_CHILDREN:
         remaining = total - MAX_CHILDREN
         placeholder = (
@@ -337,10 +330,6 @@ def _render_group(name: str, grp: h5py.Group, depth: int = 0) -> str:
         f'</li>'
     )
 
-
-# --------------------------------------------------------------------------- #
-# Public entry point – unchanged signature
-# --------------------------------------------------------------------------- #
 def _build_hdf5_tree_html(h5_path: pathlib.Path) -> str:
     """
     Open *h5_path* and return a ready‑to‑inject HTML fragment.

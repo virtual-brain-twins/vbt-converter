@@ -88,6 +88,8 @@
                     li.classList.toggle('expanded');    // toggles the ►/▼ symbol
                     const childUl = li.querySelector('ul');
                     if (childUl) childUl.style.display = li.classList.contains('expanded') ? 'block' : 'none';
+                    const childDl = li.querySelector('dl');
+                    if (childDl) childDl.style.display = li.classList.contains('expanded') ? 'block' : 'none';
                 });
             });
         });

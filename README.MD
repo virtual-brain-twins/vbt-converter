@@ -288,6 +288,7 @@ The generic driver automatically:
 
 Take a look at the generated UML diagrams, data‑flow diagrams and sequence diagrams in `docs/` for a visual overview of the architecture, data flow and execution sequences.
 See [docs/Readme.md](docs/Readme.md) for more details.
+
 ---
 
 <a name="testing"></a>
@@ -315,6 +316,4 @@ Contributions are welcome:
 * Ensure the test suite passes (`pytest`).
 * Open a merge request against the `main` branch.
 
----  
-
-*Enjoy converting your VBT simulation data!*
+---

@@ -9,7 +9,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from tests.integration.utils.helper_functions import create_link_html
+from tests.integration.utils.helper_functions import create_link_html, _build_hdf5_tree_html
 
 
 # ----------------------------------------------------------------------
@@ -246,13 +246,14 @@ def main() -> None:
 
     template_path = ci_root / "tests" / "integration" / "utils" / "hdf5_comparison_template.html"
     template = template_path.read_text()
+    html_tree = _build_hdf5_tree_html(converted_hdf5)
     filled = (
         template
         .replace("{ground_truth_h5}", str(ground_truth))
         .replace("{output_hdf}", str(converted_hdf5))
         .replace("{status_class_h5}", "success" if success else "failure")
-        .replace("{status_message_h5}", status_message,
-                 )
+        .replace("{status_message_h5}", status_message)
+        .replace("{hdf5_tree_html}", html_tree)
     )
     report_path: Path = args.output_dir / "test_result_report.html"
     report_path.write_text(filled)

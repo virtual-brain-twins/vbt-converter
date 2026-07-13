@@ -32,7 +32,6 @@ import numpy as np
 from .protocol_exporter import ProtocolExporter
 from ..schema.simulation_parameters import SimulationParameters
 from ..schema.spike_map import SpikeMap
-from ..schema.stimulus import Stimulus
 from ..schema.stimulus_set import StimulusSet
 from ..utils.helpers import normalize, AMU_POPULATIONS, get_discretized_stimulus, get_firing_rates
 
@@ -54,7 +53,7 @@ class AMUExporter(ProtocolExporter):
 
     # Public protocol information (used by the generic driver)
     protocol_name = "amu"
-    output_suffix = ".amu.npz"
+    output_suffix = ".npz"
 
     # Argument handling
     @classmethod

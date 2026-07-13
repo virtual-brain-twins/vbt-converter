@@ -36,7 +36,62 @@
             border-radius: 4px;
             margin-top:.5rem;
         }
+        /* ---------- HDF5‑tree specific styling ---------- */
+        .hdf5-tree, .hdf5-tree ul {
+            list-style: none;
+            padding-left: 1.2em;
+            margin: 0;
+        }
+
+        .hdf5-tree li {
+            line-height: 1.4;
+        }
+
+        .hdf5-tree .toggle {
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .hdf5-tree .toggle::before {
+            content: "▶";
+            display: inline-block;
+            width: 1em;
+            margin-right: 4px;
+            transition: transform .1s ease-in-out;
+        }
+
+        .hdf5-tree .expanded > .toggle::before {
+            content: "▼";
+        }
+
+        .hdf5-tree .meta, .hdf5-tree .attrs {
+            margin-left: 1.4em;
+            font-size: 0.9em;
+            color: #555;
+        }
+
+        .hdf5-tree .attrs dt {
+            font-weight: bold;
+        }
+
+        .hdf5-tree .attrs dd {
+            margin: 0 0 .5em 1em;
+        }
     </style>
+    <script>
+        // Simple delegate‑based expand/collapse
+        document.addEventListener('DOMContentLoaded', function () {
+            document.querySelectorAll('.hdf5-tree .toggle').forEach(function (el) {
+                el.addEventListener('click', function (e) {
+                    e.stopPropagation();               // keep click on parent from bubbling
+                    const li = el.parentNode;           // the <li> that holds the toggle
+                    li.classList.toggle('expanded');    // toggles the ►/▼ symbol
+                    const childUl = li.querySelector('ul');
+                    if (childUl) childUl.style.display = li.classList.contains('expanded') ? 'block' : 'none';
+                });
+            });
+        });
+    </script>
 </head>
 <body>
 
@@ -48,6 +103,12 @@
 
     <p class="status {status_class_h5}">HDF5 comparison:</p>
     <pre class="{status_class_h5}">{status_message_h5}</pre>
+
+        <!-- ---------- Visualisation of the test HDF5 ---------- -->
+    <p><strong>Test‑generated HDF5 file structure</strong></p>
+    <div class="hdf5-tree">
+        {hdf5_tree_html}
+    </div>
 </div>
 
 </body>

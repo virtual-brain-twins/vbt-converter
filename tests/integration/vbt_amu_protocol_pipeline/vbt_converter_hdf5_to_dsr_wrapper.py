@@ -184,7 +184,7 @@ def main() -> None:
             sys.exit(1)
 
         # Verify that the converter produced the expected file
-        output_npz = output_npz_dir / "amu.dsr.npz"
+        output_npz = output_npz_dir / "amu.npz"
         if not output_npz.is_file():
             logger.error("Expected output file was not created: %s", output_npz)
             sys.exit(1)

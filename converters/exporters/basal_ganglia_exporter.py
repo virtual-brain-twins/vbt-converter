@@ -48,7 +48,7 @@ class BasalGangliaExporter(ProtocolExporter):
         return {"metadata": meta, "spike_trains": spikes}
 
     protocol_name = "basal-ganglia"
-    output_suffix = ".basal.npz"
+    output_suffix = ".npz"
 
     @classmethod
     def configure_parser(cls, parser: argparse.ArgumentParser) -> None:

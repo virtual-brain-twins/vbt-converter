@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+import html
+import json
 import logging
 import os
+import pathlib
 from pathlib import Path
-from typing import List, Tuple, Sequence
+from typing import List, Tuple, Sequence, Any, Dict
 from typing import Union
+
+import h5py
+import numpy as np
 
 LinkSpec = Union[
     Tuple[str, str],  # (path, link_text) → uses default `file`
@@ -181,3 +187,182 @@ def create_link_html(
     output_file.write_text(html_content, encoding="utf-8")
 
     logger.info(f"HTML file created at: {output_file.resolve()}")
+
+MAX_CHILDREN = 5               # How many members of a group are rendered
+TRUNCATE_TEXT = "… {remaining:d} more item(s)"  # Shown when a group is cut
+
+
+# --------------------------------------------------------------------------- #
+# Tiny utility helpers
+# --------------------------------------------------------------------------- #
+def _escape(text: Any) -> str:
+    """HTML‑escape anything that is not ``None``."""
+    return html.escape(str(text)) if text is not None else ""
+
+
+def _is_small_dataset(ds: h5py.Dataset) -> bool:
+    """True if the dataset is a scalar or a single element – cheap to read."""
+    return ds.shape == () or ds.size == 1
+
+
+# --------------------------------------------------------------------------- #
+# Attribute rendering
+# --------------------------------------------------------------------------- #
+def _format_attrs(attrs: h5py.AttributeManager) -> str:
+    """
+    Return an HTML <dl class="attrs"> block with *user‑defined* attributes.
+    Empty attribute collections produce an empty string.
+    """
+    if not attrs:
+        return ""
+
+    lines: List[str] = ['<dl class="attrs">']
+    for key, val in attrs.items():
+        # ``val`` may be a NumPy scalar / array – try to turn it into JSON.
+        try:
+            # ``tolist`` gives native Python objects; if it fails we fall back.
+            native = val.tolist() if hasattr(val, "tolist") else val
+            val_str = json.dumps(native)
+        except Exception:
+            # Fallback – ``repr`` is safe for everything.
+            val_str = _escape(repr(val))
+
+        lines.append(f"<dt>{_escape(key)}:</dt><dd>{_escape(val_str)}</dd>")
+    lines.append("</dl>")
+    return "\n".join(lines)
+
+
+# --------------------------------------------------------------------------- #
+# Dataset rendering
+# --------------------------------------------------------------------------- #
+def _dataset_meta(ds: h5py.Dataset) -> str:
+    """Collect dtype, shape, chunking and compression information."""
+    parts = [
+        f"dtype: {_escape(ds.dtype)}",
+        f"shape: {_escape(ds.shape)}",
+    ]
+    if ds.chunks:
+        parts.append(f"chunks: {_escape(ds.chunks)}")
+    if ds.compression:
+        parts.append(f"compression: {_escape(ds.compression)}")
+    return ", ".join(parts)
+
+
+def _render_dataset(name: str, ds: h5py.Dataset) -> str:
+    """HTML for a single dataset – metadata + optional scalar value."""
+    meta = _dataset_meta(ds)
+
+    # -------------------------------------------------------------------- #
+    #   Value handling – only for scalars / single‑element arrays
+    # -------------------------------------------------------------------- #
+    if _is_small_dataset(ds):
+        try:
+            value = ds[()]                     # read the scalar
+            # ``tolist`` handles NumPy scalars nicely
+            native = value.tolist() if hasattr(value, "tolist") else value
+            value_str = json.dumps(native)
+        except Exception as exc:                # very defensive
+            value_str = f"<i>error reading value: {html.escape(str(exc))}</i>"
+        value_html = f"<div class=\"meta\">value: {_escape(value_str)}</div>"
+    else:
+        # For anything larger we *never* read the data.
+        value_html = "<div class=\"meta\"><i>array data omitted (size > 1)</i></div>"
+    # -------------------------------------------------------------------- #
+
+    attr_html = _format_attrs(ds.attrs)
+
+    return (
+        f'<li>'
+        f'<span class="toggle">Dataset: {_escape(name)} ({meta})</span>'
+        f'{value_html}'
+        f'{attr_html}'
+        f'</li>'
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Group rendering – the part that needed a speed‑up
+# --------------------------------------------------------------------------- #
+def _render_group(name: str, grp: h5py.Group, depth: int = 0) -> str:
+    """
+    Render a group and (recursively) its children.
+
+    *Only the first ``MAX_CHILDREN`` members are expanded*; the rest are
+    represented by a short placeholder.  ``depth`` is only used for
+    debugging / future extensions – it is not part of the HTML output.
+    """
+    attr_html = _format_attrs(grp.attrs)
+
+    # -------------------------------------------------------------------- #
+    #   Fast child enumeration – we obtain the names first, then slice.
+    # -------------------------------------------------------------------- #
+    all_names = list(grp.keys())                      # cheap
+    total = len(all_names)
+
+    # The slice that we actually render.
+    render_names = all_names[:MAX_CHILDREN]
+
+    children_html: List[str] = []
+    for child_name in render_names:
+        child_obj = grp[child_name]                  # cheap – only metadata
+        if isinstance(child_obj, h5py.Group):
+            children_html.append(_render_group(child_name, child_obj, depth + 1))
+        elif isinstance(child_obj, h5py.Dataset):
+            children_html.append(_render_dataset(child_name, child_obj))
+        else:
+            children_html.append(
+                f"<li>Unsupported object: {_escape(child_name)} ({type(child_obj)})</li>"
+            )
+
+    # -------------------------------------------------------------------- #
+    #   Truncation placeholder (if needed)
+    # -------------------------------------------------------------------- #
+    if total > MAX_CHILDREN:
+        remaining = total - MAX_CHILDREN
+        placeholder = (
+            f'<li class="truncated"><i>{TRUNCATE_TEXT.format(remaining=remaining)}</i></li>'
+        )
+        children_html.append(placeholder)
+
+    children_block = (
+        f'<ul style="display:none;">' + "\n".join(children_html) + "</ul>"
+        if children_html else ""
+    )
+
+    return (
+        f'<li class="expanded">'
+        f'<span class="toggle">Group: {_escape(name)}</span>'
+        f'{attr_html}'
+        f'{children_block}'
+        f'</li>'
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Public entry point – unchanged signature
+# --------------------------------------------------------------------------- #
+def _build_hdf5_tree_html(h5_path: pathlib.Path) -> str:
+    """
+    Open *h5_path* and return a ready‑to‑inject HTML fragment.
+
+    The fragment is a single <ul> containing the root members of the file.
+    All heavy‑weight I/O (reading large datasets, traversing massive groups)
+    is avoided – groups are truncated after ``MAX_CHILDREN`` items and only
+    scalar values are materialised.
+    """
+    if not h5_path.is_file():
+        raise FileNotFoundError(f"HDF5 file not found: {h5_path}")
+
+    with h5py.File(str(h5_path), "r") as root:
+        root_children: List[str] = []
+        for name, obj in root.items():
+            if isinstance(obj, h5py.Group):
+                root_children.append(_render_group(name, obj))
+            elif isinstance(obj, h5py.Dataset):
+                root_children.append(_render_dataset(name, obj))
+            else:
+                root_children.append(
+                    f"<li>Unsupported object: {_escape(name)} ({type(obj)})</li>"
+                )
+        # ``''.join`` is a tad faster than ``+`` inside a loop.
+        return f"<ul>{''.join(root_children)}</ul>"

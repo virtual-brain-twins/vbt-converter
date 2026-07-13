@@ -111,8 +111,8 @@ class TestSimulationSerialization:
                 expected_calls = [
                     ((self.mock_parent_group, "Sim_001"),),
                     ((self.mock_sim_group, "Parameters"),),
-                    ((self.mock_sim_group, "Stimulus"),),
-                    ((self.mock_sim_group, "OutputSpike"),),
+                    ((self.mock_sim_group, "Stimuli"),),
+                    ((self.mock_sim_group, "OutputSpikes"),),
                 ]
                 # ``make_group`` should have been called exactly four times, in order.
                 assert mk_group.call_args_list == expected_calls
@@ -171,9 +171,9 @@ class TestSimulationSerialization:
         mock_stim_grp = MagicMock(name="stim_group")
         mock_spike_grp = MagicMock(name="spike_group")
         mock_root.__getitem__.side_effect = lambda key: {
-            "parameters": mock_params_grp,
-            "Stimulus": mock_stim_grp,
-            "OutputSpike": mock_spike_grp,
+            "Parameters": mock_params_grp,
+            "Stimuli": mock_stim_grp,
+            "OutputSpikes": mock_spike_grp,
         }[key]
 
         # Fake return values for the static ``from_hdf5`` methods.

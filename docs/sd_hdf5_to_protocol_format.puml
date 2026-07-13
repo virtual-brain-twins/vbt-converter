@@ -1,0 +1,48 @@
+@startuml
+title Sequence – convert_hdf5_to_format (master HDF5 → protocol artefacts)
+
+actor User
+participant "CLI (convert_hdf5_to_format)" as CLI
+participant "ArgParse / Sub‑parsers" as Parser
+participant "ProtocolExporter (abstract)" as BaseExp
+participant "AMUExporter / BasalGangliaExporter" as Exporter
+participant "HDF5 file (master)" as MasterH5
+participant "Helper utils\nhelpers, dataset_helpers" as Utils
+participant "NumPy / scipy" as NumPy
+participant "Output files (npz, dsr.npz …)" as OutFile
+
+User -> CLI : invoke script with args
+CLI -> Parser : build parser & parse argv
+Parser --> CLI : args (global + protocol‑specific)
+CLI -> CLI : configure root logger (configure_logging)
+
+CLI -> MasterH5 : h5py.File(master_path, "r")
+activate MasterH5
+
+CLI -> Exporter : exporter_cls(**exporter_kwargs)
+note right of Exporter
+  exporter_kwargs contain:
+  - master_h5 (placeholder)
+  - out_dir
+  - log_level
+  - protocol‑specific args (e.g. bin_size)
+end note
+
+Exporter -> BaseExp : __init__(master_h5, out_dir, log_level)
+BaseExp -> BaseExp : configure own logger (configure_logging)
+
+Exporter -> Exporter : run()
+Exporter -> Exporter : enumerate Sim_<id> groups
+loop for each simulation group
+    Exporter -> Exporter : extract_one_simulation()
+    Exporter -> MasterH5 : read Sim_<id>/Parameters, /Stimulus, /OutputSpike
+    Exporter -> Utils : _as_numpy(), _read_section()
+    Exporter -> NumPy : compute firing_rate, discretise stimulus, normalize()
+    Exporter -> OutFile : np.savez_compressed(...)
+
+    Exporter -> Exporter : log.info("Saved …")
+end
+
+deactivate MasterH5
+CLI -> CLI : logger.info("All done – results are in …")
+@enduml

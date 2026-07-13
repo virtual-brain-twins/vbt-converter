@@ -85,16 +85,16 @@ class Stimulus(HDF5Serializable):
             If any of the attributes cannot be converted to a NumPy array suitable
             for storage.
         """
-        store_dataset(parent, "limits", self.limits, compression=False)
-        store_dataset(parent, "values", self.values, compression=False)
-        store_dataset(parent, "max_value", np.array(self.max_value), compression=False)
+        store_dataset(parent, "Limits", self.limits, compression=False)
+        store_dataset(parent, "Values", self.values, compression=False)
+        store_dataset(parent, "MaxValue", np.array(self.max_value), compression=False)
 
     @classmethod
     def from_hdf5(cls: Type["Stimulus"], grp: h5py.Group) -> "Stimulus":
         """Reconstruct a :class:`Stimulus` instance from an HDF5 group.
 
-        The method expects three datasets – ``limits``, ``values`` and
-        ``max_value`` – to be present in ``grp``.  Missing datasets or type
+        The method expects three datasets – ``Limits``, ``Values`` and
+        ``MaxValue`` – to be present in ``grp``.  Missing datasets or type
         mismatches will raise an exception.
 
         Args
@@ -110,7 +110,7 @@ class Stimulus(HDF5Serializable):
         Raises
         ------
         KeyError
-            If any of the required datasets (``limits``, ``values``, ``max_value``)
+            If any of the required datasets (``Limits``, ``Values``, ``MaxValue``)
             are missing from ``grp``.
         TypeError
             If the data cannot be cast to the expected NumPy types.
@@ -118,9 +118,9 @@ class Stimulus(HDF5Serializable):
             If the arrays have incompatible shapes (e.g. ``limits`` does not have
             ``len(values) + 1`` elements).
         """
-        limits = grp["limits"][()]
-        values = grp["values"][()]
-        max_val = float(grp["max_value"][()])
+        limits = grp["Limits"][()]
+        values = grp["Values"][()]
+        max_val = float(grp["MaxValue"][()])
 
         # Basic validation to provide clearer error messages.
         if limits.ndim != 1 or values.ndim != 1:

@@ -1,0 +1,20 @@
+@startuml
+title vbt-converter - Context Diagram (Level-0)
+
+actor User
+
+rectangle "convert_any_to_hdf5.py\nCLI driver"          as CLI1
+rectangle "convert_hdf5_to_format.py\nCLI driver"      as CLI2
+
+database  "Raw input directory / CSV\n(AMU or Basal-Ganglia)" as RAW_IN
+folder    "Master HDF5 bundle\n.bundle.h5\n.raw_bundle.zip"                     as H5_ZIP_OUT
+folder    "Protocol-specific artefacts\n(.npz, .dsr.npz, ...)" as PROTO_OUT
+
+User --> CLI1 : invoke\nconvert_any_to_hdf5 ...
+CLI1 --> RAW_IN : read
+CLI1 --> H5_ZIP_OUT : write MasterBundle (HDF5) + Raw Bundle (ZIP)
+
+User --> CLI2 : invoke\nconvert_hdf5_to_format ...
+CLI2 --> H5_ZIP_OUT : read
+CLI2 --> PROTO_OUT : write per-protocol files
+@enduml

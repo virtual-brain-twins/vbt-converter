@@ -1,237 +1,320 @@
-# vbt‑converter  
+# vbt‑converter
 
-**Virtual‑Brain‑Twin (VBT) data‑conversion utilities** – a tiny library that  
-*collects simulation results* into a **master HDF5 bundle** and then *exports* that bundle to the protocol‑specific format required by downstream analysis pipelines (currently **AMU** and **Basal‑Ganglia**).
+**Virtual‑Brain‑Twin (VBT) data‑conversion utilities** – a lightweight Python library that
 
----
+* collects the results of many neural‑network simulations into a **single master HDF5 bundle** (new schema version 1.0)
+  and
+* exports that bundle to the protocol‑specific formats required by downstream analysis pipelines (currently **AMU** and
+  **Basal‑Ganglia**).
+
+The library is pure‑Python, depends only on a small scientific stack, and is organized as a reusable package that can be
+vendored as a Git sub‑module.
+
+---  
 
 ## Table of contents
-1. [Overview](#overview)  
-2. [Prerequisites](#prerequisites)  
-3. [Add the repository as a submodule](#add-as‑submodule)  
-4. [Installation (Python environment)](#installation)  
-5. [Typical workflow](#workflow)  
-   - [Step 1 – Build the master HDF5](#step1-build-master-hdf5)  
-   - [Step 2 – Export to a protocol format](#step2-export-protocol)  
-6. [HDF5 bundle layout](#hdf5‑layout)  
-   - [AMU protocol](#amu‑layout)  
-   - [Basal‑Ganglia protocol](#basal‑ganglia‑layout)  
-7. [Extending the exporter (new protocol)](#extending)  
-8. [Running the test‑suite (optional)](#testing)  
-9. [License & contributing](#license)  
 
----
+1. [Overview](#overview)
+2. [Prerequisites](#prerequisites)
+3. [Add the repository as a sub‑module](#add‑as‑submodule)
+4. [Installation (Python environment)](#installation)
+5. [Typical workflow](#workflow)
+    * [Step 1 – Build a master HDF5 bundle](#step1-build-bundle)
+    * [Step 2 – Export a protocol‑specific artefact](#step2-export)
+6. [HDF5 bundle layout (schema 1.0)](#bundle-layout)
+    * [Common root structure](#common-root)
+    * [AMU protocol specifics](#amu-layout)
+    * [Basal‑Ganglia protocol specifics](#bg-layout)
+7. [Extending the package (new protocol)](#extending)
+8. [Design Documentation](#design-doc)
+9. [Running the test‑suite (optional)](#testing)
+10. [License & contributing](#license)
+
+---  
 
 <a name="overview"></a>
-## 1. Overview  
 
-| Script | Purpose | Main entry points |
-|--------|---------|-------------------|
-| `converters/generic_converter/convert_any_to_hdf5.py` | Walk a **Basal‑Ganglia CSV** or an **AMU directory tree** and write a *single* master HDF5 file (`master.h5`). | `python convert_any_to_hdf5.py …` |
-| `converters/generic_converter/convert_hdf5_to_format.py` | Read the master HDF5 and, **per protocol**, produce the downstream artefacts (`*.basal.npz` or `*.dsr.npz`). | `python convert_hdf5_to_format.py -i master.h5 -o out_dir amu` (or `basal-ganglia`) |
+## 1. Overview
 
-Both scripts are completely self‑contained – they only rely on the Python packages listed in `requirements.txt` (NumPy, h5py, pandas, PyYAML, tqdm, Allure‑pytest‑plugin, …).
+| Script                                                   | Purpose                                                                                                                                                                 | Main entry points                                                            |
+|----------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------|
+| `converters/generic_converter/convert_any_to_hdf5.py`    | Walk an **AMU directory tree** **or** a **Basal‑Ganglia CSV** and write a *single* master HDF5 file (`master.h5`) along with the raw_bundle.zip.                        | `python -m converters.generic_converter.convert_any_to_hdf5 …`               |
+| `converters/generic_converter/convert_hdf5_to_format.py` | Read the master HDF5 and, **per protocol**, produce the downstream artefacts (`*.dsr.npz` for AMU, `*.npz` for Basal‑Ganglia).                                          | `python -m converters.generic_converter.convert_hdf5_to_format … <protocol>` |
+| `converters/factory/*_factory.py`                        | Low‑level factories that assemble a :class:`~converters.schema.master_bundle.MasterBundle` from raw input.                                                              |
+| `converters/exporters/*_exporter.py`                     | Concrete exporters that implement the per‑simulation conversion logic for a given protocol.                                                                             |
+| `converters/schema/*`                                    | Dataclasses that capture the new HDF5 schema (`Simulation`, `SpikeMap`, `StimulusSet`, …) and implement :class:`~converters.schema.hdf5_serializable.HDF5Serializable`. |
+| `converters/utils/*`                                     | Helper utilities – logging, dataset creation, ZIP archiving, CSV handling, etc.                                                                                         |
 
----
+All scripts use only the packages listed in `requirements.txt` (NumPy, h5py, PyYAML, tqdm, …).
+
+---  
 
 <a name="prerequisites"></a>
-## 2. Prerequisites  
 
-* Python 3.9 + (the CI uses the `venv` flavour).  
-* The packages in `requirements.txt`.  
-* For **Basal‑Ganglia** the input CSV must follow the VBT reference layout (see `bg_protocol_helper.py`).  
-* For **AMU** each simulation directory must contain the files produced by the original AMU pipeline (`spike_times/*.npz`, `record_info/record_neurons.data`, `metrics/avg_firing_rates.csv`, etc.).
+## 2. Prerequisites
 
----
+| Requirement      | Details                                                                                                                                                                                                                                                                                                                                                                      |
+|------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Python**       | 3.9+ (the library is type‑annotated and tested on 3.9 – 3.12).                                                                                                                                                                                                                                                                                                               |
+| **Dependencies** | Install from `requirements.txt`.                                                                                                                                                                                                                                                                                                                                             |
+| **Input data**   | <ul><li>**AMU** – a root directory where each immediate sub‑folder is a separate simulation run containing `spike_times/*.npz`, `config.yaml`, `record_info/record_neurons.data`, …</li><li>**Basal‑Ganglia** – a *tab‑separated* CSV generated by the original Snudda pipeline; the CSV references per‑run stimulus JSON files and Snudda output‑spike HDF5 files.</li></ul> |
+| **Optional**     | `zstandard` Python package – enables ZSTD compression when creating the optional raw‑data ZIP archive (fallback to DEFLATE is automatic).                                                                                                                                                                                                                                    |
+
+---  
 
 <a name="add-as-submodule"></a>
-## 3. Add the repository as a submodule  
 
-If you already have a Git project that needs the converters, add it as a submodule:
+## 3. Add the repository as a sub‑module
+
+If you have an existing analysis repository, vendor the converter as a sub‑module:
 
 ```bash
 # Inside your main repository
 git submodule add https://gitlab.jsc.fz-juelich.de/virtualbraintwin/vbt-converter.git external/vbt-converter
-git submodule update --init --recursive   # fetch the submodule contents
+git submodule update --init --recursive   # fetch the sub‑module contents
 ```
 
-After the submodule is cloned you can call the scripts directly:
+After cloning you can execute the CLI scripts directly:
 
 ```bash
 python external/vbt-converter/converters/generic_converter/convert_any_to_hdf5.py …
 python external/vbt-converter/converters/generic_converter/convert_hdf5_to_format.py …
 ```
 
-*Tip*: keep the submodule on a stable tag/branch (e.g. `-b main`) and update it with `git submodule update --remote` when a new version is released.
+*Tip*: Pin the sub‑module to a stable tag/branch (e.g. `-b main`) and update with `git submodule update --remote` when a
+new version is released.
 
----
+---  
 
 <a name="installation"></a>
+
 ## 4. Installation (Python environment)
 
-From the submodule root:
+From the sub‑module root:
 
 ```bash
-# 1) Create a virtual environment (optional but recommended)
+# (optional) create a virtual environment
 python3 -m venv .venv
 source .venv/bin/activate
 
-# 2) Install the library dependencies
+# install the required packages
 pip install -r requirements.txt
 ```
 
-The `setup_environment.sh` script used by the CI performs the same steps automatically.
+The helper script `setup_environment.sh` (used by the CI) performs the same steps.
 
----
+---  
 
 <a name="workflow"></a>
-## 5. Typical workflow  
 
-The conversion is a **two‑step pipeline**:
+## 5. Typical workflow
 
-<a name="step1-build-master-hdf5"></a>
-### Step 1 – Build the master HDF5  
+The conversion is a **two‑stage pipeline**:
+
+<a name="step1-build-bundle"></a>
+
+### Step 1 – Build the master HDF5 bundle
 
 ```bash
-# AMU directory tree
-python converters/generic_converter/convert_any_to_hdf5.py \
-    -i /path/to/amu_root \
-    -o /tmp/master.h5 \
-    --protocol amu \
-    --log-level INFO
+# ---- AMU --------------------------------------------------------------
+python -m converters.generic_converter.convert_any_to_hdf5 \
+    -i /path/to/amu_root                \
+    -o /tmp/master.h5                    \
+    --protocol amu                       \
+    --log-level INFO                     # optional (DEBUG, INFO, …)
 
-# Basal‑Ganglia CSV + simulation root
-python converters/generic_converter/convert_any_to_hdf5.py \
-    -i /path/to/run_list.csv \
-    -o /tmp/master.h5 \
-    --protocol basal \
+# ---- Basal‑Ganglia ----------------------------------------------------
+python -m converters.generic_converter.convert_any_to_hdf5 \
+    -i /path/to/run_list.csv             \
+    -o /tmp/master.h5                    \
+    --protocol basal-ganglia             \
     --log-level INFO
 ```
 
-* `--no‑raw‑bundle` disables the optional zipped copy of the original data.  
-* `--log-level` can be `DEBUG`, `INFO`, …  
+* **`--protocol`** – either `amu` or `basal-ganglia` (exact strings used by the CLI).
+* **`--no-raw-bundle`** – disables the optional embedding of the original raw data as a ZIP archive (`raw_bundle.zip`).
+* The script creates the output directory if it does not exist, writes the attribute `format_version = "1.0"` to the
+  root, and builds the *StandardFormat* group (`/StandardFormat`) according to the new schema.
 
-The script creates the output directory if missing, writes a global attribute `format_version = "1.0"` and, for each discovered simulation, creates a `sim_<id>` group containing the various *sections* (see [bundle layout](#hdf5‑layout)).
+<a name="step2-export"></a>
 
-<a name="step2-export-protocol"></a>
-### Step 2 – Export the protocol‑specific artefacts  
+### Step 2 – Export a protocol‑specific artefact
 
 ```bash
-# Export AMU DS‑R .npz files
-python converters/generic_converter/convert_hdf5_to_format.py \
+# ---- AMU (produces a single compressed .npz in DS‑R format) ----------
+python -m converters.generic_converter.convert_hdf5_to_format \
     -i /tmp/master.h5 \
-    -o ./out_amu \
-    -b 0.001      # bin size (seconds) required by the AMU exporter
+    -o ./out_amu      \
+    -b 0.001          \   # bin size (seconds) – required by AMUExporter
     amu
 
-# Export Basal‑Ganglia per‑simulation .npz files
-python converters/generic_converter/convert_hdf5_to_format.py \
+# ---- Basal‑Ganglia (one .npz per simulation) -------------------------
+python -m converters.generic_converter.convert_hdf5_to_format \
     -i /tmp/master.h5 \
     -o ./out_bg \
     basal-ganglia
 ```
 
-The command line follows the conventional pattern:
+* The **protocol name** is the *sub‑command* (`amu` or `basal-ganglia`).
+* Protocol‑specific arguments are added automatically – e.g. `--bin-size` (`-b`) for the AMU exporter.
+* Output files are written into the directory given with `-o`.
+* A log file `<script_name>.log` is created in the directory defined by the environment variable `VBT_JOB_LOGS` (
+  default: the current working directory) and a copy of all messages is also sent to `stderr`.
 
-```
-convert_hdf5_to_format.py -i <master.h5> -o <out_dir> [--log-level <lvl>] <protocol>
-```
+---  
 
-The **protocol name** is the sub‑command (`amu` or `basal-ganglia`).  
-Additional protocol‑specific arguments are added automatically (e.g. `--bin-size` for AMU).
+<a name="bundle-layout"></a>
 
----
+## 6. HDF5 bundle layout (schema 1.0)
 
-<a name="hdf5-layout"></a>
-## 6. HDF5 bundle layout  
-
-The master file is a **flat collection of groups** – one per simulation – under the root.  
-All groups share the same *section* names, but the concrete layout depends on the protocol.
+The master file follows a **well‑defined hierarchy** that is versioned (`format_version = "1.0"`). All protocol‑specific
+data lives under the top‑level group **`StandardFormat`**; optional raw data and external‑dependency information are
+stored in separate groups.
 
 ```
 /
 ├─ format_version (attr) = "1.0"
-├─ sim_<id_1>/
-│   ├─ metadata/
-│   ├─ spike_trains/          (AMU)   OR   output_spikes/ (Basal)
-│   ├─ record_neurons/        (AMU only)
-│   ├─ metrics/               (AMU only)
-│   ├─ stimulus/              (both)
-│   ├─ logs/                  (Basal only)
-│   └─ raw_bundle/            (optional zip)
-└─ sim_<id_N>/ …
+├─ StandardFormat/
+│   ├─ Global/                ← global experiment metadata (attributes)
+│   └─ Simulations/
+│       ├─ Sim_<id_1>/        ← first simulation
+│       │   ├─ Parameters/    ← scalar key/value pairs (SimulationParameters)
+│       │   ├─ Stimuli/       ← StimulusSet (population‑wise piece‑wise constants)
+│       │   └─ OutputSpikes/  ← SpikeMap (Populations → Neurons → times/indices)
+│       ├─ Sim_<id_2>/ …
+│       └─ …
+├─ RawBundle/                 ← optional; contains a scalar dataset linking to raw_bundle.zip
+└─ ExternalDependencies/      ← optional; mapping dependency → version / URL (attributes)
 ```
 
-<a name="amu-layout"></a>
-### AMU protocol  
+### Common root structure
 
-| Section (group) | Content | HDF5 representation |
-|-----------------|---------|----------------------|
-| `metadata` | All scalar simulation parameters (e.g. `scale_num_neurons`, `t_sim`) | Attributes on the group |
-| `spike_trains` | One sub‑group per population (`L2/3E`, `L4PV`, …) containing `indices` (optional) and `times` datasets | `float64` (seconds) and `int64` (neuron ids) |
-| `record_neurons` | Mapping `label → int` (e.g. `n_cells`) | Structured dataset `record_neurons` with fields `label` (UTF‑8) and `value` (`int64`) |
-| `metrics` | Average firing rates per population (CSV in the reference pipeline) | Structured dataset `Avg Firing Rate Hz` (`label`, `value`) |
-| `stimulus` | Piece‑wise‑constant external stimulus | Attributes: `type = "piecewise_constant"`; Datasets `limits` (int ms) and `values` (float array) |
-| `raw_bundle` (optional) | Zip archive of the original simulation directory | Binary blob stored via `DataSection.store_external_path` (external HDF5 link if the target is HDF5). |
+| Path                                   | Meaning                                                                                                                                                                                                          |
+|----------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `/format_version`                      | String attribute – current schema version (`"1.0"`).                                                                                                                                                             |
+| `/StandardFormat/Global`               | Attributes holding free‑form global metadata (`experiment_info`, arbitrary key/value pairs).                                                                                                                     |
+| `/StandardFormat/Simulations/Sim_<id>` | One group per simulation. The `<id>` is taken from the source (CSV `sim_info_file` stem for Basal‑Ganglia, directory name for AMU).                                                                              |
+| `/RawBundle`                           | If `--no-raw-bundle` is **not** used, a scalar dataset `raw_bundle.zip` stores an :class:`~converters.schema.external_link.ExternalLink` that points to the zipped raw data archive (relative to the HDF5 file). |
+| `/ExternalDependencies`                | Optional mapping of external software dependencies (e.g. `numpy → "1.26.0"`).                                                                                                                                    |
 
-All datasets are **compressed** where appropriate (gzip → level 6).  
-The exporter (`AMUExporter`) reads the `metadata`, `spike_trains`, `record_neurons`, and `stimulus` sections to compute firing‑rate matrices, discretise the stimulus, normalise the data and finally write a single compressed NumPy archive named `amu.dsr.npz`.
+### AMU protocol specifics (`/StandardFormat/Simulations/Sim_<id>`)
 
-<a name="basal-ganglia-layout"></a>
-### Basal‑Ganglia protocol  
+| Sub‑group                                                                                                                                                                                         | Content                                                                                                                     | HDF5 representation                                                                                                                                                                                                                 |
+|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `Parameters`                                                                                                                                                                                      | All scalar simulation parameters – the three scaling factors plus any additional metadata (e.g. `t_sim`, `record_neurons`). | Stored as **attributes** on the group (`SimulationParameters`).                                                                                                                                                                     |
+| `Stimuli`                                                                                                                                                                                         | A *single* uniform stimulus (same for every population) – piece‑wise‑constant.                                              | One `PopulationStimulus` named `"default"` for each population; each contains a `Stimulus` (datasets `Limits`, `Values`, `MaxValue`).                                                                                               |
+| `OutputSpikes`                                                                                                                                                                                    | Spike trains for all populations defined in :data:`AMU_POPULATIONS`.                                                        | `SpikeMap → Population → Neuron → times` (datasets `times`). The optional `indices` dataset is present when the original NPZ included an `indices` array; otherwise a dummy neuron per spike is created during bundle construction. |
+| **Optional** `record_neurons` (binary payload) is stored as an attribute inside the `Parameters` group by the factory – later accessed through `SimulationParameters.kv_pairs["record_neurons"]`. |
 
-| Section (group) | Content | HDF5 representation |
-|-----------------|---------|----------------------|
-| `metadata` | Simulation meta‑data (network state, duration, DA level, …) | Attributes on the group |
-| `output_spikes` | Direct copy of the original Snudda `output_spikes.h5` file hierarchy (`/neurons/<gid>/spikes`, `/time`, `/meta_data/…`) | Copied *as‑is* using `h5py.Group.copy` (lazy, no data copy). |
-| `aux_files` | Three standard log files (`error.log`, `info.log`, `warning.log`) | Binary blobs (small files) or external links for larger files. |
-| `raw_bundle` (optional) | Zip archive of the whole simulation directory | Same mechanism as for AMU. |
+The **AMU exporter** (`AMUExporter`) reads the above sections, discretises spikes with the user‑provided bin size,
+discretises the stimulus, normalises firing‑rates, stimulus and parameters, and writes a **single compressed NumPy
+archive** named `amu.dsr.npz` (default output suffix `.npz`) with the keys required by the downstream DS‑R pipeline:
+
+```
+x          → normalised firing‑rate matrix (n_points, n_time_bins, n_populations)
+u          → normalised stimulus (n_points, n_time_bins, 1)
+theta      → normalised parameter matrix (n_points, n_params)
+names_x    → list of population names (AMU_POPULATIONS)
+names_theta→ list of short parameter names (["numneur", "synstr", "nmdaeff"])
+dt         → bin size (seconds)
+mu_x, sd_x → mean / std used for normalisation of x
+mu_u, sd_u → mean / std used for normalisation of u
+mu_theta, sd_theta → mean / std used for normalisation of theta
+```
+
+### Basal‑Ganglia protocol specifics (`/StandardFormat/Simulations/Sim_<id>`)
+
+| Sub‑group                                      | Content                                                                                          | HDF5 representation                                                                                                                                                                     |
+|------------------------------------------------|--------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `Parameters`                                   | Simulation meta‑data (network state, duration, DA level, input conductance, …).                  | Stored as attributes (string‑encoded or JSON‑encoded) in the `Parameters` group.                                                                                                        |
+| `Stimuli`                                      | Full stimulus definition – per‑population piece‑wise constant or generic sub‑stimuli.            | One `PopulationStimulus` per population; each sub‑stimulus stores a `Stimulus` (datasets `Limits`, `Values`, `MaxValue`) and any scalar attributes (e.g. generator type, cluster size). |
+| `OutputSpikes`                                 | Direct copy of the original Snudda spike‑output HDF5 hierarchy (`meta_data`, `time`, `neurons`). | The factory reads the classic Snudda layout and builds a `SpikeMap` comprised of `Population` and `Neuron` objects (datasets `times`).                                                  |
+| **Optional** `RawBundle` behaves like for AMU. |
+
+The **Basal‑Ganglia exporter** (`BasalGangliaExporter`) writes **one `.npz` per simulation** containing:
+
+- Will be extended further!
+* `metadata` – a JSON‑encoded string of all scalar meta‑data (attributes from `Parameters`).
+* `<pop>_times` – raw spike timestamps for each population.
+* `<pop>_indices` – optional neuron IDs (present only if the original data stored them).
+
+---  
+
+<a name="extending"></a>
+
+## 7. Extending the package (new protocol)
+
+Adding a new protocol is straightforward and does not require touching the existing code. Add a new factory and exporter, register them in the dictionaries `PROTOCOL_BUILDERS` and `PROTOCOL_EXPORTERS`, and the generic driver will automatically add a new sub‑command to the CLI.
+
+- Create a new factory that produces a :class:`~converters.schema.master_bundle.MasterBundle` from the raw data. Follow the pattern of `AMUFactory` or `BasalGangliaFactory`.
+- Register the factory in `PROTOCOL_BUILDERS` (see `protocol_registry.py`).
+
+Adding support for a new downstream format only requires a few well‑defined steps:
+
+1. **Create a subclass of** :class:`converters.exporters.protocol_exporter.ProtocolExporter`.
+    * Implement
+        * `extract_one_simulation(self, sim_id, sim_group)` → return a plain `dict` (or any structure) that contains the
+          data you need for the final artefact.
+        * `export_one_simulation(self, sim_id, sim_group)` → write the artefact to ``self.out_dir`` (use ``self.log``
+          for messaging).
+    * Optionally override ``protocol_name`` and ``output_suffix``.
+    * Add a ``@classmethod configure_parser(cls, parser)`` that declares any extra CLI arguments (e.g. `--threshold`).
+
+2. **Register the exporter** in `converters/generic_converter/convert_hdf5_to_format.py` by adding an entry to the
+   module‑level dictionary `PROTOCOL_EXPORTERS`:
+
+   ```python
+   from converters.exporters.my_new_exporter import MyNewExporter
+   PROTOCOL_EXPORTERS["my-protocol"] = MyNewExporter
+   ```
+
+3. **(Optional) Add a builder** if the new protocol also needs to be *created* from raw data.
+    * Implement a factory function that returns a :class:`~converters.schema.master_bundle.MasterBundle`.
+    * Expose it via a concrete subclass of :class:`converters.factory.protocol_registry.ProtocolBuilder` and add the
+      builder to `PROTOCOL_BUILDERS`.
+
+The generic driver automatically:
+
+* Adds a sub‑command with the name you used in `PROTOCOL_EXPORTERS`.
+* Injects only the arguments that the exporter’s ``__init__`` signature expects (so adding new CLI options never breaks
+  existing code).
+* Handles logging, input validation and HDF5 opening.
 
 ---
 
-<a name="extending"></a>
-## 7. Extending the exporter (new protocol)
+<a name="design-doc"></a>
 
-Adding a custom protocol is straightforward:
+## 8. Design Documentation
 
-1. **Create a subclass** of `converters/exporters/protocol_exporter.py.ProtocolExporter`.  
-2. Implement `extract_one_simulation` (logic that returns a dictionary of NumPy arrays) and `export_one_simulation` (writes the final artefact).  
-3. Register the class in `convert_hdf5_to_format.py` by adding a new entry to the `PROTOCOL_EXPORTERS` dictionary.  
-4. Optionally add a `configure_parser` class‑method to expose protocol‑specific CLI arguments.
-
-The generic driver automatically discovers the sub‑command name and forwards all non‑global arguments that match the exporter’s `__init__` signature.
-
+Take a look at the generated UML diagrams, data‑flow diagrams and sequence diagrams in `docs/` for a visual overview of the architecture, data flow and execution sequences.
+See [docs/Readme.md](docs/Readme.md) for more details.
 ---
 
 <a name="testing"></a>
-## 8. Running the test‑suite (optional)
 
-The repository ships a **pytest‑based integration test harness** that validates the whole CI pipeline (see `ci/template_repo/vbt_protocol_template_tests`).  
-To run it locally:
+## 9. Running the test‑suite (optional)
+
+The library includes a test‑suite (unit and integration) that can be run with `pytest`. The tests are located in `tests/` and cover the schema, factories, exporters and CLI scripts.
+The test can be run via GitLab CI/CD or locally. To run the tests locally, ensure you have `pytest` installed in your environment and execute:
 
 ```bash
-# Activate the venv where the requirements are installed
-source .venv/bin/activate
-
-# The test harness expects the environment variables used by the CI.
-export VBT_ENTRY_SCRIPT=$(pwd)/converters/generic_converter/convert_any_to_hdf5.py
-export VBT_ENTRY_ARGS="--protocol amu"
-export VBT_INPUT_PATH=/path/to/amu_root
-export VBT_OUTPUT_PATH=$(pwd)/tmp_out
-export VBT_RUN_TIMEOUT=300
-
-# Run the generic test suite
-pytest -s ci/template_repo/vbt_protocol_template_tests
+pytest tests/
 ```
 
-All artefacts are attached to an Allure report (`allure-results`) which can be generated locally with `allure serve allure-results`.
-
----
+---  
 
 <a name="license"></a>
-## 9. License & contributing  
 
-* To be decided.  
-* Contributions are welcome – please open a merge request against the `main` branch and ensure that the test suite passes (`pytest`).  
+## 10. License & contributing
 
----
+*The license is still to be decided.*  
+Contributions are welcome:
+
+* Fork the repository.
+* Create a feature branch.
+* Ensure the test suite passes (`pytest`).
+* Open a merge request against the `main` branch.
+
+---  
+
+*Enjoy converting your VBT simulation data!*

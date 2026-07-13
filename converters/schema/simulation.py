@@ -83,11 +83,11 @@ class Simulation(HDF5Serializable):
         self.parameters.to_hdf5(param_grp)
 
         # ---- stimulus ---------------------------------------------------
-        stim_grp = make_group(sim_grp, "Stimulus")
+        stim_grp = make_group(sim_grp, "Stimuli")
         self.stimulus.to_hdf5(stim_grp)
 
         # ---- output spikes ----------------------------------------------
-        spike_grp = make_group(sim_grp, "OutputSpike")
+        spike_grp = make_group(sim_grp, "OutputSpikes")
         self.output_spike.to_hdf5(spike_grp)
 
     @classmethod
@@ -96,7 +96,7 @@ class Simulation(HDF5Serializable):
 
         The supplied group must correspond to a ``Sim_<id>`` group created by
         :meth:`to_hdf5`.  The method extracts the simulation identifier from the
-        group name and loads the ``Parameters``, ``Stimulus`` and ``OutputSpike``
+        group name and loads the ``Parameters``, ``Stimuli`` and ``OutputSpikes``
         sub‑groups using their respective ``from_hdf5`` constructors.
 
         Parameters
@@ -112,8 +112,8 @@ class Simulation(HDF5Serializable):
         Raises
         ------
         KeyError
-            If any of the expected sub‑groups (``parameters``, ``Stimulus``,
-            ``OutputSpike``) are missing.
+            If any of the expected sub‑groups (``parameters``, ``Stimuli``,
+            ``OutputSpikes``) are missing.
         TypeError
             If ``grp`` is not an instance of :class:`h5py.Group`.
         ValueError
@@ -126,7 +126,7 @@ class Simulation(HDF5Serializable):
         if not sim_id:
             raise ValueError("Simulation group name does not contain an identifier.")
 
-        params = SimulationParameters.from_hdf5(grp["parameters"])
-        stim = StimulusSet.from_hdf5(grp["Stimulus"])
-        spikes = SpikeMap.from_hdf5(grp["OutputSpike"])
+        params = SimulationParameters.from_hdf5(grp["Parameters"])
+        stim = StimulusSet.from_hdf5(grp["Stimuli"])
+        spikes = SpikeMap.from_hdf5(grp["OutputSpikes"])
         return cls(simulation_id=sim_id, parameters=params, stimulus=stim, output_spike=spikes)

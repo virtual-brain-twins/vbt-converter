@@ -1,0 +1,155 @@
+<html>
+  <body>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+      <div class="mermaid">
+    
+        classDiagram
+          class converters {
+          }
+          class exporters {
+          }
+          class amu_exporter {
+          }
+          class basal_ganglia_exporter {
+          }
+          class protocol_exporter {
+          }
+          class factory {
+          }
+          class amu_factory {
+          }
+          class basal_ganglia_factory {
+          }
+          class protocol_registry {
+          }
+          class generic_converter {
+          }
+          class convert_any_to_hdf5 {
+          }
+          class convert_hdf5_to_format {
+          }
+          class schema {
+          }
+          class external_dependencies_group {
+          }
+          class external_link {
+          }
+          class global_section {
+          }
+          class hdf5_serializable {
+          }
+          class master_bundle {
+          }
+          class neuron {
+          }
+          class population {
+          }
+          class population_stimulus {
+          }
+          class raw_bundle_group {
+          }
+          class simulation {
+          }
+          class simulation_parameters {
+          }
+          class spike_map {
+          }
+          class standard_format_group {
+          }
+          class stimulus {
+          }
+          class stimulus_set {
+          }
+          class utils {
+          }
+          class bg_protocol_helper {
+          }
+          class common {
+          }
+          class data_section_helper {
+          }
+          class dataset_helpers {
+          }
+          class helpers {
+          }
+          class zip_helper {
+          }
+          amu_exporter --> protocol_exporter
+          basal_ganglia_exporter --> protocol_exporter
+          protocol_exporter --> common
+          amu_factory --> external_dependencies_group
+          amu_factory --> global_section
+          amu_factory --> master_bundle
+          amu_factory --> neuron
+          amu_factory --> population
+          amu_factory --> population_stimulus
+          amu_factory --> raw_bundle_group
+          amu_factory --> simulation
+          amu_factory --> simulation_parameters
+          amu_factory --> spike_map
+          amu_factory --> standard_format_group
+          amu_factory --> stimulus
+          amu_factory --> stimulus_set
+          amu_factory --> helpers
+          basal_ganglia_factory --> external_dependencies_group
+          basal_ganglia_factory --> global_section
+          basal_ganglia_factory --> master_bundle
+          basal_ganglia_factory --> neuron
+          basal_ganglia_factory --> population
+          basal_ganglia_factory --> population_stimulus
+          basal_ganglia_factory --> raw_bundle_group
+          basal_ganglia_factory --> simulation
+          basal_ganglia_factory --> simulation_parameters
+          basal_ganglia_factory --> spike_map
+          basal_ganglia_factory --> standard_format_group
+          basal_ganglia_factory --> stimulus
+          basal_ganglia_factory --> stimulus_set
+          basal_ganglia_factory --> bg_protocol_helper
+          protocol_registry --> amu_factory
+          protocol_registry --> basal_ganglia_factory
+          protocol_registry --> master_bundle
+          convert_any_to_hdf5 --> protocol_registry
+          convert_any_to_hdf5 --> common
+          convert_hdf5_to_format --> amu_exporter
+          convert_hdf5_to_format --> basal_ganglia_exporter
+          convert_hdf5_to_format --> protocol_exporter
+          convert_hdf5_to_format --> common
+          external_dependencies_group --> hdf5_serializable
+          external_dependencies_group --> dataset_helpers
+          global_section --> hdf5_serializable
+          global_section --> dataset_helpers
+          master_bundle --> external_dependencies_group
+          master_bundle --> hdf5_serializable
+          master_bundle --> raw_bundle_group
+          master_bundle --> standard_format_group
+          neuron --> hdf5_serializable
+          neuron --> dataset_helpers
+          population --> hdf5_serializable
+          population --> neuron
+          population --> dataset_helpers
+          population_stimulus --> stimulus
+          raw_bundle_group --> external_link
+          raw_bundle_group --> hdf5_serializable
+          raw_bundle_group --> dataset_helpers
+          simulation --> hdf5_serializable
+          simulation --> simulation_parameters
+          simulation --> spike_map
+          simulation --> stimulus_set
+          simulation --> dataset_helpers
+          simulation_parameters --> hdf5_serializable
+          spike_map --> hdf5_serializable
+          spike_map --> population
+          spike_map --> dataset_helpers
+          standard_format_group --> global_section
+          standard_format_group --> hdf5_serializable
+          standard_format_group --> simulation
+          standard_format_group --> dataset_helpers
+          stimulus --> hdf5_serializable
+          stimulus --> dataset_helpers
+          stimulus_set --> hdf5_serializable
+          stimulus_set --> population_stimulus
+          helpers --> stimulus_set
+  
+       </div>
+  </body>
+</html>

@@ -1,0 +1,79 @@
+@startuml
+title vbt‑converter – Component Overview
+
+package "CLI Layer" {
+  [convert_any_to_hdf5.py] as C1
+  [convert_hdf5_to_format.py] as C2
+}
+
+package "Factory & Registry" {
+  [Protocol Registry] as REG
+  [AMUBuilder] as B1
+  [BasalGangliaBuilder] as B2
+  [amu_factory] as F1
+  [basal_ganglia_factory] as F2
+}
+
+package "Schema (HDF5 Model)" {
+  [MasterBundle] as MB
+  [StandardFormatGroup] as SF
+  [Simulation] as SIM
+  [SpikeMap] as SM
+  [Population] as POP
+  [Neuron] as N
+  [StimulusSet] as STSET
+  [PopulationStimulus] as POPSTIM
+  [Stimulus] as STIM
+  [RawBundleGroup] as RAWGRP
+  [ExternalLink] as EXTLINK
+}
+
+package "Exporters" {
+  [ProtocolExporter] as PEXP
+  [AMUExporter] as AMUEXP
+  [BasalGangliaExporter] as BGEXP
+}
+
+package "Utilities" {
+  [helpers] as HL
+  [zip_helper] as ZIP
+  [dataset_helpers] as DH
+  [common (logging)] as LOG
+}
+
+C1 --> REG : lookup builder
+C2 --> REG : lookup exporter
+
+REG --> B1 : selects AMUBuilder
+B1 --> F1 : call build_amu_master_bundle()
+REG --> B2 : selects BasalGangliaBuilder
+B2 --> F2 : call build_bg_master_bundle()
+
+F1 --> MB : creates MasterBundle
+F2 --> MB : creates MasterBundle
+
+F1 --> ZIP : optional zip_directory()
+F2 --> ZIP : optional zip_directory()
+
+MB --> SF : contains
+MB --> RAWGRP : optional
+RAWGRP --> EXTLINK : attaches external link
+
+SF --> SIM : many
+SIM --> SM : OutputSpike
+SIM --> STSET : Stimulus
+SIM --> POP : via SpikeMap (populations)
+POP --> N : neurons
+
+C2 --> PEXP : subclass selection (sub‑parser)
+
+PEXP <|-- AMUEXP
+PEXP <|-- BGEXP
+
+AMUEXP --> HL : get_firing_rates, normalize, …
+BGEXP --> HL : (none, just copy)
+
+C1 --> LOG
+C2 --> LOG
+
+@enduml

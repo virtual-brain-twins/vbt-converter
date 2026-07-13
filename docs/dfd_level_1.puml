@@ -1,0 +1,49 @@
+@startuml
+' -------------------------------------------------
+' Styling (optional)
+skinparam backgroundColor #FEFEFE
+skinparam handwritten true
+
+' -------------------------------------------------
+' Title
+title vbt-converter - Detailed Data‑Flow (Level‑1)
+
+' -------------------------------------------------
+' Actors
+actor User
+
+' -------------------------------------------------
+' Main blocks (using the native element names)
+rectangle "CLI (argparse + logging)\nconvert_any_to_hdf5.py" as CLI
+rectangle "Protocol Builder Registry\n(PROTOCOL_BUILDERS)" as REG
+rectangle "AMUBuilder / BasalGangliaBuilder" as BUILDER
+rectangle "Factory Functions\namu_factory / basal_ganglia_factory" as FACTORY
+rectangle "Schema Objects\nMasterBundle, StandardFormatGroup, …" as SCHEMA
+rectangle "ZIP Helper\nzip_directory()" as ZIP
+
+' -------------------------------------------------
+' Data stores (using 'package' which looks like a folder)
+package "Raw Input\n(Dir / CSV)" as RAW
+package "Master HDF5 file\nbundle.h5" as H5
+package "Optional raw‑bundle.zip\n(embedded link)" as ZIPFILE
+
+' -------------------------------------------------
+' Data‑flow arrows
+User   --> CLI      : request conversion
+CLI    --> RAW      : read input path
+CLI    --> REG      : lookup builder (args.protocol)
+REG    --> BUILDER  : instantiate
+BUILDER --> FACTORY : call build_*_master_bundle(...)
+FACTORY --> RAW     : open files (npz, yaml, h5, json, …)
+FACTORY --> SCHEMA  : create objects (Simulation, SpikeMap, StimulusSet,…)
+FACTORY --> ZIP     : (optional) zip raw directory
+ZIP    --> ZIPFILE  : create archive
+FACTORY --> SCHEMA  : assemble MasterBundle
+
+SCHEMA --> H5       : MasterBundle.to_hdf5()
+H5     --> ZIPFILE  : external‑link stored (RawBundleGroup)
+
+CLI    --> H5       : write file
+CLI    --> User     : "Finished – master file written"
+
+@enduml

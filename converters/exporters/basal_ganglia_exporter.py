@@ -29,11 +29,12 @@ class BasalGangliaExporter(ProtocolExporter):
         For the Basal‑Ganglia protocol we keep the *raw* per‑population
         (indices, times) arrays exactly as they appear in the new schema.
         """
+        ## TODO: This is a template implementation and needs to be adapted in the near future.
         # ---- metadata -------------------------------------------------
-        meta = SimulationParameters.from_hdf5(sim_group["parameters"]).kv_pairs
+        meta = SimulationParameters.from_hdf5(sim_group["Parameters"]).kv_pairs
 
         # ---- spikes ----------------------------------------------------
-        spike_map = SpikeMap.from_hdf5(sim_group["OutputSpike"])
+        spike_map = SpikeMap.from_hdf5(sim_group["OutputSpikes"])
         # Convert back to the legacy ``{pop: (indices, times)}`` format that the
         # downstream analysis expects.
         spikes: dict[str, tuple[np.ndarray | None, np.ndarray]] = {}

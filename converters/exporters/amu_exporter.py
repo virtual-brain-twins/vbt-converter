@@ -152,11 +152,11 @@ class AMUExporter(ProtocolExporter):
         )
 
         # ---- stimulus ---------------------------------------------------
-        stimulus_set = StimulusSet.from_hdf5(sim_group["Stimulus"])
+        stimulus_set = StimulusSet.from_hdf5(sim_group["Stimuli"])
         disc_stim = get_discretized_stimulus(stimulus_set, self.bin_size)
 
         # ---- spikes ------------------------------------------------------
-        spike_map = SpikeMap.from_hdf5(sim_group["OutputSpike"])
+        spike_map = SpikeMap.from_hdf5(sim_group["OutputSpikes"])
         # Build the ``pop → {times, indices}`` dict expected by the utils.
         spikes: dict = {}
         neurons_count: dict = param_section.kv_pairs.get("record_neurons", {})

@@ -201,8 +201,14 @@ vbt_cleanup_job:
     # Prepare the local destination folder (mkdir -p is idempotent)
     - |
       echo "▶ Ensuring local destination folder exists: ${LOCAL_DEST_PATH}"
-      mkdir -p "${LOCAL_DEST_PATH}"
-
+      if   [ -d "${LOCAL_DEST_PATH}" ]; then          # existing directory
+          dir="${LOCAL_DEST_PATH}"
+      else                                            # file or non‑existent path
+          dir="$(dirname "${LOCAL_DEST_PATH}")"
+      fi
+      
+      # Finally, create the directory
+      mkdir -p "${dir}"
     # Pull from MinIO (recursive works also for a single object)
     - |
       echo "▶ Copying from MinIO …"

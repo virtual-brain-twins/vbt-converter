@@ -1,11 +1,8 @@
 # vbt‑converter
 
-**Virtual‑Brain‑Twin (VBT) data‑conversion utilities** – a lightweight Python library that
-
-* collects the results of many neural‑network simulations into a **single master HDF5 bundle** (new schema version 1.0)
-  and
-* exports that bundle to the protocol‑specific formats required by downstream analysis pipelines (currently **AMU** and
-  **Basal‑Ganglia**).
+**Virtual‑Brain‑Twin (VBT) data‑conversion utilities** – This is a framework that reads the raw protocol results,
+potential consisting out of multiple individual simulations, and converts it into a standardized format. As standard
+that can then be processed by downstream analysis pipelines.
 
 The library is pure‑Python, depends only on a small scientific stack, and is organized as a reusable package that can be
 vendored as a Git sub‑module.
@@ -314,8 +311,11 @@ Set the following CI variables when you trigger the job:
 
 ### What the job does? (Example case: AMU protocol)
 
-The job copies the object located at https://vbt-minio.fz-juelich.de/console/browser/ci-temp-cache/$MINIO_SRC_PATH to the local cache location defined by `LOCAL_DEST_DIR`.  
-When the job finishes successfully, the ground‑truth file in the cache (`tests/test_data/ground_truth/test_convert_output.h5`) is refreshed, and subsequent integration tests will use the updated data.
+The job copies the object located at https://vbt-minio.fz-juelich.de/console/browser/ci-temp-cache/$MINIO_SRC_PATH to
+the local cache location defined by `LOCAL_DEST_DIR`. When the job finishes successfully, the ground‑truth file in the
+cache (`tests/test_data/ground_truth/test_convert_output.h5`) is refreshed, and subsequent integration tests will use
+the
+updated data.
 
 ### How to run it
 

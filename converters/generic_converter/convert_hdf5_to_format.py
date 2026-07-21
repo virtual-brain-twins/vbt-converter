@@ -28,6 +28,7 @@ from converters.exporters.amu_exporter import AMUExporter
 from converters.exporters.basal_ganglia_exporter import BasalGangliaExporter
 from converters.exporters.protocol_exporter import ProtocolExporter
 from converters.utils.common import configure_logging
+from converters.utils.validation import validate_master_bundle
 
 PROTOCOL_EXPORTERS: Dict[str, Type[ProtocolExporter]] = {
     "amu": AMUExporter,
@@ -75,6 +76,12 @@ def _build_main_parser() -> argparse.ArgumentParser:
         default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
         help="Verbosity of the conversion process.",
+    )
+    parser.add_argument(
+        "-s",
+        "--strict",
+        action="store_true",
+        help="Enable strict validation of the master bundle.",
     )
 
     # Sub‑parsers – one per protocol.  The *dest* argument stores the name
@@ -152,12 +159,14 @@ def main(argv: list[str] | None = None) -> None:
     allowed = {p.name for p in sig.parameters.values() if p.name != "self"}
 
     for key, value in vars(args).items():
-        if key in {"input", "output_dir", "log_level", "protocol"}:
+        if key in {"input", "output_dir", "log_level", "protocol", "strict"}:
             continue
         if key in allowed:
             exporter_kwargs[key] = value
 
     # Open the master HDF5 file and run the exporter
+    validate_master_bundle(bundle_path=master_path,
+                           strict=args.strict)  # raises ValueError if the file is not a valid bundle
     with h5py.File(master_path, "r") as master_h5:
         exporter_kwargs["master_h5"] = master_h5  # replace placeholder
         exporter = exporter_cls(**exporter_kwargs)

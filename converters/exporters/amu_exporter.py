@@ -25,15 +25,17 @@ from __future__ import annotations
 import argparse
 import logging
 from pathlib import Path
+from typing import Any
 
 import h5py
 import numpy as np
+from numpy import dtype, ndarray
 
 from .protocol_exporter import ProtocolExporter
 from ..schema.simulation_parameters import SimulationParameters
 from ..schema.spike_map import SpikeMap
 from ..schema.stimulus_set import StimulusSet
-from ..utils.helpers import normalize, AMU_POPULATIONS, get_discretized_stimulus, get_firing_rates
+from ..utils.helpers import normalize, get_discretized_stimulus, get_firing_rates
 
 # Fixed definitions – they must stay identical to the reference script
 PARAMETERS = ["scale_num_neurons", "scale_syn_strength", "scale_nmda_efficacy"]
@@ -104,6 +106,7 @@ class AMUExporter(ProtocolExporter):
         r = []
         u = []
         theta = []
+        unique_populations = set()
         for sim_grp in sim_groups:
             sim_id = sim_grp.name.split("/", 1)[-1].replace("Sim_", "")
             try:
@@ -111,6 +114,7 @@ class AMUExporter(ProtocolExporter):
                 r.append(result["firing_rate"].T)
                 u.append(result["stimulus"][:, None])
                 theta.append(result["param_values"])
+                unique_populations.update(result["populations"])
             except Exception as exc:  # pragma: no cover – defensive
                 self.log.exception("Failed to export simulation %s: %s", sim_id, exc)
         r = np.array(r)  # shape: (npoints, nt, nvar)
@@ -127,7 +131,7 @@ class AMUExporter(ProtocolExporter):
             x=r_norm,
             u=u_norm,
             theta=theta_norm,
-            names_x=AMU_POPULATIONS,
+            names_x=list(unique_populations),
             names_theta=PARAMETERS_SHORT,
             dt=self.bin_size,
             mu_x=mu_r,
@@ -140,7 +144,8 @@ class AMUExporter(ProtocolExporter):
         self.log.info("Saved DS-R .npz file for simulation: %s", out_path)
 
     # Core conversion per simulation
-    def extract_one_simulation(self, sim_id: str, sim_group: h5py.Group) -> dict[str, np.ndarray]:
+    def extract_one_simulation(self, sim_id: str, sim_group: h5py.Group) -> dict[
+        str, ndarray[tuple[Any, ...], dtype[Any]] | list[str]]:
         """
         The *sim_group* is now a ``Sim_<id>`` group that follows the new schema.
         """
@@ -160,6 +165,7 @@ class AMUExporter(ProtocolExporter):
         # Build the ``pop → {times, indices}`` dict expected by the utils.
         spikes: dict = {}
         neurons_count: dict = param_section.kv_pairs.get("record_neurons", {})
+        populations = [pop.population_name for pop in spike_map.populations]
         for pop in spike_map.populations:
             # Concatenate all neuron spike‑times for this population.
             all_times = np.concatenate([n.times for n in pop.neurons]) if pop.neurons else np.empty(0)
@@ -178,6 +184,7 @@ class AMUExporter(ProtocolExporter):
             t0=t0,
             t1=t1,
             nneurons=neurons_count,
+            populations=populations
         )
 
         self.log.info(
@@ -191,4 +198,5 @@ class AMUExporter(ProtocolExporter):
             "firing_rate": firing_rate,
             "stimulus": disc_stim,
             "param_values": param_vals,
+            "populations": populations,
         }

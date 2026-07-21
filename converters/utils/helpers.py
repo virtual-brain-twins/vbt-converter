@@ -115,10 +115,11 @@ def get_firing_rates(
         t0: float,
         t1: float,
         nneurons: dict[str, int],
+        populations: list[str]
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Compute population‑wise firing‑rate matrices.
 
-    For each population listed in ``AMU_POPULATIONS`` the function bins spike
+    For each population listed in ``populations`` the function bins spike
     timestamps into uniform windows of width ``dt`` seconds, normalises by the
     number of recorded cells, and scales by the bin width to obtain rates in Hz.
 
@@ -132,11 +133,12 @@ def get_firing_rates(
         nneurons: Mapping from population name to the number of recorded cells.
             Populations missing from this dictionary are assumed to contain a
             single cell.
+        populations: List of population names to include in the output.
 
     Returns:
         A tuple ``(t_mid, rates)`` where ``t_mid`` is a 1‑D array of the bin centre
         times (shape ``(nbins,)``) and ``rates`` is a 2‑D array of shape
-        ``(len(AMU_POPULATIONS), nbins)`` containing firing rates (Hz) for each
+        ``(len(populations), nbins)`` containing firing rates (Hz) for each
         population.
 
     Raises:
@@ -149,9 +151,9 @@ def get_firing_rates(
 
     nbins = round((t1 - t0) / dt)
     t_edges = np.linspace(t0, t1, nbins + 1)
-    rates = np.zeros((len(AMU_POPULATIONS), nbins), dtype=float)
+    rates = np.zeros((len(populations), nbins), dtype=float)
 
-    for i, pop in enumerate(AMU_POPULATIONS):
+    for i, pop in enumerate(populations):
         if pop not in spikes:
             continue
         times = spikes[pop]["times"]

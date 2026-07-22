@@ -23,15 +23,6 @@ import numpy as np
 
 from converters.schema.stimulus_set import StimulusSet
 
-AMU_POPULATIONS = [
-    "L1VIP",
-    "L23E", "L23PV", "L23SST", "L23VIP",
-    "L4E", "L4PV", "L4SST", "L4VIP",
-    "L5E", "L5PV", "L5SST", "L5VIP",
-    "L6E", "L6PV", "L6SST", "L6VIP",
-]
-
-
 def interpolate_constant(
         x: np.ndarray,
         xp: np.ndarray,

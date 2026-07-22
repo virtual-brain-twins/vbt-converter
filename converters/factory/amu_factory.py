@@ -40,7 +40,6 @@ from converters.schema.spike_map import SpikeMap
 from converters.schema.standard_format_group import StandardFormatGroup
 from converters.schema.stimulus import Stimulus
 from converters.schema.stimulus_set import StimulusSet
-from converters.utils.helpers import AMU_POPULATIONS
 
 log = logging.getLogger(__name__)
 
@@ -162,7 +161,7 @@ def build_amu_master_bundle(
         spike_map = SpikeMap(populations=populations)
 
         # ---- stimulus (piecewise‑constant) ----------------------------------------
-        stimulus_set = _parse_stimulus_set(cfg, run_dir)
+        stimulus_set = _parse_stimulus_set(cfg, run_dir, [pop.population_name for pop in spike_map.populations])
 
         sim = Simulation(
             simulation_id=run_dir.name,
@@ -184,25 +183,25 @@ def build_amu_master_bundle(
     return MasterBundle(standard=std_fmt, raw=raw_bundle, deps=deps)
 
 
-def _parse_stimulus_set(cfg: dict[Any, Any] | Any, run_dir: Path) -> StimulusSet:
+def _parse_stimulus_set(cfg: dict[Any, Any] | Any, run_dir: Path, populations: List[str]) -> StimulusSet:
     """Parse piecewise‑constant stimulus files and build a :class:`StimulusSet`.
 
     The function looks for files matching the pattern ``random_input_<N>ms.npz``
     within ``run_dir``.  Each file contributes one segment to the stimulus: the
     upper limit (``N`` ms) and the waveform stored under the key ``'arr_0'``.
     The final segment extends to the total simulation time defined by
-    ``cfg['t_sim']`` (default ``1000`` ms).
+    ``cfg['t_sim']`` (default ``1000``ms).
 
     Args:
         cfg: The configuration dictionary loaded from ``config.yaml`` (or an
             empty dictionary if the file is missing).  Only the key ``'t_sim'``
             is consulted.
         run_dir: Path to the directory that holds the current simulation run.
-
+        populations: A list of population names for which to create stimulus data.
     Returns:
         A :class:`~converters.schema.stimulus_set.StimulusSet` containing a
         :class:`~converters.schema.population_stimulus.PopulationStimulus` for
-        each population listed in :data:`AMU_POPULATIONS`.
+        each population listed in :data:`populations`.
 
     Raises:
         FileNotFoundError: If a matching ``*.npz`` stimulus file is expected but
@@ -236,7 +235,7 @@ def _parse_stimulus_set(cfg: dict[Any, Any] | Any, run_dir: Path) -> StimulusSet
                 },
                 sub_attrs={},
             )
-            for pop in AMU_POPULATIONS
+            for pop in populations
         ]
     )
     return stimulus_set

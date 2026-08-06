@@ -71,11 +71,9 @@ def main() -> None:
                         help="Do NOT embed the zipped original directory.")
     parser.add_argument("--protocol-version",
                         default="1.0.0",
-                        action="store_true",
                         help="The protocol version which shall be incorporated.")
     parser.add_argument("--protocol-info-path",
                         default="{{input}}/protocol_info.pdf",
-                        action="store_true",
                         help="The PDF file containing the protocol information shall be incorporated. If it is not provided, the file is expected to be located in the input folder.")
     parser.add_argument(
         "--log-level",

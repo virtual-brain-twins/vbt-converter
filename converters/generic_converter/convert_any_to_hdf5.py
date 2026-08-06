@@ -18,9 +18,9 @@ Typical invocation
 ------------------
 
     python convert_any_to_hdf5.py -i /path/to/input -o /path/to/master.h5 \\
-        --protocol amu [--no-raw-bundle] [--log-level INFO]
+        --protocol amu [--no-raw-bundle] [--log-level INFO] [--protocol-version 1.0.0] [--protocol-info-path /path/to/protocol_info.pdf]
     python convert_any_to_hdf5.py -i /path/to/input/run_list.csv -o /path/to/master.h5 \\
-        --protocol basal [--no-raw-bundle] [--log-level INFO]
+        --protocol basal [--no-raw-bundle] [--log-level INFO] [--protocol-version 1.0.0] [--protocol-info-path /path/to/protocol_info.pdf]
 
 Arguments
 ---------
@@ -30,6 +30,8 @@ Arguments
 * ``--protocol``      – Either ``basal`` or ``amu`` to select the appropriate parser.
 * ``--no-raw-bundle`` – Skip embedding the zipped original data.
 * ``--log-level``     – Logging verbosity (default ``INFO``).
+* ``--protocol-version`` – The protocol version to be incorporated.
+* ``--protocol-info-path`` – The path to the PDF file containing the protocol information.
 
 The script creates the output directory if needed, writes a ``format_version`` attribute
 to the HDF5 root, and logs progress and errors to STDERR.
@@ -43,6 +45,7 @@ from pathlib import Path
 
 from converters.factory.protocol_registry import PROTOCOL_BUILDERS
 from converters.utils.common import configure_logging
+from converters.utils.zip_helper import zip_directory
 
 logger = configure_logging(
     __name__,
@@ -63,7 +66,17 @@ def main() -> None:
         required=True,
         help="Which protocol to interpret the input as.",
     )
-    parser.add_argument("--no-raw-bundle", action="store_true", help="Do NOT embed the zipped original directory.")
+    parser.add_argument("--no-raw-bundle",
+                        action="store_true",
+                        help="Do NOT embed the zipped original directory.")
+    parser.add_argument("--protocol-version",
+                        default="1.0.0",
+                        action="store_true",
+                        help="The protocol version which shall be incorporated.")
+    parser.add_argument("--protocol-info-path",
+                        default="{{input}}/protocol_info.pdf",
+                        action="store_true",
+                        help="The PDF file containing the protocol information shall be incorporated. If it is not provided, the file is expected to be located in the input folder.")
     parser.add_argument(
         "--log-level",
         default="INFO",
@@ -82,8 +95,14 @@ def main() -> None:
     out_path = Path(args.output).expanduser().resolve()
     out_dir = out_path if out_path.is_dir() else out_path.parent
     raw_zip = out_dir / f"raw_data.zip"
-    # if not args.no_raw_bundle:
-    #     zip_directory(src_root=input_path if input_path.is_dir() else input_path.parent, dst_zip=raw_zip)
+    proto_path = (
+        args.protocol_info_path.replace("{{input}}", str(input_path), 1)
+        if args.protocol_info_path.startswith("{{input}}")
+        else args.protocol_info_path
+    )
+    protocol_info_path = Path(proto_path).expanduser().resolve()
+    if not args.no_raw_bundle:
+        zip_directory(src_root=input_path if input_path.is_dir() else input_path.parent, dst_zip=raw_zip)
     try:
         builder = PROTOCOL_BUILDERS[args.protocol]  # KeyError → unknown protocol (should never happen)
     except KeyError:
@@ -91,10 +110,12 @@ def main() -> None:
         sys.exit(1)
 
     master = builder(
-        input_path,
+        input_path=input_path,
         embed_raw=not args.no_raw_bundle,
-        embed_raw_path=raw_zip.relative_to(out_dir),
+        embed_raw_path=raw_zip,
         output_dir=out_dir,
+        protocol_version=args.protocol_version,
+        protocol_info_path=protocol_info_path
     )
 
     # Write the file

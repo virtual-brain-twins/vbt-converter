@@ -7,8 +7,8 @@ the three main components produced by ``convert_any_to_hdf5``:
   scientific data in the standard format;
 * :class:`~converters.schema.raw_bundle_group.RawBundleGroup` – the original
   input data packaged as a zip archive (optional);
-* :class:`~converters.schema.external_dependencies_group.ExternalDependenciesGrp`
-  – optional version‑tracking information for external dependencies.
+* :class:`~converters.schema.protocol_group.ProtocolGroup` – optional protocol
+  information packaged as a PDF or other binary document.
 
 The bundle can be written to or read from an HDF5 file that follows schema
 version ``1.0``.
@@ -19,8 +19,8 @@ from pathlib import Path
 
 import h5py
 
-from converters.schema.external_dependencies_group import ExternalDependenciesGrp
 from converters.schema.hdf5_serializable import HDF5Serializable
+from converters.schema.protocol_group import ProtocolGroup
 from converters.schema.raw_bundle_group import RawBundleGroup
 from converters.schema.standard_format_group import StandardFormatGroup
 
@@ -35,13 +35,13 @@ class MasterBundle(HDF5Serializable):
         The scientific data formatted according to the standard schema.
     raw : RawBundleGroup | None
         Optional raw input data packaged as a zip archive.
-    deps : ExternalDependenciesGrp | None
-        Optional information about external dependencies and their versions.
+    protocol : ProtocolGroup | None
+        Optional protocol information packaged as a PDF or other binary document.
     """
 
     standard: StandardFormatGroup = field(default_factory=StandardFormatGroup)
-    raw: RawBundleGroup | None = None
-    deps: ExternalDependenciesGrp | None = None
+    protocol: ProtocolGroup | None = field(default_factory=ProtocolGroup)
+    raw: RawBundleGroup | None = field(default_factory=RawBundleGroup)
 
     def to_hdf5(self, out_path: Path) -> None:
         """Write the bundle to an HDF5 file.
@@ -69,8 +69,8 @@ class MasterBundle(HDF5Serializable):
             self.standard.to_hdf5(hf)
             if self.raw:
                 self.raw.to_hdf5(hf)
-            if self.deps:
-                self.deps.to_hdf5(hf)
+            if self.protocol:
+                self.protocol.to_hdf5(hf)
 
     @classmethod
     def from_hdf5(cls, in_path: Path) -> "MasterBundle":
@@ -102,5 +102,5 @@ class MasterBundle(HDF5Serializable):
         with h5py.File(in_path, "r") as hf:
             std = StandardFormatGroup.from_hdf5(hf)
             raw = RawBundleGroup.from_hdf5(hf) if "RawBundle" in hf else None
-            deps = ExternalDependenciesGrp.from_hdf5(hf) if "ExternalDependencies" in hf else None
-            return cls(standard=std, raw=raw, deps=deps)
+            proto = ProtocolGroup.from_hdf5(hf) if "Protocol" in hf else None
+            return cls(standard=std, raw=raw, protocol=proto)

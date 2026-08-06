@@ -1,7 +1,7 @@
 """Utility for creating ZIP archives of directory trees.
 
 This module selects an appropriate compression method at import time:
-* If the running interpreter supports Zstandard (Python ≥ 3.14) **and**
+* If the running interpreter supports Zstandard (Python ≥ 3.14) **and**
   the optional ``zstandard`` library is importable, ZSTD compression is used
   with a default level of 15.
 * Otherwise DEFLATE compression (the classic ZIP format) is used with a

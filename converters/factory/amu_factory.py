@@ -22,26 +22,31 @@ from __future__ import annotations
 import logging
 import re
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Tuple, Optional
 
 import numpy as np
 import yaml
 
-from converters.schema.external_dependencies_group import ExternalDependenciesGrp
+from converters.schema.configuration import Configuration
 from converters.schema.global_section import GlobalSection
 from converters.schema.master_bundle import MasterBundle
 from converters.schema.neuron import Neuron
 from converters.schema.population import Population
-from converters.schema.population_stimulus import PopulationStimulus
+from converters.schema.protocol_group import ProtocolGroup
 from converters.schema.raw_bundle_group import RawBundleGroup
 from converters.schema.simulation import Simulation
 from converters.schema.simulation_parameters import SimulationParameters
 from converters.schema.spike_map import SpikeMap
 from converters.schema.standard_format_group import StandardFormatGroup
+from converters.schema.stimuli_group import StimuliGroup
 from converters.schema.stimulus import Stimulus
-from converters.schema.stimulus_set import StimulusSet
+from converters.utils.metadata import MetaDataBuilder
+from converters.utils.units import Unit
 
 log = logging.getLogger(__name__)
+
+PARAMETERS = ["scale_num_neurons", "scale_syn_strength", "scale_nmda_efficacy"]
+PARAMETERS_SHORT = ["numneur", "synstr", "nmdaeff"]
 
 
 def _population_from_npz(name: str, npz_path: Path) -> Population:
@@ -97,7 +102,8 @@ def build_amu_master_bundle(
         embed_raw: bool = True,
         embed_raw_path: Path,
         output_dir: Path,
-) -> MasterBundle:
+        protocol_version: str,
+        protocol_info_path: Path) -> MasterBundle:
     """Construct a :class:`~converters.schema.master_bundle.MasterBundle` from an AMU run directory.
 
     The function walks the ``sim_dir`` directory, interprets each sub‑folder as
@@ -114,6 +120,8 @@ def build_amu_master_bundle(
             ``build_master_h5`` routine).
         embed_raw_path: Path where the raw zip archive should be created.
         output_dir: Destination directory for the generated raw‑bundle artefact.
+        protocol_version: The version of the protocol to be incorporated.
+        protocol_info_path: Path to a PDF file containing protocol information.
 
     Returns:
         A fully populated :class:`~converters.schema.master_bundle.MasterBundle`
@@ -127,15 +135,20 @@ def build_amu_master_bundle(
         ValueError: If spike files are malformed or missing required arrays.
         OSError: For any I/O‑related errors while reading files or writing the raw
             zip archive.
+
     """
     # Global metadata (same as before, but now lives in the GlobalSection)
     # We keep a very small set of global fields – the rest can be added later.
-    global_meta = {
-        "project": "VBT‑AMU",
-        "author": "John Doe",
-        "description": "AMU parameter‑sweep conversion",
-    }
-    global_section = GlobalSection(metadata_mapping=global_meta, experiment_info="AMU sweep")
+    mb = MetaDataBuilder()
+    mb.author("John Doe")
+    mb.creation_date("2026-07-31T12:00:00Z")
+    mb.software("AMU Software")
+    mb.software_version("1.0.2", unit=None)
+    mb.run_id("e3b0c442-98fc-1c14-9af6-3b33d8fbc123")
+    global_meta = mb.to_dict()
+    global_section = GlobalSection(metadata_mapping=global_meta,
+                                   parameter_simulation_mapping={},
+                                   experiment_info="AMU sweep")
 
     # Walk every sub‑directory → one Simulation entry
     sims: List[Simulation] = []
@@ -143,16 +156,32 @@ def build_amu_master_bundle(
         if not run_dir.is_dir():
             continue
 
-        # ---- read the config.yaml -------------------------------------------------
+        # Load the full configuration (raw key → value)
         cfg_path = run_dir / "config.yaml"
-        cfg = yaml.safe_load(cfg_path.read_text()) if cfg_path.exists() else {}
-        rec_raw: dict = np.load(run_dir / "record_info" / "record_neurons.data", allow_pickle=True)
-        cfg["record_neurons"] = {str(k): int(v) for k, v in
-                                 rec_raw.items()}  # add the record‑neurons mapping to the config and dump it as part of parameters
-        # The old code kept the whole dictionary as metadata – we do the same.
-        param = SimulationParameters(kv_pairs=cfg)
+        # Read config and convert to key → (value, unit=None)
+        full_cfg: Dict[str, Tuple[Any, Optional[Unit]]] = {
+            k: (v, None) for k, v in (yaml.safe_load(cfg_path.read_text()) if cfg_path.exists() else {}).items()
+        }
+        # Add the record‑neurons mapping
+        rec_path = run_dir / "record_info" / "record_neurons.data"
+        if rec_path.is_file():
+            rec_raw = np.load(rec_path, allow_pickle=True)
+            # keep the original mapping (str → int) in the configuration
+            full_cfg["record_neurons"] = ({str(k): int(v) for k, v in rec_raw.items()}, None)
 
-        # ---- spike trains (NPZ per layer) -----------------------------------------
+        # Extract the selected dynamic parameters, rename them, and wrap values as (value, None)
+        sim_params: dict = {}
+        for long_name, short_name in zip(PARAMETERS, PARAMETERS_SHORT):
+            if long_name in full_cfg:
+                # Unit is not provided inside the parent sweep directory, hence kept None
+                sim_params[short_name] = full_cfg.pop(long_name)
+
+        # Remaining entries belong to the generic configuration object
+        # `full_cfg` now contains everything except the three parameters above.
+        param = SimulationParameters(kv_pairs=sim_params)
+        config = Configuration(kv_pairs=full_cfg)  # ← all other config items
+
+        # spike trains (NPZ per layer)
         spike_dir = run_dir / "spike_times"
         populations: List[Population] = []
         for npz_file in sorted(spike_dir.glob("*.npz")):
@@ -160,13 +189,14 @@ def build_amu_master_bundle(
             populations.append(_population_from_npz(pop_name, npz_file))
         spike_map = SpikeMap(populations=populations)
 
-        # ---- stimulus (piecewise‑constant) ----------------------------------------
-        stimulus_set = _parse_stimulus_set(cfg, run_dir, [pop.population_name for pop in spike_map.populations])
+        # stimulus (piecewise‑constant)
+        stimuli_group = _parse_stimulus_group(full_cfg, run_dir, [pop.population_name for pop in spike_map.populations])
 
         sim = Simulation(
             simulation_id=run_dir.name,
+            configuration=config,
             parameters=param,
-            stimulus=stimulus_set,
+            stimulus=stimuli_group,
             output_spike=spike_map,
         )
         sims.append(sim)
@@ -177,14 +207,13 @@ def build_amu_master_bundle(
     # Optional raw‑bundle zip (identical to the old behaviour)
     raw_bundle = RawBundleGroup() if embed_raw else None
     if raw_bundle:
-        raw_bundle.out_path = output_dir
-        raw_bundle.zip_link.target = str(embed_raw_path)
-    deps = ExternalDependenciesGrp(deps={})
-    return MasterBundle(standard=std_fmt, raw=raw_bundle, deps=deps)
+        raw_bundle.zip_path = embed_raw_path
+    proto = ProtocolGroup(version=protocol_version, content_path=protocol_info_path)
+    return MasterBundle(standard=std_fmt, raw=raw_bundle, protocol=proto)
 
 
-def _parse_stimulus_set(cfg: dict[Any, Any] | Any, run_dir: Path, populations: List[str]) -> StimulusSet:
-    """Parse piecewise‑constant stimulus files and build a :class:`StimulusSet`.
+def _parse_stimulus_group(cfg: dict[Any, Any] | Any, run_dir: Path, populations: List[str]) -> StimuliGroup:
+    """Parse piecewise‑constant stimulus files and build a :class:`StimuliGroup`.
 
     The function looks for files matching the pattern ``random_input_<N>ms.npz``
     within ``run_dir``.  Each file contributes one segment to the stimulus: the
@@ -199,7 +228,7 @@ def _parse_stimulus_set(cfg: dict[Any, Any] | Any, run_dir: Path, populations: L
         run_dir: Path to the directory that holds the current simulation run.
         populations: A list of population names for which to create stimulus data.
     Returns:
-        A :class:`~converters.schema.stimulus_set.StimulusSet` containing a
+        A :class:`~converters.schema.stimuli_group.StimuliGroup` containing a
         :class:`~converters.schema.population_stimulus.PopulationStimulus` for
         each population listed in :data:`populations`.
 
@@ -218,24 +247,16 @@ def _parse_stimulus_set(cfg: dict[Any, Any] | Any, run_dir: Path, populations: L
             continue
         limits.append(int(m.group(1)))
         values.append(np.load(f)["arr_0"])
-    limits.append(cfg.get("t_sim", 1000))  # total simulation time (ms)
+    limits.append(cfg.get("t_sim", 1000)[0])  # total simulation time (ms)
 
     # Convert to numpy & compute max value
     limits_arr = np.array(limits, dtype=np.float64)
     values_arr = np.array(values, dtype=np.float64)
-    max_val = float(values_arr.max()) if values_arr.size else 0.0
     # A single stimulus is applied uniformly across all populations in the simulation,
     # serving as the default sub-stimulus for each population.
-    stimulus_set = StimulusSet(
-        populations=[
-            PopulationStimulus(
-                name=pop,
-                sub_stimuli={
-                    "default": Stimulus(limits=limits_arr, values=values_arr, max_value=max_val)
-                },
-                sub_attrs={},
-            )
-            for pop in populations
-        ]
+    return StimuliGroup(
+        stimuli_map={
+            f"{population}_default": Stimulus(limits=limits_arr, values=values_arr) for population in populations
+        },
+        attr_map={},
     )
-    return stimulus_set

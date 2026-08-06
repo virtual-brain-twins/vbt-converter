@@ -1,58 +1,63 @@
-"""This module defines the :class:`Stimulus` data class – a lightweight container for a
-piecewise‑constant stimulus (or any other type of stimulus that can be described by
-arrays of limits and corresponding values).  The class implements the
-:class:`~converters.schema.hdf5_serializable.HDF5Serializable` protocol, allowing a
-stimulus instance to be written to or reconstructed from an HDF5 group using
-`h5py`.
+"""
+Data model for a piece‑wise constant stimulus and utilities for serialising it
+to and from HDF5 files.
 
-Typical usage
-~~~~~~~~~~~~~
->>> stim = Stimulus(
-...     limits=np.array([0.0, 1.0, 2.0]),
-...     values=np.array([0.5, 1.5]),
-...     max_value=1.5,
-...     stim_type="piecewise_constant",
-... )
->>> with h5py.File("stim.h5", "w") as f:
-...     grp = f.create_group("stimulus")
-...     stim.to_hdf5(grp)
->>> with h5py.File("stim.h5", "r") as f:
-...     loaded = Stimulus.from_hdf5(f["stimulus"])
+The :class:`Stimulus` class stores the limits and values that define a
+piece‑wise constant waveform, optional physical units for each array, and a
+string identifying the stimulus type.  It inherits from
+:class:`~converters.schema.hdf5_serializable.HDF5Serializable` which defines the
+``to_hdf5`` and ``from_hdf5`` interface used throughout the converters package.
+
+Typical usage::
+
+    stim = Stimulus(
+        limits=np.array([0.0, 1.0, 2.0]),
+        values=np.array([5.0, 10.0]),
+        stim_type="piecewise_constant",
+        limits_unit=Unit("s"),
+        values_unit=Unit("mV")
+    )
+    with h5py.File("stim.h5", "w") as f:
+        grp = f.create_group("Stimulus")
+        stim.to_hdf5(grp)
+
+    # ...later...
+    with h5py.File("stim.h5", "r") as f:
+        loaded = Stimulus.from_hdf5(f["Stimulus"])
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Type
+from typing import Optional
 
 import h5py
 import numpy as np
 
-from converters.schema.hdf5_serializable import HDF5Serializable
+from converters.schema.hdf5_serializable import HDF5Serializable, _decode
 from converters.utils.dataset_helpers import store_dataset
+from converters.utils.units import Unit
 
 
 @dataclass
 class Stimulus(HDF5Serializable):
-    """Container for a stimulus that can be serialized to HDF5.
+    """Container for a piece‑wise constant stimulus.
 
     Attributes
     ----------
     limits : np.ndarray
-        A one‑dimensional array defining the boundaries (edges) of the stimulus
-        intervals.  Shape ``(N + 1,)`` where ``N`` is the number of intervals.
+        One‑dimensional array of the stimulus segment boundaries.  It must have
+        a length exactly one greater than ``values``.
     values : np.ndarray
-        A one‑dimensional array of values associated with each interval defined by
-        ``limits``.  Shape ``(N,)``.
-    max_value : float
-        The maximum value observed in ``values``; stored separately for quick access.
+        One‑dimensional array of the stimulus amplitude for each segment.
     stim_type : str
-        A string identifier for the type of stimulus (e.g. ``"piecewise_constant"``).
-
-    Notes
-    -----
-    The class inherits from :class:`~converters.schema.hdf5_serializable.HDF5Serializable`,
-    requiring implementation of :meth:`to_hdf5` and :meth:`from_hdf5`.
+        Identifier for the type of stimulus (e.g. ``"piecewise_constant"``).
+    limits_unit : Optional[Unit]
+        Physical unit of the ``limits`` array, stored as an HDF5 attribute if
+        provided.
+    values_unit : Optional[Unit]
+        Physical unit of the ``values`` array, stored as an HDF5 attribute if
+        provided.
     """
 
     limits: np.ndarray = field(
@@ -61,68 +66,74 @@ class Stimulus(HDF5Serializable):
     values: np.ndarray = field(
         default_factory=lambda: np.array([], dtype=np.float64)
     )
-    max_value: float = 0.0
     stim_type: str = "piecewise_constant"
+    limits_unit: Optional[Unit] = None
+    values_unit: Optional[Unit] = None
 
     def to_hdf5(self, parent: h5py.Group) -> None:
-        """Write the stimulus data to an HDF5 group.
+        """Serialise the stimulus to an HDF5 group.
 
-        Each attribute is stored as a separate dataset inside ``parent``.  The
-        datasets are written without compression to keep the operation fast.
+        The method creates three datasets within ``parent``:
 
-        Args
-        ----
+        * ``"Limits"`` – the ``limits`` array (no compression)
+        * ``"Values"`` – the ``values`` array (no compression)
+        * ``"StimType"`` – a scalar, variable‑length UTF‑8 string dataset
+
+        If ``limits_unit`` and/or ``values_unit`` are supplied, they are written
+        as the ``"unit"`` attribute on the corresponding datasets.
+
+        Parameters
+        ----------
         parent : h5py.Group
-            The HDF5 group that will receive the stimulus datasets.  The group
-            must be writable.
-
-        Raises
-        ------
-        OSError
-            If the HDF5 file underlying ``parent`` cannot be written to (e.g.
-            due to I/O errors or insufficient permissions).
-        ValueError
-            If any of the attributes cannot be converted to a NumPy array suitable
-            for storage.
+            The HDF5 group that will receive the new datasets.
         """
         store_dataset(parent, "Limits", self.limits, compression=False)
+        if self.limits_unit is not None:
+            parent["Limits"].attrs["unit"] = self.limits_unit
+
         store_dataset(parent, "Values", self.values, compression=False)
-        store_dataset(parent, "MaxValue", np.array(self.max_value), compression=False)
+        if self.values_unit is not None:
+            parent["Values"].attrs["unit"] = self.values_unit
+
+        # StimType is a variable‑length UTF‑8 string dataset
+        dt = h5py.string_dtype()
+        ds = parent.create_dataset("StimType", shape=(), dtype=dt)
+        ds[()] = self.stim_type
 
     @classmethod
-    def from_hdf5(cls: Type["Stimulus"], grp: h5py.Group) -> "Stimulus":
-        """Reconstruct a :class:`Stimulus` instance from an HDF5 group.
+    def from_hdf5(cls, grp: h5py.Group) -> "Stimulus":
+        """Create a ``Stimulus`` instance from an HDF5 group.
 
-        The method expects three datasets – ``Limits``, ``Values`` and
-        ``MaxValue`` – to be present in ``grp``.  Missing datasets or type
-        mismatches will raise an exception.
+        The method reads the ``Limits`` and ``Values`` datasets, together with
+        the optional ``unit`` attributes, and the scalar ``StimType`` dataset.
+        Basic validation ensures the dimensionality and length relationship
+        required by the piece‑wise constant representation.
 
-        Args
-        ----
+        Parameters
+        ----------
         grp : h5py.Group
-            The HDF5 group containing the stimulus datasets.
+            Group containing the ``Limits``, ``Values`` and ``StimType`` datasets.
 
         Returns
         -------
         Stimulus
-            A new instance populated with the data read from ``grp``.
+            An instance populated with the data extracted from ``grp``.
 
         Raises
         ------
-        KeyError
-            If any of the required datasets (``Limits``, ``Values``, ``MaxValue``)
-            are missing from ``grp``.
-        TypeError
-            If the data cannot be cast to the expected NumPy types.
         ValueError
-            If the arrays have incompatible shapes (e.g. ``limits`` does not have
-            ``len(values) + 1`` elements).
+            If ``limits`` or ``values`` are not one‑dimensional, or if their
+            lengths do not satisfy ``len(limits) == len(values) + 1``.
         """
         limits = grp["Limits"][()]
         values = grp["Values"][()]
-        max_val = float(grp["MaxValue"][()])
+        stim_type = _decode(grp["StimType"][()])
 
-        # Basic validation to provide clearer error messages.
+        # optional unit attributes
+        lim_u = _decode(grp["Limits"].attrs.get("unit"))
+        val_u = _decode(grp["Values"].attrs.get("unit"))
+
+        # Basic validation (unchanged)
         if limits.ndim != 1 or values.ndim != 1:
             raise ValueError("Both 'limits' and 'values' must be one‑dimensional arrays.")
         if limits.size != values.size + 1:
@@ -131,4 +142,10 @@ class Stimulus(HDF5Serializable):
                 f"'values' length ({values.size})."
             )
 
-        return cls(limits=limits, values=values, max_value=max_val)
+        return cls(
+            limits=limits,
+            values=values,
+            stim_type=stim_type,
+            limits_unit=lim_u,
+            values_unit=val_u,
+        )

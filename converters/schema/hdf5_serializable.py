@@ -20,6 +20,19 @@ import h5py
 _T = TypeVar("_T", bound="HDF5Serializable")
 
 
+def _decode(attr):
+    """Return a clean text value for an HDF5 attribute.
+
+    * If the attribute is ``bytes`` – decode as UTF‑8, replacing any illegal
+      byte sequences.
+    * If it is already a ``str`` – return it unchanged.
+    * If the attribute is missing (``None``) – keep it as ``None``.
+    """
+    if isinstance(attr, bytes):
+        return attr.decode("utf‑8", errors="replace")
+    return attr  # str, None or any other python object
+
+
 class HDF5Serializable(ABC):
     """Interface required for every object that participates in the schema.
 

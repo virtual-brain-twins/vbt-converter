@@ -38,6 +38,8 @@ class ProtocolBuilder(ABC):
             embed_raw: bool,
             embed_raw_path: Path,
             output_dir: Path,
+            protocol_version: str,
+            protocol_info_path: Path,
     ) -> MasterBundle:
         """Build a :class:`~converters.schema.master_bundle.MasterBundle`.
 
@@ -48,6 +50,8 @@ class ProtocolBuilder(ABC):
                 ``embed_raw`` is ``True``.
             output_dir: Directory where the builder may write auxiliary output
                 files (e.g., intermediate JSON, logs).
+            protocol_version: The version of the protocol to be incorporated.
+            protocol_info_path: Path to a PDF file containing protocol information.
 
         Returns:
             An instance of :class:`~converters.schema.master_bundle.MasterBundle`
@@ -78,6 +82,8 @@ class AMUBuilder(ProtocolBuilder):
             embed_raw: bool,
             embed_raw_path: Path,
             output_dir: Path,
+            protocol_version: str,
+            protocol_info_path: Path
     ) -> MasterBundle:
         """Create an AMU ``MasterBundle`` from raw input data.
 
@@ -89,6 +95,8 @@ class AMUBuilder(ProtocolBuilder):
             embed_raw: Whether to embed the raw data inside the bundle.
             embed_raw_path: Target path for the embedded raw data.
             output_dir: Directory where the builder may emit auxiliary files.
+            protocol_version: The version of the protocol to be incorporated.
+            protocol_info_path: Path to a PDF file containing protocol information.
 
         Returns:
             A populated ``MasterBundle`` representing the AMU protocol.
@@ -103,6 +111,8 @@ class AMUBuilder(ProtocolBuilder):
             embed_raw=embed_raw,
             embed_raw_path=embed_raw_path,
             output_dir=output_dir,
+            protocol_version=protocol_version,
+            protocol_info_path=protocol_info_path
         )
 
 
@@ -119,6 +129,8 @@ class BasalGangliaBuilder(ProtocolBuilder):
             embed_raw: bool,
             embed_raw_path: Path,
             output_dir: Path,
+            protocol_version: str,
+            protocol_info_path: Path
     ) -> MasterBundle:
         """Create a Basal Ganglia ``MasterBundle`` from raw input data.
 
@@ -130,6 +142,8 @@ class BasalGangliaBuilder(ProtocolBuilder):
             embed_raw: Whether to embed the raw data inside the bundle.
             embed_raw_path: Target path for the embedded raw data.
             output_dir: Directory where the builder may emit auxiliary files.
+            protocol_version: The version of the protocol to be incorporated.
+            protocol_info_path: Path to a PDF file containing protocol information.
 
         Returns:
             A populated ``MasterBundle`` representing the Basal Ganglia protocol.
@@ -144,6 +158,8 @@ class BasalGangliaBuilder(ProtocolBuilder):
             embed_raw=embed_raw,
             embed_raw_path=embed_raw_path,
             output_dir=output_dir,
+            protocol_version=protocol_version,
+            protocol_info_path=protocol_info_path
         )
 
 

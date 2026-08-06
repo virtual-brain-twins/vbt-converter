@@ -21,7 +21,8 @@ from typing import Tuple
 
 import numpy as np
 
-from converters.schema.stimulus_set import StimulusSet
+from converters.schema.stimuli_group import StimuliGroup
+
 
 def interpolate_constant(
         x: np.ndarray,
@@ -61,36 +62,52 @@ def interpolate_constant(
     return np.take(yp, indices)
 
 
-def get_discretized_stimulus(stim_set: StimulusSet, dt: float) -> np.ndarray:
-    """Sample a piece‑wise constant stimulus section at a uniform temporal grid.
+def get_discretized_stimulus(stim_group: StimuliGroup, dt: float) -> np.ndarray:
+    """Return a discretized, piecewise‑constant stimulus trace.
 
-    The stimulus is extracted from the first population of ``stim_set``.  The
-    section must be of type ``"piecewise_constant"``, otherwise a
-    ``NotImplementedError`` is raised.  The returned array contains the stimulus
-    values evaluated at the centre of each time bin.
+    The function looks for a stimulus named ``"L1VIP_default"`` inside the
+    provided ``stim_group`` and checks that it is of type
+    ``"piecewise_constant"``. It then samples the stimulus at a uniform time
+    step ``dt`` (seconds) and returns the values evaluated at the centre of
+    each time bin.
 
-    Args:
-        stim_set: A :class:`StimulusSet` instance containing stimulus sections.
-        dt: Desired temporal resolution in seconds (must be positive).
+    Parameters
+    ----------
+    stim_group : StimuliGroup
+        Container holding a mapping from stimulus identifiers to their
+        definitions. The mapping must contain a key ``"L1VIP_default"``.
+    dt : float
+        Desired time step for the discretized output, expressed in seconds.
+        The number of bins is computed as ``round((t1 - t0) / dt)`` where
+        ``t0`` and ``t1`` are the start and end times of the stimulus.
 
-    Returns:
-        A 1‑D NumPy array of discretised stimulus values, one entry per time bin.
+    Returns
+    -------
+    np.ndarray
+        One‑dimensional array of stimulus values sampled at the mid‑points of
+        the generated time bins.
 
-    Raises:
-        ValueError: If the stimulus set does not contain a default section.
-        NotImplementedError: If the section type is not ``"piecewise_constant"``.
+    Raises
+    ------
+    ValueError
+        If the expected sub‑stimulus ``"L1VIP_default"`` is not present in the
+        ``stimuli_map``.
+    NotImplementedError
+        If the found stimulus has a ``stim_type`` other than
+        ``"piecewise_constant"``.
     """
-    stim_sect = stim_set.populations[0].sub_stimuli.get("default", None)
-    if stim_sect is None:
-        raise ValueError("No stimulus section found")
-    if stim_sect.stim_type != "piecewise_constant":
+    # Obtain the stimulus applicable to any population, as it is identical for all.
+    sub_stimulus = stim_group.stimuli_map.get("L1VIP_default", None)
+    if sub_stimulus is None:
+        raise ValueError("No sub stimulus section found")
+    if sub_stimulus.stim_type != "piecewise_constant":
         raise NotImplementedError(
-            f"Stimulus type '{stim_sect.stim_type}' not supported"
+            f"Stimulus type '{sub_stimulus.stim_type}' not supported"
         )
 
     # Convert limits from ms to s for internal consistency.
-    limits = np.array(stim_sect.limits) / 1000.0
-    values = np.array(stim_sect.values)
+    limits = np.array(sub_stimulus.limits) / 1000.0
+    values = np.array(sub_stimulus.values)
 
     t0, t1 = limits[0], limits[-1]
     nbins = round((t1 - t0) / dt)

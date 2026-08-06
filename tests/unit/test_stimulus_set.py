@@ -13,7 +13,7 @@ from unittest import mock
 
 import allure
 
-from converters.schema.stimulus_set import StimulusSet, PopulationStimulus  # type: ignore
+from converters.schema.stimulus_set import StimulusSet, StimuliGroup  # type: ignore
 
 
 # --------------------------------------------------------------------------- #
@@ -98,8 +98,8 @@ class TestStimulusSet:
         # ------------------------------------------------------------------- #
         # Create three mock PopulationStimulus objects – each with a spec so
         # that attribute access is validated against the real class.
-        mock_populations: List[PopulationStimulus] = [
-            mock.create_autospec(PopulationStimulus, instance=True) for _ in range(3)
+        mock_populations: List[StimuliGroup] = [
+            mock.create_autospec(StimuliGroup, instance=True) for _ in range(3)
         ]
 
         # Build the StimulusSet under test.
@@ -168,12 +168,12 @@ class TestStimulusSet:
 
         # Prepare return mocks for each population that the factory will create.
         created_populations = [
-            mock.create_autospec(PopulationStimulus, instance=True) for _ in sub_group_names
+            mock.create_autospec(StimuliGroup, instance=True) for _ in sub_group_names
         ]
 
         # Patch the class method `PopulationStimulus.from_hdf5` so that it
         # returns our prepared mock objects in the order of iteration.
-        with mock.patch.object(PopulationStimulus, "from_hdf5", side_effect=created_populations) as factory_mock:
+        with mock.patch.object(StimuliGroup, "from_hdf5", side_effect=created_populations) as factory_mock:
             # ------------------------------------------------------------------- #
             # Act – call the class method under test inside an Allure step
             # ------------------------------------------------------------------- #
@@ -227,3 +227,53 @@ class TestStimulusSet:
             name="Teardown info",
             attachment_type=allure.attachment_type.TEXT,
         )
+
+
+    def test(self):
+        import h5py
+        import numpy as np
+
+        # ------------------------------------------------------------
+        # 1. Define the compound datatype: value + unit
+        # ------------------------------------------------------------
+        #   - `value` uses a native scalar type (here we use np.float64 as an example)
+        #   - `unit`  is a variable‑length UTF‑8 string (stored as bytes)
+        value_dtype = np.float64  # change to np.int32, np.bool_, etc. as needed
+        unit_dtype = h5py.string_dtype(encoding='utf-8')  # variable‑length UTF‑8
+
+        compound_dtype = np.dtype([('value', value_dtype),
+                                   ('unit', unit_dtype)])
+
+        # ------------------------------------------------------------
+        # 2. Create a sample compound value
+        # ------------------------------------------------------------
+        # Example: parameter "gravity" = 9.80665 m·s⁻²
+        param_name = 'gravity'
+        compound_value = np.array((9.80665, "m·s⁻²"), dtype=compound_dtype)
+
+        # ------------------------------------------------------------
+        # 3. Write the attribute to the Parameters group
+        # ------------------------------------------------------------
+        with h5py.File('simulation.h5', 'a') as h5f:
+            # Create (or obtain) the Parameters group
+            grp = h5f.require_group('Parameters')
+
+            # Attach the compound attribute
+            # h5py will automatically convert the NumPy scalar to the HDF5 attribute
+            grp.attrs.create(name=param_name, data=compound_value, dtype=compound_dtype)
+
+            # ---- optional: add another parameter of different native type ----
+            # Example: a boolean flag "use_implicit_solver" (unit not applicable)
+            bool_dtype = np.dtype([('value', np.bool_), ('unit', unit_dtype)])
+            bool_attr = np.array((True, ""), dtype=bool_dtype)
+            grp.attrs.create(name='use_implicit_solver', data=bool_attr, dtype=bool_dtype)
+
+        print("Compound attributes written successfully.")
+
+        with h5py.File('simulation.h5', 'r') as h5f:
+            grp = h5f['Parameters']
+            for attr_name in grp.attrs:
+                compound_attr = grp.attrs[attr_name]
+                value = compound_attr['value']
+                unit = compound_attr['unit'].decode("utf-8")
+                print(f"Parameter: {attr_name}, Value: {value}, Unit: {unit}")

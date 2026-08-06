@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Callable, List, Sequence
 
 import h5py
+import numpy as np
 
 from converters.utils.common import configure_logging
 
@@ -93,10 +94,11 @@ def _check_standardformat(file: h5py.File) -> None:
 
 
 def _check_global(file: h5py.File) -> None:
-    """``/StandardFormat/Global``  + attribute ``experiment_info``."""
+    """``/StandardFormat/Global``  + attribute experiment_info and parameter_simulation_mapping."""
     std = file["StandardFormat"]
     glob = _require_group(std, "Global")
     _require_attr(glob, "experiment_info")
+    _require_attr(glob, "parameter_simulation_mapping")
 
 
 def _check_simulations(file: h5py.File) -> List[h5py.Group]:
@@ -121,9 +123,15 @@ def _check_one_simulation(sim_grp: h5py.Group, populations: List[str]) -> List[s
                  sim_grp.name)
 
     # Required sub‑groups
+    config = _require_group(sim_grp, "Configuration")
     params = _require_group(sim_grp, "Parameters")
     stimuli = _require_group(sim_grp, "Stimuli")
     out_spikes = _require_group(sim_grp, "OutputSpikes")
+
+    # ``Configuration`` must have at least one attribute
+    _require(len(config.attrs) > 0,
+             "Configuration group must contain at least one attribute",
+             config.name)
 
     # ``Parameters`` must have at least one attribute
     _require(len(params.attrs) > 0,
@@ -131,28 +139,28 @@ def _check_one_simulation(sim_grp: h5py.Group, populations: List[str]) -> List[s
              params.name)
 
     # Each population under ``Stimuli`` must have ≥ 1 sub‑stimulus
-    for pop_name, pop_grp in stimuli.items():
-        _require(isinstance(pop_grp, h5py.Group), f"Population '{pop_name}' is not a group", stimuli.name)
-        _require(len(pop_grp) > 0,
-                 f"Population '{pop_name}' must contain at least one sub‑stimulus group",
-                 pop_grp.name)
+    for stimuli_name, stimuli_grp in stimuli.items():
+        _require(isinstance(stimuli_grp, h5py.Group), f"Stimuli '{stimuli_name}' is not a group", stimuli_name)
+        _require(len(stimuli_grp) > 0,
+                 f"Stimuli group '{stimuli_name}' must contain at least one sub‑stimulus group",
+                 stimuli_name)
 
         # Each sub‑stimulus must have the three datasets with shape checks
-        for sub_name, sub_grp in pop_grp.items():
-            _require(isinstance(sub_grp, h5py.Group), f"Sub‑stimulus '{sub_name}' not a group", pop_grp.name)
+        # for sub_name, sub_grp in stimuli_grp.items():
+        #     _require(isinstance(sub_grp, h5py.Group), f"Sub‑stimulus '{sub_name}' not a group", pop_grp.name)
 
-            limits = _require_dataset(sub_grp, "Limits")
-            values = _require_dataset(sub_grp, "Values")
-            maxval = _require_dataset(sub_grp, "MaxValue")
+        limits = _require_dataset(stimuli_grp, "Limits")
+        values = _require_dataset(stimuli_grp, "Values")
+        stim_type = _require_dataset(stimuli_grp, "StimType")
 
-            # Shape checks – we only need the rank & length, not the data itself
-            _require(limits.ndim == 1,
-                     "Limits must be 1‑D", limits.name)
-            _require(values.ndim == 1,
-                     "Values must be 1‑D", values.name)
-            _require(limits.shape[0] == values.shape[0] + 1,
-                     f"len(Limits) ({limits.shape[0]}) must be len(Values)+1 ({values.shape[0] + 1})",
-                     sub_grp.name)
+        # Shape checks – we only need the rank & length, not the data itself
+        _require(limits.ndim == 1,
+                 "Limits must be 1‑D", limits.name)
+        _require(values.ndim == 1,
+                 "Values must be 1‑D", values.name)
+        _require(limits.shape[0] == values.shape[0] + 1,
+                 f"len(Limits) ({limits.shape[0]}) must be len(Values)+1 ({values.shape[0] + 1})",
+                 stimuli_name)
 
     # ``OutputSpikes/SpikeMap`` must exist and contain at least one neuron per population
     spike_map = _require_group(out_spikes, "SpikeMap")
@@ -185,18 +193,71 @@ def _check_rawbundle(file: h5py.File) -> None:
         return  # optional group – nothing to validate
     raw_grp = _require_group(file, "RawBundle")
     dset = _require_dataset(raw_grp, "raw_bundle.zip")
-    for attr in ("path", "target", "link_type", "format"):
+    for attr in ("original_name", "original_size", "format", "checksum"):
         _require_attr(dset, attr)
 
 
-def _check_external_deps(file: h5py.File) -> None:
-    """All members of ``ExternalDependencies`` are string attributes."""
-    if "ExternalDependencies" not in file:
+def _check_protocol(file: h5py.File) -> None:
+    """
+    Validate the optional ``Protocol`` group.
+
+    The group is optional, but when it is present it must contain:
+
+    * An attribute ``Version`` – a UTF‑8 string (``str`` or ``bytes``) –‑ **mandatory**.
+    * A dataset ``Content`` – ``uint8`` dtype, storing the PDF bytes –‑ **mandatory**.
+    * The ``Content`` dataset must be **compressed** (any HDF5 compression filter).
+    """
+    # The whole group is optional – if it does not exist we simply exit.
+    if "Protocol" not in file:
         return
-    deps_grp = _require_group(file, "ExternalDependencies")
-    for name, val in deps_grp.attrs.items():
-        _require(isinstance(val, (str, bytes)),
-                 f"External dependency attribute '{name}' must be a string", deps_grp.name)
+
+    # Make sure the group actually exists (creates it if it was a dangling
+    #    reference) and keep a reference for later checks.
+    protocol_grp = _require_group(file, "Protocol")
+
+    # Version attribute -------------------------------------------------- #
+    _require(
+        "Version" in protocol_grp.attrs,
+        "Protocol group is missing required attribute 'Version'",
+        protocol_grp.name,
+    )
+    version_val = protocol_grp.attrs["Version"]
+    _require(
+        isinstance(version_val, (str, bytes)),
+        "Protocol attribute 'Version' must be a UTF‑8 string (str or bytes)",
+        protocol_grp.name,
+    )
+
+    # Content dataset ---------------------------------------------------- #
+    _require(
+        "Content" in protocol_grp,
+        "Protocol group must contain a dataset named 'Content'",
+        protocol_grp.name,
+    )
+    content_ds = protocol_grp["Content"]
+
+    # Verify that we really have a Dataset object (not a Group, etc.)
+    _require(
+        isinstance(content_ds, h5py.Dataset),
+        "Protocol member 'Content' must be a dataset, not a group",
+        protocol_grp.name,
+    )
+
+    # Check dtype – it must be unsigned 8‑bit (raw bytes).
+    _require(
+        content_ds.dtype == np.uint8,
+        f"Protocol dataset 'Content' must have dtype uint8, got {content_ds.dtype}",
+        content_ds.name,
+    )
+
+    # Verify that the dataset is stored compressed.
+    #     h5py reports the filter name (e.g. 'gzip', 'lzf', ...) via the
+    #     ``compression`` attribute; ``None`` means "no compression".
+    _require(
+        content_ds.compression is not None,
+        "Protocol dataset 'Content' must be stored compressed (compression filter missing)",
+        content_ds.name,
+    )
 
 
 # Public API – a single function that runs all checks.
@@ -206,7 +267,7 @@ CHECKS: Sequence[Callable[[h5py.File], None | List[h5py.Group]]] = (
     _check_global,
     _check_simulations,  # returns the list of simulation groups
     _check_rawbundle,
-    _check_external_deps,
+    _check_protocol,
 )
 
 
@@ -276,6 +337,6 @@ def validate_master_bundle(
             logger.debug("Running optional RawBundle check")
             _check_rawbundle(hf)
             logger.debug("Running optional ExternalDependencies check")
-            _check_external_deps(hf)
+            _check_protocol(hf)
 
     logger.info("Master bundle %s passed validation", bundle_path)

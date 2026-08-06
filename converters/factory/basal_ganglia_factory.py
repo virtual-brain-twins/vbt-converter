@@ -13,6 +13,8 @@ Typical usage
     ...     embed_raw=True,
     ...     embed_raw_path=Path("raw.zip"),
     ...     output_dir=Path("out"),
+    ...     protocol_version="1.0",
+    ...     protocol_info_path=Path("protocol_info.pdf"),
     ... )
 """
 
@@ -27,25 +29,21 @@ from typing import Any, Dict, List, Tuple
 import h5py
 import numpy as np
 
-from converters.schema.external_dependencies_group import ExternalDependenciesGrp
 from converters.schema.global_section import GlobalSection
 from converters.schema.master_bundle import MasterBundle
 from converters.schema.neuron import Neuron
 from converters.schema.population import Population
-from converters.schema.population_stimulus import PopulationStimulus
+from converters.schema.protocol_group import ProtocolGroup
 from converters.schema.raw_bundle_group import RawBundleGroup
 from converters.schema.simulation import Simulation
 from converters.schema.simulation_parameters import SimulationParameters
 from converters.schema.spike_map import SpikeMap
 from converters.schema.standard_format_group import StandardFormatGroup
+from converters.schema.stimuli_group import StimuliGroup
 from converters.schema.stimulus import Stimulus
-from converters.schema.stimulus_set import StimulusSet
 from converters.utils.bg_protocol_helper import stream_csv_as_dicts
 
-# ----------------------------------------------------------------------------- #
 # Helper regular expression for simple arithmetic strings.
-# ----------------------------------------------------------------------------- #
-
 _ARITHMETIC_RE = re.compile(
     r"""
     ^\s*
@@ -125,13 +123,9 @@ def _parse_cortical_sub_stimulus(
     limits = np.asarray(sub_dict.get("start", []), dtype=np.float64)
     values = np.asarray(sub_dict.get("frequency", []), dtype=np.float64)
 
-    # Maximum value of the piece‑wise function (used elsewhere in the original code).
-    max_value = float(np.max(values)) if values.size else 0.0
-
     stimulus = Stimulus(
         limits=limits,
         values=values,
-        max_value=max_value,
         stim_type=sub_dict.get("stim_type", "piecewise_constant"),
     )
 
@@ -180,7 +174,6 @@ def _parse_generic_sub_stimulus(
     stimulus = Stimulus(
         limits=np.empty(0, dtype=np.float64),
         values=np.empty(0, dtype=np.float64),
-        max_value=0.0,
         stim_type="piecewise_constant",
     )
 
@@ -188,7 +181,7 @@ def _parse_generic_sub_stimulus(
     return stimulus, attrs
 
 
-def _parse_input_config(input_config: Path) -> StimulusSet:
+def _parse_input_config(input_config: Path) -> StimuliGroup:
     """Parse a JSON stimulus description and convert it to a :class:`StimulusSet`.
 
     The JSON file follows the legacy Snudda format where each top‑level key is a
@@ -212,7 +205,7 @@ def _parse_input_config(input_config: Path) -> StimulusSet:
     with input_config.open("r", encoding="utf-8") as fh:
         cfg = json.load(fh)
 
-    populations: List[PopulationStimulus] = []
+    populations: List[StimuliGroup] = []
 
     for pop_name, pop_content in cfg.items():
         sub_stimuli: Dict[str, Stimulus] = {}
@@ -228,12 +221,12 @@ def _parse_input_config(input_config: Path) -> StimulusSet:
             sub_attrs[sub_name] = attrs
 
         populations.append(
-            PopulationStimulus(
-                name=pop_name, sub_stimuli=sub_stimuli, sub_attrs=sub_attrs
+            StimuliGroup(
+                stimuli_map=sub_stimuli, attr_map=sub_attrs
             )
         )
 
-    return StimulusSet(populations=populations)
+    return StimuliGroup(stimuli_map={}, attr_map={})
 
 
 def _populations_from_output_spikes(h5_path: Path) -> List[Population]:
@@ -279,6 +272,8 @@ def build_bg_master_bundle(
         embed_raw: bool,
         embed_raw_path: Path,
         output_dir: Path,
+        protocol_version: str,
+        protocol_info_path: Path
 ) -> MasterBundle:
     """Build a :class:`MasterBundle` from a basal‑ganglia CSV file.
 
@@ -293,6 +288,8 @@ def build_bg_master_bundle(
         embed_raw_path: Path to the raw data archive (used only when ``embed_raw``
             is ``True``).
         output_dir: Directory where the final bundle will be written.
+        protocol_version: Protocol version to use.
+        protocol_info_path: Path to the file containing protocol information.
 
     Returns:
         A fully populated :class:`MasterBundle` instance ready for serialisation.
@@ -319,7 +316,7 @@ def build_bg_master_bundle(
 
     # Global section – reuse high‑level fields from each CSV row.
     global_section = GlobalSection(
-        metadata_mapping={"network_state": "network_state", "duration": "duration"},
+        metadata_mapping={"network_state": ("network_state", None), "duration": ("duration", None)},
         experiment_info="Basal‑Ganglia simulation",
     )
 
@@ -327,11 +324,11 @@ def build_bg_master_bundle(
     for row in csv_rows:
         # Simulation parameters taken directly from the CSV row.
         meta = {
-            "network_state": row["network_state"],
-            "duration": row["duration"],
-            "da_level": row["da_level"],
-            "input_conductance": row["input_conductance"],
-            "input_scale_factor": row["input_scale_factor"],
+            "network_state": (row["network_state"], None),
+            "duration": (row["duration"], None),
+            "da_level": (row["da_level"], None),
+            "input_conductance": (row["input_conductance"], None),
+            "input_scale_factor": (row["input_scale_factor"], None),
         }
         parameters = SimulationParameters(kv_pairs=meta)
 
@@ -360,5 +357,5 @@ def build_bg_master_bundle(
         raw_bundle.out_path = output_dir
         raw_bundle.zip_link.target = str(embed_raw_path)
 
-    deps = ExternalDependenciesGrp(deps={})
-    return MasterBundle(standard=standard_group, raw=raw_bundle, deps=deps)
+    proto = ProtocolGroup(version=protocol_version, content_path=protocol_info_path)
+    return MasterBundle(standard=standard_group, raw=raw_bundle, protocol=proto)

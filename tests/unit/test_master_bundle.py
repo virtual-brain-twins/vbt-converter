@@ -17,6 +17,7 @@ import allure
 import pytest
 
 from converters.schema.master_bundle import MasterBundle
+from tests.integration.vbt_amu_protocol_pipeline.utils.validate_and_report import compare_npz
 
 
 # --------------------------------------------------------------------------- #

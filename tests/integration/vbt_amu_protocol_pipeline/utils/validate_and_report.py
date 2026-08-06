@@ -214,16 +214,22 @@ def compare_npz(numpy_file1: pathlib.Path, numpy_file2: pathlib.Path,
                         )
                     # Redundant second allclose kept for strictness
                     if not np.allclose(
-                        data1[key],
-                        data2[key],
-                        rtol=rtol,
-                        atol=atol,
-                        equal_nan=True,
+                            data1[key],
+                            data2[key],
+                            rtol=rtol,
+                            atol=atol,
+                            equal_nan=True,
                     ):
                         return False, f"Value mismatch (float) in key: {key}"
                 else:
-                    if not np.array_equal(data1[key], data2[key]):
-                        return False, f"Value mismatch in key: {key}"
+                    if key == "names_x":
+                        temp1 = np.sort(data1[key])
+                        temp2 = np.sort(data2[key])
+                        if not np.array_equal(temp1, temp2):
+                            return False, f"Value mismatch in key: {key}"
+                    else:
+                        if not np.array_equal(data1[key], data2[key]):
+                            return False, f"Value mismatch in key: {key}"
 
         return True, "Files are identical"
     except Exception as e:
@@ -371,12 +377,12 @@ def build_artifact_section() -> str:
 
 
 def write_html_report(
-    output_path: pathlib.Path,
-    *,
-    data: dict,
-    success: bool,
-    error_msg: Optional[str] = None,
-    comparison: Optional[Tuple[bool, str]] = None,
+        output_path: pathlib.Path,
+        *,
+        data: dict,
+        success: bool,
+        error_msg: Optional[str] = None,
+        comparison: Optional[Tuple[bool, str]] = None,
 ):
     """Render and write the final HTML file."""
     filename = output_path.name

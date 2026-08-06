@@ -1,48 +1,36 @@
-@startuml
-title Sequence – convert_hdf5_to_format (master HDF5 → protocol artefacts)
+@startuml sd_hdf5_to_protocol_format
+actor User as u
+participant "CLI (convert_hdf5_to_format.py)" as cli
+participant "argparse.Namespace" as args
+participant "logging (root)" as rootlog
+participant "validation.validate_master_bundle()" as validator
+database "Master HDF5 Bundle\n(master.h5)" as h5file
+participant "PROTOCOL_EXPORTERS\nregistry" as exporter_reg
+participant "Exporter Class\n(AMUExporter / BasalGangliaExporter)" as exporter
+participant "Exporter Instance" as exp_inst
+participant "npz writer (numpy)" as npz
 
-actor User
-participant "CLI (convert_hdf5_to_format)" as CLI
-participant "ArgParse / Sub‑parsers" as Parser
-participant "ProtocolExporter (abstract)" as BaseExp
-participant "AMUExporter / BasalGangliaExporter" as Exporter
-participant "HDF5 file (master)" as MasterH5
-participant "Helper utils\nhelpers, dataset_helpers" as Utils
-participant "NumPy / scipy" as NumPy
-participant "Output files (npz, dsr.npz …)" as OutFile
+u -> cli : python convert_hdf5_to_format.py -i master.h5 -o out_dir amu -b 0.001
+cli -> args : parser.parse_args()
+cli -> rootlog : logging.basicConfig(level=args.log_level)
 
-User -> CLI : invoke script with args
-CLI -> Parser : build parser & parse argv
-Parser --> CLI : args (global + protocol‑specific)
-CLI -> CLI : configure root logger (configure_logging)
+cli -> validator : validate_master_bundle(bundle_path, strict=args.strict)
+validator --> cli : raises ValidationError? (no)
 
-CLI -> MasterH5 : h5py.File(master_path, "r")
-activate MasterH5
+cli -> h5file : h5py.File(master.h5, "r")  (read‑only)
+cli -> exporter_reg : PROTOCOL_EXPORTERS[args.protocol]
+exporter_reg --> cli : exporter class (AMUExporter)
 
-CLI -> Exporter : exporter_cls(**exporter_kwargs)
-note right of Exporter
-  exporter_kwargs contain:
-  - master_h5 (placeholder)
-  - out_dir
-  - log_level
-  - protocol‑specific args (e.g. bin_size)
-end note
+cli -> exporter : configure_parser() (already done by argparse)
 
-Exporter -> BaseExp : __init__(master_h5, out_dir, log_level)
-BaseExp -> BaseExp : configure own logger (configure_logging)
+cli -> exporter : __init__(master_h5, out_dir, bin_size=args.bin_size, log_level=log_lvl)
+activate exporter
+exporter -> exp_inst : create instance
+exp_inst -> h5file : read simulation groups
+exp_inst -> exp_inst : extract_one_simulation() (per simulation)
+exp_inst -> npz : np.savez_compressed(...)
+deactivate exporter
 
-Exporter -> Exporter : run()
-Exporter -> Exporter : enumerate Sim_<id> groups
-loop for each simulation group
-    Exporter -> Exporter : extract_one_simulation()
-    Exporter -> MasterH5 : read Sim_<id>/Parameters, /Stimulus, /OutputSpike
-    Exporter -> Utils : _as_numpy(), _read_section()
-    Exporter -> NumPy : compute firing_rate, discretise stimulus, normalize()
-    Exporter -> OutFile : np.savez_compressed(...)
-
-    Exporter -> Exporter : log.info("Saved …")
-end
-
-deactivate MasterH5
-CLI -> CLI : logger.info("All done – results are in …")
+cli -> rootlog : logger.info("All done …")
+cli --> u : exit 0
 @enduml

@@ -12,7 +12,7 @@
             protocol_name : str
             configure_parser(parser: argparse.ArgumentParser) None
             export_one_simulation(sim_id: str, sim_group: h5py.Group)* None
-            extract_one_simulation(sim_id: str, sim_group: h5py.Group) dict[str, np.ndarray]
+            extract_one_simulation(sim_id: str, sim_group: h5py.Group) dict[str, ndarray[tuple[Any, ...], dtype[Any]] | list[str]]
             run() None
           }
           class BasalGangliaBuilder {
@@ -24,20 +24,12 @@
             export_one_simulation(sim_id: str, sim_group: h5py.Group) None
             extract_one_simulation(sim_id: str, sim_group: h5py.Group) dict[str, Any]
           }
-          class ExternalDependenciesGrp {
-            deps : Dict[str, str]
-            from_hdf5(root: h5py.File) 'ExternalDependenciesGrp'
-            to_hdf5(root: h5py.File) None
-          }
-          class ExternalLink {
-            path : str
-            target : str
-            attach(grp: h5py.Group, name: str) None
-            from_dataset(dset: h5py.Dataset) 'ExternalLink'
+          class Configuration {
           }
           class GlobalSection {
             experiment_info : str
-            metadata_mapping : Dict[Any, str]
+            metadata_mapping : Dict[Any, Tuple[Any, Optional[Unit]]]
+            parameter_simulation_mapping : Dict[str, str]
             from_hdf5(grp: h5py.Group) 'GlobalSection'
             to_hdf5(parent: h5py.Group) None
           }
@@ -45,16 +37,44 @@
             from_hdf5(grp: h5py.Group)* _T
             to_hdf5(parent: h5py.Group)* None
           }
+          class KeyValueCompoundContainer {
+            kv_pairs : Dict[str, Tuple[Any, Optional[Unit]]]
+            from_hdf5(grp: h5py.Group) T
+            get(key: str) Tuple[Any, Optional[Unit]]
+            get_unit(key: str) Optional[Unit]
+            get_value(key: str) Any
+            pop(key: str, default: Any) Tuple[Any, Optional[Unit]]
+            set(key: str, value: Any, unit: Optional[Unit]) None
+            to_hdf5(parent: h5py.Group) None
+          }
           class MasterBundle {
-            deps : ExternalDependenciesGrp | None
+            protocol : ProtocolGroup | None
             raw : RawBundleGroup | None
             standard
             from_hdf5(in_path: Path) 'MasterBundle'
             to_hdf5(out_path: Path) None
           }
+          class MetaDataBuilder {
+            affiliation(value: Any, unit: Optional[Unit]) None
+            author(value: Any, unit: Optional[Unit]) None
+            comment(value: Any, unit: Optional[Unit]) None
+            contact_email(value: Any, unit: Optional[Unit]) None
+            creation_date(value: Any, unit: Optional[Unit]) None
+            get(key: StandardKey) Tuple[Any, Optional[str]]
+            input_data(value: Any, unit: Optional[Unit]) None
+            license(value: Any, unit: Optional[Unit]) None
+            project(value: Any, unit: Optional[Unit]) None
+            run_id(value: Any, unit: Optional[Unit]) None
+            set(key: StandardKey, value: Any, unit: Optional[Unit]) None
+            simulation_name(value: Any, unit: Optional[Unit]) None
+            software(value: Any, unit: Optional[Unit]) None
+            software_version(value: Any, unit: Optional[Unit]) None
+            to_dict() MetaDataMap
+          }
           class Neuron {
             index : int
             times : ndarray
+            times_unit : Optional[Unit]
             from_hdf5(grp: h5py.Group) 'Neuron'
             to_hdf5(parent: h5py.Group) None
           }
@@ -62,13 +82,6 @@
             neurons : List[Neuron]
             population_name : str
             from_hdf5(grp: h5py.Group) 'Population'
-            to_hdf5(parent: h5py.Group) None
-          }
-          class PopulationStimulus {
-            name : str
-            sub_attrs : Dict[str, Dict[str, Any]]
-            sub_stimuli : Dict[str, Stimulus]
-            from_hdf5(parent: h5py.Group, name: str) 'PopulationStimulus'
             to_hdf5(parent: h5py.Group) None
           }
           class ProtocolBuilder {
@@ -84,13 +97,24 @@
             extract_one_simulation(sim_id: str, sim_group: h5py.Group)* Any
             run() None
           }
+          class ProtocolGroup {
+            content : Optional[bytes]
+            content_path : Optional[Path]
+            version : str
+            from_hdf5(root: h5py.File) 'ProtocolGroup'
+            to_hdf5(root: h5py.File) None
+          }
           class RawBundleGroup {
-            out_path : Path
-            zip_link
+            checksum : Optional[str]
+            compression : Optional[Union[str, Tuple[str, int]]]
+            out_path
+            zip_path : Path
+            extract_to(destination: Union[Path, str]) Path
             from_hdf5(root: h5py.File) 'RawBundleGroup'
             to_hdf5(root: h5py.File) None
           }
           class Simulation {
+            configuration
             output_spike
             parameters
             simulation_id : str
@@ -99,9 +123,6 @@
             to_hdf5(parent: h5py.Group) None
           }
           class SimulationParameters {
-            kv_pairs : Dict[str, Any]
-            from_hdf5(grp: h5py.Group) 'SimulationParameters'
-            to_hdf5(parent: h5py.Group) None
           }
           class SpikeMap {
             populations : List[Population]
@@ -114,41 +135,58 @@
             from_hdf5(root: h5py.File) 'StandardFormatGroup'
             to_hdf5(root: h5py.File) None
           }
+          class StandardKey {
+            name
+          }
+          class StimuliGroup {
+            attr_map : Dict[str, Dict[str, Tuple[Any, Optional[Unit]]]]
+            pop_list_map : Dict[str, List[str]]
+            stimuli_map : Dict[str, Stimulus]
+            from_hdf5(parent: h5py.Group) 'StimuliGroup'
+            to_hdf5(parent: h5py.Group) None
+          }
           class Stimulus {
             limits : ndarray
-            max_value : float
+            limits_unit : Optional[Unit]
             stim_type : str
             values : ndarray
+            values_unit : Optional[Unit]
             from_hdf5(grp: h5py.Group) 'Stimulus'
             to_hdf5(parent: h5py.Group) None
           }
-          class StimulusSet {
-            populations : List[PopulationStimulus]
-            from_hdf5(stim_grp: h5py.Group) 'StimulusSet'
-            to_hdf5(stim_grp: h5py.Group) None
+          class Unit {
+            name
+          }
+          class UnitCategory {
+            name
+          }
+          class ValidationError {
+            location : str | None
+            message : str
           }
           AMUExporter --|> ProtocolExporter
           BasalGangliaExporter --|> ProtocolExporter
           AMUBuilder --|> ProtocolBuilder
           BasalGangliaBuilder --|> ProtocolBuilder
-          ExternalDependenciesGrp --|> HDF5Serializable
+          KeyValueCompoundContainer --|> HDF5Serializable
+          Configuration --|> KeyValueCompoundContainer
           GlobalSection --|> HDF5Serializable
           MasterBundle --|> HDF5Serializable
           Neuron --|> HDF5Serializable
           Population --|> HDF5Serializable
+          ProtocolGroup --|> HDF5Serializable
           RawBundleGroup --|> HDF5Serializable
           Simulation --|> HDF5Serializable
-          SimulationParameters --|> HDF5Serializable
+          SimulationParameters --|> KeyValueCompoundContainer
           SpikeMap --|> HDF5Serializable
           StandardFormatGroup --|> HDF5Serializable
           Stimulus --|> HDF5Serializable
-          StimulusSet --|> HDF5Serializable
-          RawBundleGroup --> ExternalLink : zip_link
+          Simulation --> Configuration : configuration
           StandardFormatGroup --> GlobalSection : global_section
           Simulation --> SimulationParameters : parameters
           Simulation --> SpikeMap : output_spike
           MasterBundle --> StandardFormatGroup : standard
-          Simulation --> StimulusSet : stimulus
+          Simulation --> StimuliGroup : stimulus
   
        </div>
   </body>

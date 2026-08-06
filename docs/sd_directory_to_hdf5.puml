@@ -1,33 +1,33 @@
-@startuml
-title Sequence – convert_any_to_hdf5 (raw → master HDF5)
+@startuml sd_directory_to_hdf5
+actor User as u
+participant "CLI (convert_any_to_hdf5.py)" as cli
+participant "argparse.Namespace" as args
+participant "logging (root)" as rootlog
+participant "zip_helper\nzip_directory()" as zipper
+participant "PROTOCOL_BUILDERS\nregistry" as registry
+participant "ProtocolBuilder\n(AMUBuilder/BasalGangliaBuilder)" as builder
+participant "Factory Function\nbuild_amu_master_bundle / build_bg_master_bundle" as factory
+participant "MasterBundle" as bundle
+database "HDF5 file\n(master.h5)" as h5file
 
-actor User
-participant "CLI (convert_any_to_hdf5)" as CLI
-participant "PROTOCOL_BUILDERS registry" as Registry
-participant "ProtocolBuilder (e.g. AMUBuilder)" as Builder
-participant "Factory (build_amu_master_bundle)" as Factory
-participant "Schema objects" as Schema
-participant "ZIP helper (optional)" as ZipHelper
-participant "HDF5 file" as H5File
-participant "RawBundleGroup (optional)" as RawBundle
-
-User -> CLI : invoke script with args
-CLI -> Registry : PROTOCOL_BUILDERS[protocol]
-Registry --> Builder : return concrete builder
-CLI -> Builder : __call__(input_path, embed_raw, embed_raw_path, out_dir)
-Builder -> Factory : build_*_master_bundle(...)
-Factory -> Factory : read raw files (npz, yaml, json, h5)
-Factory -> Schema : instantiate Simulation / SpikeMap / StimulusSet / …
-alt embed_raw = True
-    Factory -> ZipHelper : zip_directory(src_root, embed_raw_path)
-    ZipHelper -> RawBundle : ExternalLink.attach()
+u -> cli : python convert_any_to_hdf5.py -i <inp> -o <out> --protocol amu
+cli -> args : parser.parse_args()
+cli -> rootlog : logging.basicConfig(level=args.log_level)
+alt embed raw bundle?
+    cli -> zipper : zip_directory(src_root, dst_zip)
+    zipper --> cli : raw_zip created
 end
-Factory --> Builder : MasterBundle instance
-Builder -> Schema : MasterBundle.to_hdf5(out_path)
-Schema -> H5File : open/write, write format_version
-Schema -> H5File : StandardFormatGroup.to_hdf5()
-Schema -> H5File : RawBundleGroup.to_hdf5() (if present)
-H5File --> Schema : success
-Builder --> CLI : MasterBundle written
-CLI -> User : log.info("Finished – master file written …")
+cli -> registry : PROTOCOL_BUILDERS[args.protocol]
+registry --> cli : builder instance
+cli -> builder : __call__(input_path, embed_raw, embed_raw_path, output_dir, protocol_version, protocol_info_path)
+builder -> factory : build_amu_master_bundle(...)
+factory --> bundle : MasterBundle object
+cli -> bundle : bundle.to_hdf5(out_path)
+bundle -> h5file : write / set format_version
+bundle -> h5file : write StandardFormat group
+bundle -> h5file : (optional) write RawBundle group
+bundle -> h5file : (optional) write Protocol group
+h5file --> cli : HDF5 written
+cli -> rootlog : logger.info("Finished …")
+cli --> u : exit 0
 @enduml

@@ -1,79 +1,143 @@
-@startuml
-title vbt‑converter – Component Overview
+@startuml component_interactions
+' ==============================================================
+' ==== Packages / High‑level components =========================
+' ==============================================================
 
-package "CLI Layer" {
-  [convert_any_to_hdf5.py] as C1
-  [convert_hdf5_to_format.py] as C2
+package "CLI Scripts" {
+    [convert_any_to_hdf5.py]          as ConvIn
+    [convert_hdf5_to_format.py]      as ConvOut
 }
 
-package "Factory & Registry" {
-  [Protocol Registry] as REG
-  [AMUBuilder] as B1
-  [BasalGangliaBuilder] as B2
-  [amu_factory] as F1
-  [basal_ganglia_factory] as F2
+package "Argument Parsing" {
+    [argparse]                        as ArgParse
 }
 
-package "Schema (HDF5 Model)" {
-  [MasterBundle] as MB
-  [StandardFormatGroup] as SF
-  [Simulation] as SIM
-  [SpikeMap] as SM
-  [Population] as POP
-  [Neuron] as N
-  [StimulusSet] as STSET
-  [PopulationStimulus] as POPSTIM
-  [Stimulus] as STIM
-  [RawBundleGroup] as RAWGRP
-  [ExternalLink] as EXTLINK
+package "Logging Utilities" {
+    [converters.utils.common]         as LogUtil
+    note right of LogUtil::configure_logging configure_logging() endnote
+}
+
+package "Zip Helper" {
+    [converters.utils.zip_helper]     as ZipHelper
+    note right of ZipHelper::zip_directory zip_directory() endnote
+}
+
+package "Protocol Registry" {
+    [converters.factory.protocol_registry] as BuilderRegistry
+    note right of BuilderRegistry::PROTOCOL_BUILDERS PROTOCOL_BUILDERS[protocol] endnote
+}
+
+package "Builders / Factories" {
+    [converters.factory.amu_factory]          as AMUFactory
+    [converters.factory.basal_ganglia_factory] as BGFFactory
+}
+
+package "Schema Objects" {
+    [MasterBundle]               as MB
+    [StandardFormatGroup]        as StdFmt
+    [RawBundleGroup]             as RawGrp
+    [ProtocolGroup]              as ProtoGrp
+    [Simulation]                 as Sim
+    [SpikeMap]                   as SpikeMap
+    [StimuliGroup]               as StimGrp
+    [Population]                 as Pop
+    [Neuron]                     as Neur
 }
 
 package "Exporters" {
-  [ProtocolExporter] as PEXP
-  [AMUExporter] as AMUEXP
-  [BasalGangliaExporter] as BGEXP
+    [converters.exporters.amu_exporter]          as AMUExp
+    [converters.exporters.basal_ganglia_exporter] as BGExp
+    [converters.exporters.protocol_exporter]     as BaseExp <<ABC>>
 }
 
-package "Utilities" {
-  [helpers] as HL
-  [zip_helper] as ZIP
-  [dataset_helpers] as DH
-  [common (logging)] as LOG
+package "Exporter Registry" {
+    [converters.exporters.registry] as ExporterRegistry
+    note right of ExporterRegistry::PROTOCOL_EXPORTERS PROTOCOL_EXPORTERS[protocol] endnote
 }
 
-C1 --> REG : lookup builder
-C2 --> REG : lookup exporter
+package "Validation & Helpers" {
+    [converters.utils.validation] as Validator
+    [converters.utils.helpers]    as Helpers
+    [converters.utils.dataset_helpers] as DSHelpers
+    [converters.utils.compound_attribute] as CompAttr
+    [converters.utils.units]      as Units
+}
 
-REG --> B1 : selects AMUBuilder
-B1 --> F1 : call build_amu_master_bundle()
-REG --> B2 : selects BasalGangliaBuilder
-B2 --> F2 : call build_bg_master_bundle()
+' ==============================================================
+' ==== Relationships / Interactions ============================
+' ==============================================================
 
-F1 --> MB : creates MasterBundle
-F2 --> MB : creates MasterBundle
+' CLI → ArgParse
+ConvIn  --> ArgParse : parse arguments
+ConvOut --> ArgParse : parse arguments
 
-F1 --> ZIP : optional zip_directory()
-F2 --> ZIP : optional zip_directory()
+' CLI → Logging
+ConvIn  --> LogUtil   : configure_logging()
+ConvOut --> LogUtil   : configure_logging()
 
-MB --> SF : contains
-MB --> RAWGRP : optional
-RAWGRP --> EXTLINK : attaches external link
+' CLI → ZipHelper (only when raw bundle required)
+ConvIn  --> ZipHelper : zip_directory()
 
-SF --> SIM : many
-SIM --> SM : OutputSpike
-SIM --> STSET : Stimulus
-SIM --> POP : via SpikeMap (populations)
-POP --> N : neurons
+' CLI → Builder Registry
+ConvIn  --> BuilderRegistry : PROTOCOL_BUILDERS[protocol]
 
-C2 --> PEXP : subclass selection (sub‑parser)
+' Builder Registry → Specific Builder
+BuilderRegistry --> AMUFactory : AMUBuilder
+BuilderRegistry --> BGFFactory : BasalGangliaBuilder
 
-PEXP <|-- AMUEXP
-PEXP <|-- BGEXP
+' Builders → Factory functions (self‑call shown for clarity)
+AMUFactory --> AMUFactory : build_amu_master_bundle(...)
+BGFFactory --> BGFFactory : build_bg_master_bundle(...)
 
-AMUEXP --> HL : get_firing_rates, normalize, …
-BGEXP --> HL : (none, just copy)
+' Factory → Schema objects (populate)
+AMUFactory --> MB : returns MasterBundle
+BGFFactory --> MB : returns MasterBundle
+MB --> StdFmt
+MB --> RawGrp
+MB --> ProtoGrp
 
-C1 --> LOG
-C2 --> LOG
+' Schema → HDF5 (serialization helpers)
+StdFmt  --> DSHelpers : make_group / store_dataset
+RawGrp  --> DSHelpers : make_group / store_dataset
+ProtoGrp --> DSHelpers : make_group / store_dataset
+StimGrp --> CompAttr  : write_compound_attr / read_compound_attr
+Population --> Neur   : to_hdf5 / from_hdf5
+Neuron --> DSHelpers : store_dataset / read_dataset
+
+' CLI (convert_hdf5_to_format) → Validator
+ConvOut --> Validator : validate_master_bundle()
+
+' CLI → Exporter Registry
+ConvOut --> ExporterRegistry : PROTOCOL_EXPORTERS[protocol]
+
+' Exporter Registry → Concrete Exporter
+ExporterRegistry --> AMUExp : AMUExporter
+ExporterRegistry --> BGExp : BasalGangliaExporter
+AMUExp --> BaseExp : implements
+BGExp --> BaseExp : implements
+
+' Exporter → Helpers (stimulus, firing‑rate, normalisation)
+AMUExp --> Helpers : get_discretized_stimulus\nget_firing_rates\nnormalize
+BGExp --> Helpers : (none – uses only HDF5 helpers)
+
+' Exporter → Schema objects (read)
+AMUExp --> Sim : read Config / SimParams / StimuliGroup / SpikeMap
+BGExp --> Sim : read Config / SimParams / StimuliGroup / SpikeMap
+
+' Exporter → numpy (output)
+AMUExp --> npz : np.savez_compressed()
+BGExp --> npz : np.savez()
+
+' Exporter → Logging
+AMUExp --> LogUtil : logger.info / error
+BGExp --> LogUtil : logger.info / error
+
+' Validation uses low‑level checks
+Validator --> DSHelpers : _require_*, _require_group, …
+
+' Units & Compound Attribute are used by many schema classes
+StdFmt --> Units
+StimGrp --> Units
+CompAttr --> Units
 
 @enduml

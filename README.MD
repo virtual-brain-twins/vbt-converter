@@ -13,7 +13,7 @@ vendored as a Git sub‑module.
 
 1. [Overview](#overview)
 2. [Prerequisites](#prerequisites)
-3. [Add the repository as a sub‑module](#add‑as‑submodule)
+3. [Add the repository as a sub‑module](#add-as-submodule)
 4. [Installation (Python environment)](#installation)
 5. [Typical workflow](#workflow)
     * [Step 1 – Build a master HDF5 bundle](#step1-build-bundle)
@@ -34,14 +34,14 @@ vendored as a Git sub‑module.
 
 ## 1. Overview
 
-| Script                                                   | Purpose                                                                                                                                                                 | Main entry points                                                            |
-|----------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------|
-| `converters/generic_converter/convert_any_to_hdf5.py`    | Walk an **AMU directory tree** **or** a **Basal‑Ganglia CSV** and write a *single* master HDF5 file (`master.h5`) along with the raw_bundle.zip.                        | `python -m converters.generic_converter.convert_any_to_hdf5 …`               |
-| `converters/generic_converter/convert_hdf5_to_format.py` | Read the master HDF5 and, **per protocol**, produce the downstream artefacts (`*.dsr.npz` for AMU, `*.npz` for Basal‑Ganglia).                                          | `python -m converters.generic_converter.convert_hdf5_to_format … <protocol>` |
-| `converters/factory/*_factory.py`                        | Low‑level factories that assemble a :class:`~converters.schema.master_bundle.MasterBundle` from raw input.                                                              |
-| `converters/exporters/*_exporter.py`                     | Concrete exporters that implement the per‑simulation conversion logic for a given protocol.                                                                             |
-| `converters/schema/*`                                    | Dataclasses that capture the new HDF5 schema (`Simulation`, `SpikeMap`, `StimulusSet`, …) and implement :class:`~converters.schema.hdf5_serializable.HDF5Serializable`. |
-| `converters/utils/*`                                     | Helper utilities – logging, dataset creation, ZIP archiving, CSV handling, etc.                                                                                         |
+| Script                                                   | Purpose                                                                                                                                                                  | Main entry points                                                            |
+|----------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------|
+| `converters/generic_converter/convert_any_to_hdf5.py`    | Walk an **AMU directory tree** **or** a **Basal‑Ganglia CSV** and write a *single* master HDF5 file (`master.h5`) along with the raw_bundle.zip.                         | `python -m converters.generic_converter.convert_any_to_hdf5 …`               |
+| `converters/generic_converter/convert_hdf5_to_format.py` | Read the master HDF5 and, **per protocol**, produce the downstream artefacts (`*.dsr.npz` for AMU, `*.npz` for Basal‑Ganglia).                                           | `python -m converters.generic_converter.convert_hdf5_to_format … <protocol>` |
+| `converters/factory/*_factory.py`                        | Low‑level factories that assemble a :class:`~converters.schema.master_bundle.MasterBundle` from raw input.                                                               |
+| `converters/exporters/*_exporter.py`                     | Concrete exporters that implement the per‑simulation conversion logic for a given protocol.                                                                              |
+| `converters/schema/*`                                    | Dataclasses that capture the new HDF5 schema (`Simulation`, `SpikeMap`, `StimuliGroup`, …) and implement :class:`~converters.schema.hdf5_serializable.HDF5Serializable`. |
+| `converters/utils/*`                                     | Helper utilities – logging, dataset creation, ZIP archiving, CSV handling, **compound‑attribute handling with optional units**, etc.                                     |
 
 All scripts use only the packages listed in `requirements.txt` (NumPy, h5py, PyYAML, tqdm, …).
 
@@ -120,19 +120,27 @@ python -m converters.generic_converter.convert_any_to_hdf5 \
     -o /tmp/master.h5                    \
     --protocol amu                       \
     --log-level INFO                     # optional (DEBUG, INFO, …)
+    # optional arguments introduced in v1.0
+    --protocol-version 1.0.0 \
+    --protocol-info-path /path/to/protocol_info.pdf
 
 # ---- Basal‑Ganglia ----------------------------------------------------
 python -m converters.generic_converter.convert_any_to_hdf5 \
     -i /path/to/run_list.csv             \
     -o /tmp/master.h5                    \
     --protocol basal-ganglia             \
-    --log-level INFO
+    --log-level INFO \
+    --protocol-version 1.0.0 \
+    --protocol-info-path /path/to/protocol_info.pdf
 ```
 
 * **`--protocol`** – either `amu` or `basal-ganglia` (exact strings used by the CLI).
 * **`--no-raw-bundle`** – disables the optional embedding of the original raw data as a ZIP archive (`raw_bundle.zip`).
+* **`--protocol-version`** – version string that will be stored in the *Protocol* group of the bundle.
+* **`--protocol-info-path`** – path to a PDF (or any binary) containing the protocol description; if omitted the script
+  looks for a file named `protocol_info.pdf` inside the input directory.
 * The script creates the output directory if it does not exist, writes the attribute `format_version = "1.0"` to the
-  root, and builds the *StandardFormat* group (`/StandardFormat`) according to the new schema.
+  root, and builds the *StandardFormat* group (`/StandardFormat`) according to the new schema (see below).
 
 <a name="step2-export"></a>
 
@@ -156,8 +164,8 @@ python -m converters.generic_converter.convert_hdf5_to_format \
 * The **protocol name** is the *sub‑command* (`amu` or `basal-ganglia`).
 * Protocol‑specific arguments are added automatically – e.g. `--bin-size` (`-b`) for the AMU exporter.
 * Output files are written into the directory given with `-o`.
-* A log file `<script_name>.log` is created in the directory defined by the environment variable `VBT_JOB_LOGS` (
-  default: the current working directory) and a copy of all messages is also sent to `stderr`.
+* A log file `<script_name>.log` is created in the directory defined by the environment variable `VBT_JOB_LOGS`
+  (default: the current working directory) and a copy of all messages is also sent to `stderr`.
 
 ---  
 
@@ -166,47 +174,50 @@ python -m converters.generic_converter.convert_hdf5_to_format \
 ## 6. HDF5 bundle layout (schema 1.0)
 
 The master file follows a **well‑defined hierarchy** that is versioned (`format_version = "1.0"`). All protocol‑specific
-data lives under the top‑level group **`StandardFormat`**; optional raw data and external‑dependency information are
-stored in separate groups.
+data lives under the top‑level group **`StandardFormat`**; optional raw data, protocol information and
+external‑dependency information are stored in separate groups.
 
 ```
-/
 ├─ format_version (attr) = "1.0"
 ├─ StandardFormat/
 │   ├─ Global/                ← global experiment metadata (attributes)
+│   ├─ Configuration/         ← optional simulation‑wide configuration (compound attributes)
 │   └─ Simulations/
 │       ├─ Sim_<id_1>/        ← first simulation
+│       │   ├─ Configuration/ ← per‑simulation configuration (compound KV container)
 │       │   ├─ Parameters/    ← scalar key/value pairs (SimulationParameters)
-│       │   ├─ Stimuli/       ← StimulusSet (population‑wise piece‑wise constants)
+│       │   ├─ Stimuli/       ← StimuliGroup (population‑wise piece‑wise constants)
 │       │   └─ OutputSpikes/  ← SpikeMap (Populations → Neurons → times/indices)
 │       ├─ Sim_<id_2>/ …
 │       └─ …
-├─ RawBundle/                 ← optional; contains a scalar dataset linking to raw_bundle.zip
-└─ ExternalDependencies/      ← optional; mapping dependency → version / URL (attributes)
+├─ RawBundle/                 ← optional; contains the raw zip archive *as a dataset* (`raw_bundle.zip`)
+├─ Protocol/                  ← optional; stores protocol version and binary documentation (PDF, etc.)
+└─ ExternalDependencies/      ← **removed** – this group is no longer part of the schema
 ```
 
 ### Common root structure
 
-| Path                                   | Meaning                                                                                                                                                                                                          |
-|----------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `/format_version`                      | String attribute – current schema version (`"1.0"`).                                                                                                                                                             |
-| `/StandardFormat/Global`               | Attributes holding free‑form global metadata (`experiment_info`, arbitrary key/value pairs).                                                                                                                     |
-| `/StandardFormat/Simulations/Sim_<id>` | One group per simulation. The `<id>` is taken from the source (CSV `sim_info_file` stem for Basal‑Ganglia, directory name for AMU).                                                                              |
-| `/RawBundle`                           | If `--no-raw-bundle` is **not** used, a scalar dataset `raw_bundle.zip` stores an :class:`~converters.schema.external_link.ExternalLink` that points to the zipped raw data archive (relative to the HDF5 file). |
-| `/ExternalDependencies`                | Optional mapping of external software dependencies (e.g. `numpy → "1.26.0"`).                                                                                                                                    |
+| Path                                   | Meaning                                                                                                                                                                                                                                       |
+|----------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `/format_version`                      | String attribute – current schema version (`"1.0"`).                                                                                                                                                                                          |
+| `/StandardFormat/Global`               | Attributes holding free‑form global metadata (`experiment_info`, **`parameter_simulation_mapping`**, arbitrary key/value pairs).                                                                                                              |
+| `/StandardFormat/Configuration`        | **New (v1.0)** – a group that contains arbitrary key‑value pairs stored as **compound attributes** (value + optional unit). Typically used for global configuration that applies to all simulations.                                          |
+| `/StandardFormat/Simulations/Sim_<id>` | One group per simulation. The `<id>` is taken from the source (CSV `sim_info_file` stem for Basal‑Ganglia, directory name for AMU).                                                                                                           |
+| `/RawBundle`                           | If `--no-raw-bundle` is **not** used, a **dataset** `raw_bundle.zip` stores the raw zip archive *inside* the HDF5 file (compressed chunk‑wise) together with a SHA‑256 checksum attribute.                                                    |
+| `/Protocol`                            | **New (v1.0)** – stores protocol meta‑information. Contains the **attribute** `Version` (UTF‑8 string) and a **dataset** `Content` holding the binary protocol description (e.g. a PDF). The `Content` dataset **must be stored compressed**. |
 
 ### AMU protocol specifics (`/StandardFormat/Simulations/Sim_<id>`)
 
-| Sub‑group                                                                                                                                                                                         | Content                                                                                                                     | HDF5 representation                                                                                                                                                                                                                 |
-|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `Parameters`                                                                                                                                                                                      | All scalar simulation parameters – the three scaling factors plus any additional metadata (e.g. `t_sim`, `record_neurons`). | Stored as **attributes** on the group (`SimulationParameters`).                                                                                                                                                                     |
-| `Stimuli`                                                                                                                                                                                         | A *single* uniform stimulus (same for every population) – piece‑wise‑constant.                                              | One `StimuliGroup` named `"default"` for each population; each contains a `Stimulus` (datasets `Limits`, `Values`, `MaxValue`).                                                                                               |
-| `OutputSpikes`                                                                                                                                                                                    | Spike trains for all populations defined in :data:`AMU_POPULATIONS` (extracted from the sweep directory data).              | `SpikeMap → Population → Neuron → times` (datasets `times`). The optional `indices` dataset is present when the original NPZ included an `indices` array; otherwise a dummy neuron per spike is created during bundle construction. |
-| **Optional** `record_neurons` (binary payload) is stored as an attribute inside the `Parameters` group by the factory – later accessed through `SimulationParameters.kv_pairs["record_neurons"]`. |
+| Sub‑group                                                                                                                                                                                     | Content                                                                                                                     | HDF5 representation                                                                                                                                                                                                                 |
+|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `Parameters`                                                                                                                                                                                  | All scalar simulation parameters – the three scaling factors plus any additional metadata (e.g. `t_sim`, `record_neurons`). | Stored as **attributes** on the group (`SimulationParameters`).                                                                                                                                                                     |
+| `Stimuli`                                                                                                                                                                                     | A *single* uniform stimulus (same for every population) – piece‑wise‑constant.                                              | One `StimuliGroup` named `"default"` for each population; each contains a `Stimulus` (datasets `Limits`, `Values`, `MaxValue`).                                                                                                     |
+| `OutputSpikes`                                                                                                                                                                                | Spike trains for all populations defined in :data:`AMU_POPULATIONS` (extracted from the sweep directory data).              | `SpikeMap → Population → Neuron → times` (datasets `times`). The optional `indices` dataset is present when the original NPZ included an `indices` array; otherwise a dummy neuron per spike is created during bundle construction. |
+| **Optional** `record_neurons` (binary payload) is stored as an attribute inside the `Configuration` group by the factory – later accessed through `Configuration.kv_pairs["record_neurons"]`. |
 
 The **AMU exporter** (`AMUExporter`) reads the above sections, discretises spikes with the user‑provided bin size,
 discretises the stimulus, normalises firing‑rates, stimulus and parameters, and writes a **single compressed NumPy
-archive** named `amu.dsr.npz` (default output suffix `.npz`) with the keys required by the downstream DS‑R pipeline:
+archive** named `amu.npz` (default output suffix `.npz`) with the keys required by the downstream DS‑R pipeline:
 
 ```
 x          → normalised firing‑rate matrix (n_points, n_time_bins, n_populations)
@@ -222,20 +233,18 @@ mu_theta, sd_theta → mean / std used for normalisation of theta
 
 ### Basal‑Ganglia protocol specifics (`/StandardFormat/Simulations/Sim_<id>`)
 
-| Sub‑group                                      | Content                                                                                          | HDF5 representation                                                                                                                                                                     |
-|------------------------------------------------|--------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `Parameters`                                   | Simulation meta‑data (network state, duration, DA level, input conductance, …).                  | Stored as attributes (string‑encoded or JSON‑encoded) in the `Parameters` group.                                                                                                        |
+| Sub‑group                                      | Content                                                                                          | HDF5 representation                                                                                                                                                               |
+|------------------------------------------------|--------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `Parameters`                                   | Simulation meta‑data (network state, duration, DA level, input conductance, …).                  | Stored as attributes (string‑encoded or JSON‑encoded) in the `Parameters` group.                                                                                                  |
 | `Stimuli`                                      | Full stimulus definition – per‑population piece‑wise constant or generic sub‑stimuli.            | One `StimuliGroup` per population; each sub‑stimulus stores a `Stimulus` (datasets `Limits`, `Values`, `MaxValue`) and any scalar attributes (e.g. generator type, cluster size). |
-| `OutputSpikes`                                 | Direct copy of the original Snudda spike‑output HDF5 hierarchy (`meta_data`, `time`, `neurons`). | The factory reads the classic Snudda layout and builds a `SpikeMap` comprised of `Population` and `Neuron` objects (datasets `times`).                                                  |
+| `OutputSpikes`                                 | Direct copy of the original Snudda spike‑output HDF5 hierarchy (`meta_data`, `time`, `neurons`). | The factory reads the classic Snudda layout and builds a `SpikeMap` comprised of `Population` and `Neuron` objects (datasets `times`).                                            |
 | **Optional** `RawBundle` behaves like for AMU. |
 
 The **Basal‑Ganglia exporter** (`BasalGangliaExporter`) writes **one `.npz` per simulation** containing:
 
-- Will be extended further!
-
-* `metadata` – a JSON‑encoded string of all scalar meta‑data (attributes from `Parameters`).
-* `<pop>_times` – raw spike timestamps for each population.
-* `<pop>_indices` – optional neuron IDs (present only if the original data stored them).
+- `metadata` – a JSON‑encoded string of all scalar meta‑data (attributes from `Parameters`).
+- `<pop>_times` – raw spike timestamps for each population.
+- `<pop>_indices` – optional neuron IDs (present only if the original data stored them).
 
 ---  
 
@@ -248,7 +257,9 @@ exporter, register them in the dictionaries `PROTOCOL_BUILDERS` and `PROTOCOL_EX
 automatically add a new sub‑command to the CLI.
 
 - Create a new factory that produces a :class:`~converters.schema.master_bundle.MasterBundle` from the raw data. Follow
-  the pattern of `AMUFactory` or `BasalGangliaFactory`.
+  the pattern of `AMUFactory` or `BasalGangliaFactory`.  
+  **New factories must now accept the arguments `protocol_version` (str) and `protocol_info_path` (Path)** –
+  they are passed through the generic driver.
 - Register the factory in `PROTOCOL_BUILDERS` (see `protocol_registry.py`).
 
 Adding support for a new downstream format only requires a few well‑defined steps:
@@ -282,17 +293,18 @@ The generic driver automatically:
   existing code).
 * Handles logging, input validation and HDF5 opening.
 
----
+---  
 
 <a name="design-doc"></a>
 
 ## 8. Design Documentation
 
 Take a look at the generated UML diagrams, data‑flow diagrams and sequence diagrams in `docs/` for a visual overview of
-the architecture, data flow and execution sequences.
-See [docs/Readme.md](docs/Readme.md) for more details.
+the architecture, data flow and execution sequences. See [docs/Readme.md](docs/Readme.md) for more details.
 
----
+The detailed specification of the HDF5 schema is in [docs/specification/Virtual Brain Twin Inter Protocol Data Standard Specification and HDF5 Specification_v1.0.docx](docs/specification/Virtual%20Brain%20Twin%20Inter%20Protocol%20Data%20Standard%20Specification%20and%20HDF5%20Specification_v1.0.docx).
+
+---  
 
 <a name="minio-cache"></a>
 
@@ -302,20 +314,19 @@ If you need to create a new cache entry **or** update an existing one that is us
 **`update_or_create_new_cache_job`** manually in a pipeline.  
 Set the following CI variables when you trigger the job:
 
-| Variable         | Description                                                                 | Example value                                                                         |
-|------------------|-----------------------------------------------------------------------------|---------------------------------------------------------------------------------------|
-| `CI_CACHE_KEY`   | The cache key that GitLab uses for the MinIO bucket.                        | `vbt-converter-test-cache` (AMU cache key) / vbt-kth-bg-protocol-cache (BG cache key) |
-| `CI_CACHE_DIR`   | Directory inside the job where the cache will be written.                   | `${CI_PROJECT_DIR}/tests/test_data/`                                                  |
-| `MINIO_SRC_PATH` | Path (relative to the bucket *ci‑temp‑cache*) of the new ground‑truth file. | `VBT_AMU_Protocol/ground_truth/master_v1.h5`                                          |
-| `LOCAL_DEST_DIR` | Full destination path inside the job where the file will be copied to.      | `${CI_PROJECT_DIR}/tests/test_data/ground_truth/test_convert_output.h5`               |
+| Variable         | Description                                                                 | Example value                                                                           |
+|------------------|-----------------------------------------------------------------------------|-----------------------------------------------------------------------------------------|
+| `CI_CACHE_KEY`   | The cache key that GitLab uses for the MinIO bucket.                        | `vbt-converter-test-cache` (AMU cache key) / `vbt-kth-bg-protocol-cache` (BG cache key) |
+| `CI_CACHE_DIR`   | Directory inside the job where the cache will be written.                   | `${CI_PROJECT_DIR}/tests/test_data/`                                                    |
+| `MINIO_SRC_PATH` | Path (relative to the bucket *ci‑temp‑cache*) of the new ground‑truth file. | `VBT_AMU_Protocol/ground_truth/master_v1.h5`                                            |
+| `LOCAL_DEST_DIR` | Full destination path inside the job where the file will be copied to.      | `${CI_PROJECT_DIR}/tests/test_data/ground_truth/test_convert_output.h5`                 |
 
 ### What the job does? (Example case: AMU protocol)
 
 The job copies the object located at https://vbt-minio.fz-juelich.de/console/browser/ci-temp-cache/$MINIO_SRC_PATH to
 the local cache location defined by `LOCAL_DEST_DIR`. When the job finishes successfully, the ground‑truth file in the
 cache (`tests/test_data/ground_truth/test_convert_output.h5`) is refreshed, and subsequent integration tests will use
-the
-updated data.
+the updated data.
 
 ### How to run it
 
@@ -327,14 +338,15 @@ updated data.
 After the job succeeds, the MinIO cache entry identified by `CI_CACHE_KEY` contains the new data and is ready for the
 integration tests.
 
+---  
+
 <a name="testing"></a>
 
 ## 10. Running the test‑suite (optional)
 
 The library includes a test‑suite (unit and integration) that can be run with `pytest`. The tests are located in
-`tests/` and cover the schema, factories, exporters and CLI scripts.
-The test can be run via GitLab CI/CD or locally. To run the tests locally, ensure you have `pytest` installed in your
-environment and execute:
+`tests/` and cover the schema, factories, exporters and CLI scripts. The test can be run via GitLab CI/CD or locally. To
+run the tests locally, ensure you have `pytest` installed in your environment and execute:
 
 ```bash
 pytest tests/
@@ -353,5 +365,3 @@ Contributions are welcome:
 * Create a feature branch.
 * Ensure the test suite passes (`pytest`).
 * Open a merge request against the `main` branch.
-
----

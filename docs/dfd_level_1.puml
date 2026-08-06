@@ -1,49 +1,41 @@
-@startuml
-' -------------------------------------------------
-' Styling (optional)
-skinparam backgroundColor #FEFEFE
-skinparam handwritten true
-
-' -------------------------------------------------
-' Title
-title vbt-converter - Detailed Data‑Flow (Level‑1)
-
-' -------------------------------------------------
-' Actors
+@startuml dfd_level_1
+' ==== Actors ====
 actor User
 
-' -------------------------------------------------
-' Main blocks (using the native element names)
-rectangle "CLI (argparse + logging)\nconvert_any_to_hdf5.py" as CLI
-rectangle "Protocol Builder Registry\n(PROTOCOL_BUILDERS)" as REG
-rectangle "AMUBuilder / BasalGangliaBuilder" as BUILDER
-rectangle "Factory Functions\namu_factory / basal_ganglia_factory" as FACTORY
-rectangle "Schema Objects\nMasterBundle, StandardFormatGroup, …" as SCHEMA
-rectangle "ZIP Helper\nzip_directory()" as ZIP
+' ==== Data Stores ====
+folder "Input Directory / CSV" as IN_DIR
+folder "Protocol PDF (optional)" as PROTO_PDF
+file "Raw ZIP (tmp)" as RAW_ZIP
+database "MasterBundle (HDF5)" as H5_BUNDLE
+folder "Exported Files (.npz, .dsr.npz)" as OUT_FILES
 
-' -------------------------------------------------
-' Data stores (using 'package' which looks like a folder)
-package "Raw Input\n(Dir / CSV)" as RAW
-package "Master HDF5 file\nbundle.h5" as H5
-package "Optional raw‑bundle.zip\n(embedded link)" as ZIPFILE
+' ==== Processes (inside convert_any_to_hdf5) ====
+rectangle "Parse CLI arguments\n(argparse)" as PARSE_ARGS
+rectangle "Configure Logging\n(configure_logging)" as LOG_CFG
+rectangle "Zip raw data (optional)\n(zip_directory)" as ZIP_RAW
+rectangle "Select Protocol Builder\n(PROTOCOL_BUILDERS)" as SELECT_BUILDER
+rectangle "Build MasterBundle\n(ProtocolBuilder.__call__)" as BUILD_BUNDLE
+rectangle "Write HDF5 file\n(MasterBundle.to_hdf5)" as WRITE_H5
 
-' -------------------------------------------------
-' Data‑flow arrows
-User   --> CLI      : request conversion
-CLI    --> RAW      : read input path
-CLI    --> REG      : lookup builder (args.protocol)
-REG    --> BUILDER  : instantiate
-BUILDER --> FACTORY : call build_*_master_bundle(...)
-FACTORY --> RAW     : open files (npz, yaml, h5, json, …)
-FACTORY --> SCHEMA  : create objects (Simulation, SpikeMap, StimulusSet,…)
-FACTORY --> ZIP     : (optional) zip raw directory
-ZIP    --> ZIPFILE  : create archive
-FACTORY --> SCHEMA  : assemble MasterBundle
+' ==== Data Flows ====
+User --> PARSE_ARGS : run script
+PARSE_ARGS --> LOG_CFG : log‑level
+PARSE_ARGS --> IN_DIR : -i / --input
+PARSE_ARGS --> PROTO_PDF : --protocol‑info‑path
+PARSE_ARGS --> RAW_ZIP : --no‑raw‑bundle (negated)
+PARSE_ARGS --> SELECT_BUILDER : --protocol
 
-SCHEMA --> H5       : MasterBundle.to_hdf5()
-H5     --> ZIPFILE  : external‑link stored (RawBundleGroup)
+LOG_CFG --> ZIP_RAW : logger
+ZIP_RAW --> RAW_ZIP : create zip (if enabled)
 
-CLI    --> H5       : write file
-CLI    --> User     : "Finished – master file written"
+SELECT_BUILDER --> BUILD_BUNDLE : builder object (AMUBuilder / BasalGangliaBuilder)
+BUILD_BUNDLE --> IN_DIR : input_path
+BUILD_BUNDLE --> RAW_ZIP : embed_raw_path (optional)
+BUILD_BUNDLE --> PROTO_PDF : protocol_info_path
+BUILD_BUNDLE --> H5_BUNDLE : returns MasterBundle
 
+WRITE_H5 --> H5_BUNDLE : serialize + metadata
+WRITE_H5 --> OUT_FILES : .h5 file created
+
+User --> OUT_FILES : final master bundle ready
 @enduml

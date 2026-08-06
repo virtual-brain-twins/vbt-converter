@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Tuple, Optional
 import h5py
 
 from converters.schema.stimulus import Stimulus
-from converters.utils.compound_attribute import write_compound_attr, read_compound_attr
+from converters.utils.compound_attribute_helper import write_compound_attr, read_compound_attr
 from converters.utils.units import Unit
 
 

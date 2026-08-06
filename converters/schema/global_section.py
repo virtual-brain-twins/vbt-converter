@@ -23,7 +23,7 @@ from typing import Dict, Any, Tuple, Optional
 import h5py
 
 from converters.schema.hdf5_serializable import HDF5Serializable
-from converters.utils.compound_attribute import write_compound_attr, read_compound_attr
+from converters.utils.compound_attribute_helper import write_compound_attr, read_compound_attr
 from converters.utils.dataset_helpers import make_group
 from converters.utils.units import Unit
 

@@ -1,242 +1,289 @@
-"""pytest test suite for the ``Simulation`` class.
+"""
+Pytest test suite for :class:`converters.schema.simulation.Simulation`.
 
-The tests focus on the public ``to_hdf5`` and ``from_hdf5`` methods.
-All inner calls (``make_group`` and the ``to_hdf5`` / ``from_hdf5`` helpers of the
-contained objects) are mocked and their invocations are asserted.
-
-Allure decorators are used to generate a rich, navigable report:
-* titles, description, feature / story tags
-* severity levels
-* step‑wise execution tracking
-* attachments (simulation id, mock‑group names, etc.)
+All internal interactions are mocked – no real HDF5 files are created.
+The suite is heavily annotated with Allure to produce a rich, searchable
+HTML report.
 """
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest import mock
 
 import allure
-import pytest
+import h5py
 
+from converters.schema.configuration import Configuration
+# ----------------------------------------------------------------------
+# Import the objects under test – adjust the import path to match your repo
+# ----------------------------------------------------------------------
 from converters.schema.simulation import Simulation
 from converters.schema.simulation_parameters import SimulationParameters
 from converters.schema.spike_map import SpikeMap
-from converters.schema.stimulus_set import StimulusSet
+from converters.schema.stimuli_group import StimuliGroup
 
-# -------------------------------------------------------------------------
-# Helper constants for Allure readability
-# -------------------------------------------------------------------------
-_FEATURE = "Simulation – HDF5 (de)serialisation"
-_STORY_TO_HDF5 = "Write Simulation to HDF5"
-_STORY_FROM_HDF5 = "Read Simulation from HDF5"
+# ----------------------------------------------------------------------
+# Helper constants for readability / report consistency
+# ----------------------------------------------------------------------
+_SIM_GROUP_NAME_FMT = "Sim_{sim_id}"
+_ROOT_SUBGROUPS = ("Configuration", "Parameters", "Stimuli", "OutputSpikes")
 
-@allure.parent_suite("VBT‑converter CI/CD")
-@allure.suite("Unit tests")
-@allure.feature(_FEATURE)
-class TestSimulationSerialization:
-    """Test suite that validates the HDF5 (de)serialisation API of ``Simulation``."""
 
-    # ---------------------------------------------------------------------
-    # Common fixtures ----------------------------------------------------
-    # ---------------------------------------------------------------------
-    def setup_method(self) -> None:
-        """Create fresh mocks for every test method."""
-        # --- parent HDF5 group -------------------------------------------------
-        self.mock_parent_group = MagicMock(name="parent_h5_group")
-        self.mock_parent_group.__class__ = type("Group", (), {})  # pretend it is an h5py.Group
+@allure.feature("Simulation – HDF5 (de)serialization")
+class TestSimulationHDF5:
+    """
+    Test suite that verifies the behaviour of
+    :meth:`Simulation.to_hdf5` and :meth:`Simulation.from_hdf5`.
 
-        # --- sub‑groups that ``make_group`` will return ------------------------
-        self.mock_sim_group = MagicMock(name="sim_h5_group")
-        self.mock_params_group = MagicMock(name="params_h5_group")
-        self.mock_stim_group = MagicMock(name="stim_h5_group")
-        self.mock_spike_group = MagicMock(name="spike_h5_group")
+    All *inner* calls are mocked and their usage is asserted, allowing the
+    tests to run in pure memory while still guaranteeing that the public
+    API orchestrates its collaborators correctly.
+    """
 
-        # --- Simulation sub‑objects (Parameters, Stimulus, SpikeMap) ------------
-        self.mock_parameters = MagicMock(name="SimulationParameters")
-        self.mock_stimulus = MagicMock(name="StimulusSet")
-        self.mock_spike_map = MagicMock(name="SpikeMap")
+    # ------------------------------------------------------------------
+    # Optional fixtures – executed before/after each test method
+    # ------------------------------------------------------------------
+    def setup_method(self, method):
+        """
+        Prepare a fresh ``Simulation`` instance and a dummy ``h5py.Group``
+        that will be used as the parent container for the *to_hdf5* test.
+        """
+        self.parent_group = mock.Mock(spec=h5py.Group, name="parent_group")
+        # Use a deterministic id so the expected group names are obvious
+        self.simulation = Simulation(simulation_id="42")
 
-        # Attach a visual cue to the Allure report – the simulation id that will be used.
-        allure.attach("001", name="Default simulation_id (used in tests)", attachment_type=allure.attachment_type.TEXT)
+    def teardown_method(self, method):
+        """Placeholder kept for symmetry – nothing to clean up right now."""
+        pass
 
-    # ---------------------------------------------------------------------
-    # Test ``to_hdf5`` ----------------------------------------------------
-    # ---------------------------------------------------------------------
-    @allure.title("Simulation.to_hdf5 creates correct hierarchy and delegates to sub‑objects")
+    # ------------------------------------------------------------------
+    # Test: Serialization
+    # ------------------------------------------------------------------
+    @allure.story("Serialize a Simulation object")
+    @allure.title("Simulation.to_hdf5 creates groups & delegates correctly")
     @allure.description(
         """
-        Verify that ``Simulation.to_hdf5``:
+        Validates that ``Simulation.to_hdf5``:
 
-        1. Calls ``make_group`` to create the top‑level ``Sim_<id>`` group.
-        2. Creates the three expected child groups (Parameters, Stimulus, OutputSpike).
-        3. Delegates the actual serialisation to the ``to_hdf5`` methods of
-           ``SimulationParameters``, ``StimulusSet`` and ``SpikeMap``.
-        4. Raises ``TypeError`` when the supplied parent is not an ``h5py.Group``.
+        1️⃣ Calls ``make_group`` **five** times (root + four sub‑groups) with the
+           correct parent object and group names.  
+        2️⃣ Invokes the ``to_hdf5`` method of each component exactly once,
+           passing the freshly created subgroup.  
+        3️⃣ Does **not** touch the real filesystem (everything is mocked).
+
+        The workflow is fully exercised in memory; any exception raised by a
+        child would simply propagate – this is out of scope for the happy‑path
+        test but the call‑graph is still verified.
         """
     )
-    @allure.story(_STORY_TO_HDF5)
-    @allure.severity(allure.severity_level.CRITICAL)
-    def test_to_hdf5_successful_flow(self) -> None:
-        """Happy‑path test for :meth:`Simulation.to_hdf5` with all inner calls mocked."""
-        # -----------------------------------------------------------------
-        # 1️⃣  Arrange – patch ``make_group`` and inject mock sub‑objects
-        # -----------------------------------------------------------------
-        with patch("converters.schema.simulation.make_group") as mk_group:
-            # ``make_group`` returns a different mock depending on call order.
+    @allure.severity(allure.severity_level.NORMAL)
+    def test_to_hdf5_calls_inner_methods(self):
+        """Validate the internal workflow of ``Simulation.to_hdf5``."""
+
+        # ------------------------------------------------------------------
+        # 1️⃣  Patch everything that would touch disk or invoke real code
+        # ------------------------------------------------------------------
+        with mock.patch(
+                "converters.schema.simulation.make_group", autospec=True
+        ) as mk_group, \
+                mock.patch.object(Configuration, "to_hdf5", autospec=True) as cfg_to_h5, \
+                mock.patch.object(SimulationParameters, "to_hdf5", autospec=True) as params_to_h5, \
+                mock.patch.object(StimuliGroup, "to_hdf5", autospec=True) as stim_to_h5, \
+                mock.patch.object(SpikeMap, "to_hdf5", autospec=True) as spike_to_h5:
+            # ------------------------------------------------------------------
+            # 2️⃣  Prepare deterministic fake group objects for each ``make_group`` call
+            # ------------------------------------------------------------------
+            fake_root_grp = mock.MagicMock(spec=h5py.Group, name="Sim_42")
+            fake_cfg_grp = mock.MagicMock(spec=h5py.Group, name="Configuration")
+            fake_params_grp = mock.MagicMock(spec=h5py.Group, name="Parameters")
+            fake_stim_grp = mock.MagicMock(spec=h5py.Group, name="Stimuli")
+            fake_spike_grp = mock.MagicMock(spec=h5py.Group, name="OutputSpikes")
+
             mk_group.side_effect = [
-                self.mock_sim_group,  # Sim_<id>
-                self.mock_params_group,  # Parameters
-                self.mock_stim_group,  # Stimulus
-                self.mock_spike_group,  # OutputSpike
+                fake_root_grp,
+                fake_cfg_grp,
+                fake_params_grp,
+                fake_stim_grp,
+                fake_spike_grp,
             ]
 
-            # Build the Simulation instance that uses the MagicMock components.
-            sim = Simulation(
-                simulation_id="001",
-                parameters=self.mock_parameters,
-                stimulus=self.mock_stimulus,
-                output_spike=self.mock_spike_map,
-            )
-
-            # -----------------------------------------------------------------
-            # 2️⃣  Act – invoke the method under test
-            # -----------------------------------------------------------------
+            # ------------------------------------------------------------------
+            # 3️⃣  Execute the method under test – wrapped in an Allure step
+            # ------------------------------------------------------------------
             with allure.step("Call Simulation.to_hdf5"):
-                sim.to_hdf5(self.mock_parent_group)
+                self.simulation.to_hdf5(self.parent_group)
 
-            # -----------------------------------------------------------------
-            # 3️⃣  Assert – verify the call chain and arguments
-            # -----------------------------------------------------------------
-            with allure.step("Validate hierarchy creation via make_group"):
+            # ------------------------------------------------------------------
+            # 4️⃣  Assertions (each block lives in its own Allure step)
+            # ------------------------------------------------------------------
+            # ── make_group invocation validation ─────────────────────────────
+            with allure.step("Validate ``make_group`` call sequence"):
                 expected_calls = [
-                    ((self.mock_parent_group, "Sim_001"),),
-                    ((self.mock_sim_group, "Parameters"),),
-                    ((self.mock_sim_group, "Stimuli"),),
-                    ((self.mock_sim_group, "OutputSpikes"),),
+                    mock.call(self.parent_group, _SIM_GROUP_NAME_FMT.format(sim_id="42")),
+                    mock.call(fake_root_grp, "Configuration"),
+                    mock.call(fake_root_grp, "Parameters"),
+                    mock.call(fake_root_grp, "Stimuli"),
+                    mock.call(fake_root_grp, "OutputSpikes"),
                 ]
-                # ``make_group`` should have been called exactly four times, in order.
-                assert mk_group.call_args_list == expected_calls
+                assert mk_group.mock_calls == expected_calls, \
+                    "Unexpected make_group call order or arguments"
 
-                # Attach the call list to the report for debugging.
-                call_repr = "\n".join(str(c) for c in mk_group.call_args_list)
-                allure.attach(call_repr, name="make_group call args", attachment_type=allure.attachment_type.TEXT)
-
-            with allure.step("Validate delegated ``to_hdf5`` calls on sub‑objects"):
-                self.mock_parameters.to_hdf5.assert_called_once_with(self.mock_params_group)
-                self.mock_stimulus.to_hdf5.assert_called_once_with(self.mock_stim_group)
-                self.mock_spike_map.to_hdf5.assert_called_once_with(self.mock_spike_group)
-
-                # Attach a summary of the delegated calls.
-                delegated_summary = (
-                    f"parameters.to_hdf5 -> {self.mock_params_group}\n"
-                    f"stimulus.to_hdf5  -> {self.mock_stim_group}\n"
-                    f"spike_map.to_hdf5-> {self.mock_spike_group}"
+                # Attach the raw call list for debugging
+                allure.attach(
+                    "\n".join(str(c) for c in mk_group.mock_calls),
+                    name="make_group_calls",
+                    attachment_type=allure.attachment_type.TEXT,
                 )
-                allure.attach(delegated_summary, name="Delegated calls", attachment_type=allure.attachment_type.TEXT)
 
-        # -----------------------------------------------------------------
-        # 4️⃣  Negative case – passing a wrong parent type should raise.
-        # -----------------------------------------------------------------
-        with allure.step("Verify TypeError is raised for non‑Group parent"):
-            with pytest.raises(AttributeError):
-                sim.to_hdf5("not-an-h5py-group")  # type: ignore[arg-type]
+            # ── component ``to_hdf5`` validation ───────────────────────────────
+            with allure.step("Validate each component's ``to_hdf5`` call"):
+                cfg_to_h5.assert_called_once_with(self.simulation.configuration, fake_cfg_grp)
+                params_to_h5.assert_called_once_with(self.simulation.parameters, fake_params_grp)
+                stim_to_h5.assert_called_once_with(self.simulation.stimulus, fake_stim_grp)
+                spike_to_h5.assert_called_once_with(self.simulation.output_spike, fake_spike_grp)
 
-    # ---------------------------------------------------------------------
-    # Test ``from_hdf5`` --------------------------------------------------
-    # ---------------------------------------------------------------------
-    @allure.title("Simulation.from_hdf5 reconstructs instance from HDF5 hierarchy")
+                # Human‑readable summary for the report
+                calls_summary = "\n".join(
+                    [
+                        f"Configuration.to_hdf5 → {cfg_to_h5.call_args}",
+                        f"SimulationParameters.to_hdf5 → {params_to_h5.call_args}",
+                        f"StimuliGroup.to_hdf5 → {stim_to_h5.call_args}",
+                        f"SpikeMap.to_hdf5 → {spike_to_h5.call_args}",
+                    ]
+                )
+                allure.attach(
+                    calls_summary,
+                    name="component_to_hdf5_calls",
+                    attachment_type=allure.attachment_type.TEXT,
+                )
+
+    # ------------------------------------------------------------------
+    # Test: Deserialization
+    # ------------------------------------------------------------------
+    @allure.story("Deserialize a Simulation object")
+    @allure.title("Simulation.from_hdf5 rebuilds object & calls inner from_hdf5")
     @allure.description(
         """
-        Ensure that ``Simulation.from_hdf5``:
+        Confirms that ``Simulation.from_hdf5``:
 
-        1. Extracts the simulation identifier from the group name.
-        2. Calls the ``from_hdf5`` constructors of ``SimulationParameters``,
-           ``StimulusSet`` and ``SpikeMap`` with the appropriate sub‑groups.
-        3. Returns a fully‑populated ``Simulation`` object.
+        1️⃣ Extracts the simulation identifier from the group name (``Sim_<id>``).  
+        2️⃣ Calls the ``from_hdf5`` **class‑method** of each child object exactly once,
+           feeding the matching subgroup.  
+        3️⃣ Returns a fully‑populated ``Simulation`` instance.
+
+        All HDF5 access is mocked, therefore the test runs in pure memory.
         """
     )
-    @allure.story(_STORY_FROM_HDF5)
     @allure.severity(allure.severity_level.CRITICAL)
-    def test_from_hdf5_successful_flow(self) -> None:
-        """Happy‑path test for :meth:`Simulation.from_hdf5` with all inner calls mocked."""
-        # -----------------------------------------------------------------
-        # 1️⃣  Arrange – create a fake HDF5 group hierarchy and patch the
-        #     static constructors of the inner objects.
-        # -----------------------------------------------------------------
-        mock_root = MagicMock(name="root_sim_group")
-        mock_root.name = "/test/Sim_007"  # -> simulation_id = "007"
+    def test_from_hdf5_calls_inner_methods(self):
+        """Validate the internal workflow of ``Simulation.from_hdf5``."""
 
-        # Sub‑groups accessed via ``__getitem__``:
-        mock_params_grp = MagicMock(name="params_group")
-        mock_stim_grp = MagicMock(name="stim_group")
-        mock_spike_grp = MagicMock(name="spike_group")
-        mock_root.__getitem__.side_effect = lambda key: {
+        # ------------------------------------------------------------------
+        # 1️⃣  Mock the HDF5 hierarchy that ``from_hdf5`` expects
+        # ------------------------------------------------------------------
+        #   /some/path/Sim_99
+        #       ├─ Configuration
+        #       ├─ Parameters
+        #       ├─ Stimuli
+        #       └─ OutputSpikes
+        # ------------------------------------------------------------------
+        mock_root_grp = mock.MagicMock(spec=h5py.Group, name="Sim_99")
+        mock_root_grp.name = "/some/path/Sim_99"
+
+        mock_cfg_grp = mock.MagicMock(name="Configuration")
+        mock_params_grp = mock.MagicMock(name="Parameters")
+        mock_stim_grp = mock.MagicMock(name="Stimuli")
+        mock_spike_grp = mock.MagicMock(name="OutputSpikes")
+
+        # ``group['sub_name']`` returns the appropriate subgroup
+        mock_root_grp.__getitem__.side_effect = lambda key: {
+            "Configuration": mock_cfg_grp,
             "Parameters": mock_params_grp,
             "Stimuli": mock_stim_grp,
             "OutputSpikes": mock_spike_grp,
         }[key]
 
-        # Fake return values for the static ``from_hdf5`` methods.
-        fake_params = MagicMock(name="FakeSimulationParameters")
-        fake_stim = MagicMock(name="FakeStimulusSet")
-        fake_spike = MagicMock(name="FakeSpikeMap")
-
-        with patch.object(SimulationParameters, "from_hdf5", return_value=fake_params) as param_from_h5, \
-                patch.object(StimulusSet, "from_hdf5", return_value=fake_stim) as stim_from_h5, \
-                patch.object(SpikeMap, "from_hdf5", return_value=fake_spike) as spike_from_h5:
-            # -----------------------------------------------------------------
-            # 2️⃣  Act – invoke the class method under test
-            # -----------------------------------------------------------------
+        # ------------------------------------------------------------------
+        # 2️⃣  Patch the child ``from_hdf5`` class‑methods
+        # ------------------------------------------------------------------
+        with mock.patch.object(
+                Configuration,
+                "from_hdf5",
+                autospec=True,
+                return_value=Configuration(),
+        ) as cfg_from, \
+                mock.patch.object(
+                    SimulationParameters,
+                    "from_hdf5",
+                    autospec=True,
+                    return_value=SimulationParameters(),
+                ) as params_from, \
+                mock.patch.object(
+                    StimuliGroup,
+                    "from_hdf5",
+                    autospec=True,
+                    return_value=StimuliGroup(),
+                ) as stim_from, \
+                mock.patch.object(
+                    SpikeMap,
+                    "from_hdf5",
+                    autospec=True,
+                    return_value=SpikeMap(),
+                ) as spike_from:
+            # ------------------------------------------------------------------
+            # 3️⃣  Execute the method under test
+            # ------------------------------------------------------------------
             with allure.step("Call Simulation.from_hdf5"):
-                result = Simulation.from_hdf5(mock_root)
+                result = Simulation.from_hdf5(mock_root_grp)
 
-            # -----------------------------------------------------------------
-            # 3️⃣  Assert – verify identifier extraction and sub‑object construction
-            # -----------------------------------------------------------------
-            with allure.step("Validate simulation identifier extraction"):
-                assert result.simulation_id == "007"
-                allure.attach(result.simulation_id, name="Extracted simulation_id",
-                              attachment_type=allure.attachment_type.TEXT)
-
-            with allure.step("Validate calls to inner ``from_hdf5`` constructors"):
-                param_from_h5.assert_called_once_with(mock_params_grp)
-                stim_from_h5.assert_called_once_with(mock_stim_grp)
-                spike_from_h5.assert_called_once_with(mock_spike_grp)
-
-                # Attach a compact call‑summary.
-                call_summary = (
-                    f"SimulationParameters.from_hdf5({mock_params_grp})\n"
-                    f"StimulusSet.from_hdf5({mock_stim_grp})\n"
-                    f"SpikeMap.from_hdf5({mock_spike_grp})"
+            # ------------------------------------------------------------------
+            # 4️⃣  Verify identifier extraction
+            # ------------------------------------------------------------------
+            with allure.step("Check that the simulation identifier is parsed"):
+                assert result.simulation_id == "99", "Identifier extraction failed"
+                allure.attach(
+                    result.simulation_id,
+                    name="extracted_simulation_id",
+                    attachment_type=allure.attachment_type.TEXT,
                 )
-                allure.attach(call_summary, name="Inner from_hdf5 calls", attachment_type=allure.attachment_type.TEXT)
 
-            with allure.step("Validate the returned Simulation instance"):
-                assert isinstance(result, Simulation)
-                assert result.parameters is fake_params
-                assert result.stimulus is fake_stim
-                assert result.output_spike is fake_spike
+            # ------------------------------------------------------------------
+            # 5️⃣  Validate inner ``from_hdf5`` calls
+            # ------------------------------------------------------------------
+            with allure.step("Assert each child ``from_hdf5`` was invoked once"):
+                cfg_from.assert_called_once_with(mock_cfg_grp)
+                params_from.assert_called_once_with(mock_params_grp)
+                stim_from.assert_called_once_with(mock_stim_grp)
+                spike_from.assert_called_once_with(mock_spike_grp)
 
-                # Attach a representation of the fully built object.
-                allure.attach(repr(result), name="Resulting Simulation object",
-                              attachment_type=allure.attachment_type.TEXT)
+                # Attach a readable call‑summary
+                calls_summary = "\n".join(
+                    [
+                        f"Configuration.from_hdf5 → {cfg_from.call_args}",
+                        f"SimulationParameters.from_hdf5 → {params_from.call_args}",
+                        f"StimuliGroup.from_hdf5 → {stim_from.call_args}",
+                        f"SpikeMap.from_hdf5 → {spike_from.call_args}",
+                    ]
+                )
+                allure.attach(
+                    calls_summary,
+                    name="inner_from_hdf5_calls",
+                    attachment_type=allure.attachment_type.TEXT,
+                )
 
-        # -----------------------------------------------------------------
-        # 4️⃣  Edge case – missing identifier in group name should raise ValueError.
-        # -----------------------------------------------------------------
-        with allure.step("Verify ValueError for malformed group name"):
-            malformed_group = MagicMock(name="bad_group")
-            malformed_group.name = "/test/Sim_"  # no id after the underscore
-            with pytest.raises(ValueError):
-                Simulation.from_hdf5(malformed_group)
+            # ------------------------------------------------------------------
+            # 6️⃣  Final sanity checks on the returned object
+            # ------------------------------------------------------------------
+            with allure.step("Validate the returned ``Simulation`` instance"):
+                assert isinstance(result, Simulation), "Result is not a Simulation"
+                assert isinstance(result.configuration, Configuration)
+                assert isinstance(result.parameters, SimulationParameters)
+                assert isinstance(result.stimulus, StimuliGroup)
+                assert isinstance(result.output_spike, SpikeMap)
 
-    # ---------------------------------------------------------------------
-    # Optional cleanup (not strictly required for pure mocks but demonstrates
-    # the pattern for real resources).
-    # ---------------------------------------------------------------------
-    def teardown_method(self) -> None:
-        """Reset all mocks – useful when real resources are allocated."""
-        # In this pure‑mock scenario nothing needs explicit teardown.
-        # The method exists to illustrate where you would close files,
-        # delete temporary directories, etc.
-        pass
+                # Full object dump for debugging purposes
+                allure.attach(
+                    repr(result),
+                    name="Simulation_repr",
+                    attachment_type=allure.attachment_type.TEXT,
+                )

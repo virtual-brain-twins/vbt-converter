@@ -41,7 +41,7 @@ from typing import Any, Dict, Tuple, Optional, Type, TypeVar, ClassVar
 import h5py
 
 from .hdf5_serializable import HDF5Serializable
-from ..utils.compound_attribute import write_compound_attr, read_compound_attr
+from ..utils.compound_attribute_helper import write_compound_attr, read_compound_attr
 from ..utils.units import Unit
 
 # Generic type that represents a subclass of the container itself.

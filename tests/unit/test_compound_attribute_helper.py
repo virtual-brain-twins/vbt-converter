@@ -28,6 +28,10 @@ def _make_fake_compound(type_name: str, serialized: str, unit_str: str = ""):
 # ----------------------------------------------------------------------
 # The actual test class
 # ----------------------------------------------------------------------
+@allure.parent_suite("VBT‑converter CI/CD")
+@allure.suite("Unit tests")
+@allure.sub_suite("Tests for HDF5 Compound Attribute Utilities")
+@allure.description("Unit tests for the `write_compound_attr` and `read_compound_attr` helpers.")
 @allure.feature("HDF5 Compound Attribute Utilities")
 class TestCompoundAttributeUtils:
     """

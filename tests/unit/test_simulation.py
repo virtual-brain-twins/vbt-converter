@@ -29,6 +29,10 @@ _SIM_GROUP_NAME_FMT = "Sim_{sim_id}"
 _ROOT_SUBGROUPS = ("Configuration", "Parameters", "Stimuli", "OutputSpikes")
 
 
+@allure.parent_suite("VBT‑converter CI/CD")
+@allure.suite("Unit tests")
+@allure.sub_suite("Tests for Simulation")
+@allure.description("Unit tests for the `Simulation` class, mocking all I/O and verifying the public API.")
 @allure.feature("Simulation – HDF5 (de)serialization")
 class TestSimulationHDF5:
     """

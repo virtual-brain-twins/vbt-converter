@@ -9,7 +9,6 @@ report.
 from __future__ import annotations
 
 import json
-import pathlib
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -22,14 +21,16 @@ import allure
 from converters.schema.protocol_group import ProtocolGroup
 from converters.schema.raw_bundle_group import RawBundleGroup
 from converters.schema.standard_format_group import StandardFormatGroup
-from tests.integration.vbt_amu_protocol_pipeline.utils.validate_and_report import compare_npz
 
 
 # ----------------------------------------------------------------------
 #  Test‑suite for `converters.schema.master_bundle.MasterBundle`
 # ----------------------------------------------------------------------
 
-
+@allure.parent_suite("VBT‑converter CI/CD")
+@allure.suite("Unit tests")
+@allure.sub_suite("Tests for MasterBundle")
+@allure.description("Unit tests for the `MasterBundle` class, mocking all I/O and verifying the public API.")
 @allure.feature("MasterBundle")
 @allure.story("Serialisation / Deserialisation of a complete bundle")
 class TestMasterBundle:

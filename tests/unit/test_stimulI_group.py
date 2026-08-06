@@ -35,7 +35,11 @@ def mock_h5_group():
 # -------------------------------------------------------------------------
 #  Test class -------------------------------------------------------------
 # -------------------------------------------------------------------------
-@allure.feature("HDF5 Serialisation")
+@allure.parent_suite("VBT‑converter CI/CD")
+@allure.suite("Unit tests")
+@allure.sub_suite("Tests for StimuliGroup")
+@allure.description("Unit tests for the `StimuliGroup` class, mocking all I/O and verifying the public API.")
+@allure.feature("StimuliGroup – HDF5 (de)serialization")
 @allure.story("StimuliGroup – round‑trip to/from HDF5")
 class TestStimuliGroupSerialization:
     """

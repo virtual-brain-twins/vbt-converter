@@ -142,7 +142,9 @@ def main() -> None:
             "--output",
             str(output_hdf5),
             "--protocol",
-            "amu"
+            "amu",
+            "--protocol-version",
+            "1.0.0"
         ]
 
         # ------------------------------------------------------------------

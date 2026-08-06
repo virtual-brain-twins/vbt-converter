@@ -18,6 +18,10 @@ _SAMPLE_KV: Dict[str, Tuple[Any, Optional[Unit]]] = {
 }
 
 
+@allure.parent_suite("VBT‑converter CI/CD")
+@allure.suite("Unit tests")
+@allure.sub_suite("Tests for KeyValueCompoundContainer")
+@allure.description("Unit tests for the `KeyValueCompoundContainer` class, focusing on public API behaviour.")
 @allure.feature("Key‑Value Compound Container")
 class TestKeyValueCompoundContainer:
     """

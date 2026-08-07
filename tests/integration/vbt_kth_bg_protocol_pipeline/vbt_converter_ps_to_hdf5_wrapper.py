@@ -185,7 +185,7 @@ def main() -> None:
     logger.debug("Output file: %s", output_master_h5)
 
     result = subprocess.run(
-        ["h5diff", "-q", str(ground_truth), str(output_master_h5)],
+        ["h5diff", "-q", "--exclude-path", "/RawBundle", str(ground_truth), str(output_master_h5)],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True

@@ -61,14 +61,14 @@ def _eval_arith_string(val: Any) -> Any:
     The function recognises patterns such as ``"*1.25"``, ``"30/4000e-6"``, or
     ``"2e-05"`` and evaluates the arithmetic part, returning a ``float``.  If the
     input is not a string or does not match the expected pattern, the original
-    value is returned unchanged.
+    value is returned unchanged along with the unit.
 
     Args:
         val: The value to evaluate.  Usually a ``str`` but any type is accepted.
 
     Returns:
-        The evaluated number if the input matched the arithmetic pattern,
-        otherwise the original ``val``.
+        The evaluated number and the unit if the input matched the arithmetic pattern,
+        otherwise the original ``val``. Unit is not available, hence kept as ``None``.
 
     Raises:
         TypeError: If ``val`` is a string but contains characters that make the
@@ -77,11 +77,11 @@ def _eval_arith_string(val: Any) -> Any:
             original string being returned.
     """
     if not isinstance(val, str):
-        return val
+        return val, None
 
     m = _ARITHMETIC_RE.match(val)
     if not m:
-        return val
+        return val, None
 
     expr = m.group("expr")
     try:
@@ -89,10 +89,10 @@ def _eval_arith_string(val: Any) -> Any:
         # decimal points, exponent notation and the operators + - * / are present.
         number = eval(expr, {"__builtins__": {}}, {})
     except Exception:  # pragma: no cover
-        return val
+        return val, None
 
     # The optional leading '*' is ignored for the numeric result.
-    return number
+    return number, None
 
 
 def _parse_cortical_sub_stimulus(
@@ -204,29 +204,22 @@ def _parse_input_config(input_config: Path) -> StimuliGroup:
 
     with input_config.open("r", encoding="utf-8") as fh:
         cfg = json.load(fh)
-
-    populations: List[StimuliGroup] = []
+    sub_stimuli: Dict[str, Stimulus] = {}
+    sub_attrs: Dict[str, Dict[str, Any]] = {}
+    pop_list_map: Dict[str, List[str]] = {}
 
     for pop_name, pop_content in cfg.items():
-        sub_stimuli: Dict[str, Stimulus] = {}
-        sub_attrs: Dict[str, Dict[str, Any]] = {}
-
-        for sub_name, sub_dict in pop_content.items():
+        for stim_name, sub_dict in pop_content.items():
             if "start" in sub_dict and "frequency" in sub_dict:
                 stimulus, attrs = _parse_cortical_sub_stimulus(sub_dict)
             else:
-                stimulus, attrs = _parse_generic_sub_stimulus(sub_name, sub_dict)
+                stimulus, attrs = _parse_generic_sub_stimulus(stim_name, sub_dict)
 
-            sub_stimuli[sub_name] = stimulus
-            sub_attrs[sub_name] = attrs
+            sub_stimuli[f"{pop_name}_{stim_name}"] = stimulus
+            sub_attrs[f"{pop_name}_{stim_name}"] = attrs
+            pop_list_map[f"{pop_name}_{stim_name}"] = [pop_name]
 
-        populations.append(
-            StimuliGroup(
-                stimuli_map=sub_stimuli, attr_map=sub_attrs
-            )
-        )
-
-    return StimuliGroup(stimuli_map={}, attr_map={})
+    return StimuliGroup(stimuli_map=sub_stimuli, attr_map=sub_attrs, pop_list_map=pop_list_map)
 
 
 def _populations_from_output_spikes(h5_path: Path) -> List[Population]:
@@ -354,8 +347,6 @@ def build_bg_master_bundle(
 
     raw_bundle = RawBundleGroup() if embed_raw else None
     if raw_bundle:
-        raw_bundle.out_path = output_dir
-        raw_bundle.zip_link.target = str(embed_raw_path)
-
+        raw_bundle.zip_path = embed_raw_path
     proto = ProtocolGroup(version=protocol_version, content_path=protocol_info_path)
     return MasterBundle(standard=standard_group, raw=raw_bundle, protocol=proto)

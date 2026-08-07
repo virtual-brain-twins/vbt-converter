@@ -90,17 +90,18 @@ def main() -> None:
     )
 
     input_path = Path(args.input).expanduser().resolve()
+    input_dir = input_path if input_path.is_dir() else input_path.parent
     out_path = Path(args.output).expanduser().resolve()
     out_dir = out_path if out_path.is_dir() else out_path.parent
     raw_zip = out_dir / f"raw_data.zip"
     proto_path = (
-        args.protocol_info_path.replace("{{input}}", str(input_path), 1)
+        args.protocol_info_path.replace("{{input}}", str(input_dir), 1)
         if args.protocol_info_path.startswith("{{input}}")
         else args.protocol_info_path
     )
     protocol_info_path = Path(proto_path).expanduser().resolve()
     if not args.no_raw_bundle:
-        zip_directory(src_root=input_path if input_path.is_dir() else input_path.parent, dst_zip=raw_zip)
+        zip_directory(src_root=input_dir, dst_zip=raw_zip)
     try:
         builder = PROTOCOL_BUILDERS[args.protocol]  # KeyError → unknown protocol (should never happen)
     except KeyError:

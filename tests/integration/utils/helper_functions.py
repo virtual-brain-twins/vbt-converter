@@ -212,13 +212,23 @@ def _format_attrs(attrs: h5py.AttributeManager) -> str:
     """
     Return an HTML <dl class="attrs"> block with *user‑defined* attributes.
     Empty attribute collections produce an empty string.
+
+    The ``attrs`` mapping now yields ``key -> (value, unit)`` tuples.
+    If a unit is supplied it is shown after the value in parentheses.
     """
     if not attrs:
         return ""
 
     lines: List[str] = ['<dl style="display:none;" class="attrs">']
-    for key, val in attrs.items():
-        # ``val`` may be a NumPy scalar / array – try to turn it into JSON.
+    for key, raw_val in attrs.items():
+        # Detect the optional unit.  ``raw_val`` can be either:
+        #   * a plain value, e.g.   42
+        #   * a 2‑tuple/list, e.g.   (42, "Hertz")
+        # Anything else is treated as a plain value.
+        if isinstance(raw_val, (tuple, list)) and len(raw_val) == 2:
+            val, unit = raw_val
+        else:
+            val, unit = raw_val, None
         try:
             # ``tolist`` gives native Python objects; if it fails we fall back.
             native = val.tolist() if hasattr(val, "tolist") else val
@@ -226,8 +236,11 @@ def _format_attrs(attrs: h5py.AttributeManager) -> str:
         except Exception:
             # Fallback – ``repr`` is safe for everything.
             val_str = _escape(repr(val))
+        dd_content = f"Value: {val_str} Unit: {_escape(unit)}" if unit is not None else val_str
+        # Emit one <dt>/<dd> pair.
+        lines.append(f"<dt>{_escape(key)}:</dt><dd>{dd_content}</dd>")
 
-        lines.append(f"<dt>{_escape(key)}:</dt><dd>{_escape(val_str)}</dd>")
+    lines.append("</dl>")
     lines.append("</dl>")
     return "\n".join(lines)
 

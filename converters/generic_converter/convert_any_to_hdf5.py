@@ -119,6 +119,7 @@ def main() -> None:
 
     # Write the file
     master.to_hdf5(out_path)
+    raw_zip.unlink(missing_ok=True)  # Remove the temporary zip file if it was created
     logger.info("Finished – master file written to %s", out_path)
 
 

@@ -257,9 +257,7 @@ exporter, register them in the dictionaries `PROTOCOL_BUILDERS` and `PROTOCOL_EX
 automatically add a new sub‑command to the CLI.
 
 - Create a new factory that produces a :class:`~converters.schema.master_bundle.MasterBundle` from the raw data. Follow
-  the pattern of `AMUFactory` or `BasalGangliaFactory`.  
-  **New factories must now accept the arguments `protocol_version` (str) and `protocol_info_path` (Path)** –
-  they are passed through the generic driver.
+  the pattern of `AMUFactory` or `BasalGangliaFactory`.
 - Register the factory in `PROTOCOL_BUILDERS` (see `protocol_registry.py`).
 
 Adding support for a new downstream format only requires a few well‑defined steps:
@@ -281,7 +279,7 @@ Adding support for a new downstream format only requires a few well‑defined st
    PROTOCOL_EXPORTERS["my-protocol"] = MyNewExporter
    ```
 
-3. **(Optional) Add a builder** if the new protocol also needs to be *created* from raw data.
+3. **Add a builder** if the new protocol also needs to be *created* from raw data.
     * Implement a factory function that returns a :class:`~converters.schema.master_bundle.MasterBundle`.
     * Expose it via a concrete subclass of :class:`converters.factory.protocol_registry.ProtocolBuilder` and add the
       builder to `PROTOCOL_BUILDERS`.

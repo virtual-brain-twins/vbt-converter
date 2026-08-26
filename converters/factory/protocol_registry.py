@@ -70,7 +70,7 @@ class ProtocolBuilder(ABC):
 
 
 class AMUBuilder(ProtocolBuilder):
-    """Builder for the *Acute Myeloid Leukemia* (AMU) protocol.
+    """Builder for the AMU protocol.
 
     This implementation forwards all arguments to
     :func:`converters.factory.amu_factory.build_amu_master_bundle`.

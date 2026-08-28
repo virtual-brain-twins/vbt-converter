@@ -28,8 +28,8 @@ package "Protocol Registry" {
 }
 
 package "Builders / Factories" {
-    [converters.factory.amu_factory]          as AMUFactory
-    [converters.factory.basal_ganglia_factory] as BGFFactory
+    [converters.factory.uva_factory]          as UVAFactory
+    [converters.factory.kth_factory] as KTHFactory
 }
 
 package "Schema Objects" {
@@ -45,8 +45,7 @@ package "Schema Objects" {
 }
 
 package "Exporters" {
-    [converters.exporters.amu_exporter]          as AMUExp
-    [converters.exporters.basal_ganglia_exporter] as BGExp
+    [converters.exporters.rate_exporter]          as RateExp
     [converters.exporters.protocol_exporter]     as BaseExp <<ABC>>
 }
 
@@ -82,16 +81,16 @@ ConvIn  --> ZipHelper : zip_directory()
 ConvIn  --> BuilderRegistry : PROTOCOL_BUILDERS[protocol]
 
 ' Builder Registry → Specific Builder
-BuilderRegistry --> AMUFactory : AMUBuilder
-BuilderRegistry --> BGFFactory : BasalGangliaBuilder
+BuilderRegistry --> UVAFactory : UVABuilder
+BuilderRegistry --> KTHFactory : KTHBuilder
 
 ' Builders → Factory functions (self‑call shown for clarity)
-AMUFactory --> AMUFactory : build_amu_master_bundle(...)
-BGFFactory --> BGFFactory : build_bg_master_bundle(...)
+UVAFactory --> UVAFactory : build_uva_master_bundle(...)
+KTHFactory --> KTHFactory : build_bg_master_bundle(...)
 
 ' Factory → Schema objects (populate)
-AMUFactory --> MB : returns MasterBundle
-BGFFactory --> MB : returns MasterBundle
+UVAFactory --> MB : returns MasterBundle
+KTHFactory --> MB : returns MasterBundle
 MB --> StdFmt
 MB --> RawGrp
 MB --> ProtoGrp
@@ -111,26 +110,21 @@ ConvOut --> Validator : validate_master_bundle()
 ConvOut --> ExporterRegistry : PROTOCOL_EXPORTERS[protocol]
 
 ' Exporter Registry → Concrete Exporter
-ExporterRegistry --> AMUExp : AMUExporter
-ExporterRegistry --> BGExp : BasalGangliaExporter
-AMUExp --> BaseExp : implements
-BGExp --> BaseExp : implements
+ExporterRegistry --> UVA_AMUExp : RateExporter
+UVA_AMUExp --> BaseExp : implements
 
 ' Exporter → Helpers (stimulus, firing‑rate, normalisation)
-AMUExp --> Helpers : get_discretized_stimulus\nget_firing_rates\nnormalize
-BGExp --> Helpers : (none – uses only HDF5 helpers)
+UVA_AMUExp --> Helpers : get_discretized_stimulus\nget_firing_rates\nnormalize
+KTHExp --> Helpers : (none – uses only HDF5 helpers)
 
 ' Exporter → Schema objects (read)
-AMUExp --> Sim : read Config / SimParams / StimuliGroup / SpikeMap
-BGExp --> Sim : read Config / SimParams / StimuliGroup / SpikeMap
+UVA_AMUExp --> Sim : read Config / SimParams / StimuliGroup / SpikeMap
 
 ' Exporter → numpy (output)
-AMUExp --> npz : np.savez_compressed()
-BGExp --> npz : np.savez()
+UVA_AMUExp --> npz : np.savez_compressed()
 
 ' Exporter → Logging
-AMUExp --> LogUtil : logger.info / error
-BGExp --> LogUtil : logger.info / error
+UVA_AMUExp --> LogUtil : logger.info / error
 
 ' Validation uses low‑level checks
 Validator --> DSHelpers : _require_*, _require_group, …

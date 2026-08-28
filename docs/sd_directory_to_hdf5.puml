@@ -5,12 +5,12 @@ participant "argparse.Namespace" as args
 participant "logging (root)" as rootlog
 participant "zip_helper\nzip_directory()" as zipper
 participant "PROTOCOL_BUILDERS\nregistry" as registry
-participant "ProtocolBuilder\n(AMUBuilder/BasalGangliaBuilder)" as builder
-participant "Factory Function\nbuild_amu_master_bundle / build_bg_master_bundle" as factory
+participant "ProtocolBuilder\n(UVABuilder/KTHBuilder)" as builder
+participant "Factory Function\nbuild_uva_master_bundle / build_kth_master_bundle" as factory
 participant "MasterBundle" as bundle
 database "HDF5 file\n(master.h5)" as h5file
 
-u -> cli : python convert_any_to_hdf5.py -i <inp> -o <out> --protocol amu
+u -> cli : python convert_any_to_hdf5.py -i <inp> -o <out> --protocol uva
 cli -> args : parser.parse_args()
 cli -> rootlog : logging.basicConfig(level=args.log_level)
 alt embed raw bundle?
@@ -20,7 +20,7 @@ end
 cli -> registry : PROTOCOL_BUILDERS[args.protocol]
 registry --> cli : builder instance
 cli -> builder : __call__(input_path, embed_raw, embed_raw_path, output_dir, protocol_version, protocol_info_path)
-builder -> factory : build_amu_master_bundle(...)
+builder -> factory : build_uva_master_bundle(...)
 factory --> bundle : MasterBundle object
 cli -> bundle : bundle.to_hdf5(out_path)
 bundle -> h5file : write / set format_version

@@ -74,32 +74,32 @@ unit_tests:
       - allure-results/
     expire_in: 1 week
 
-# 2. Integration Pipeline AMU data conversion: Triggered manually via UI or automatically if Pipeline files change
-trigger-integration-amu:
+# 2. Integration Pipeline UVA data conversion: Triggered manually via UI or automatically if Pipeline files change
+trigger-integration-uva:
   stage: integration-pipelines
   trigger:
-    include: tests/integration/vbt_amu_protocol_pipeline/.gitlab-ci.yml
+    include: tests/integration/vbt_uva_protocol_pipeline/.gitlab-ci.yml
     strategy: depend
   variables:
     PARENT_PIPELINE_ID: "$CI_PIPELINE_ID"
   rules:
     # Run automatically only if files inside pipeline_a folder change
     - changes:
-        - tests/integration/vbt_amu_protocol_pipeline/**/*
+        - tests/integration/vbt_uva_protocol_pipeline/**/*
       when: on_success
     # Allow manual execution from the GitLab UI at any time
     - when: manual
       allow_failure: true
 
 # 3. Integration Pipeline for BG protocol: Triggered manually via UI or automatically if Pipeline files change
-trigger-integration-bg:
+trigger-integration-kth:
   stage: integration-pipelines
   trigger:
-    include: tests/integration/vbt_kth_bg_protocol_pipeline/.gitlab-ci.yml
+    include: tests/integration/vbt_kth_protocol_pipeline/.gitlab-ci.yml
     strategy: depend
   rules:
     - changes:
-        - tests/integration/vbt_kth_bg_protocol_pipeline/**/*
+        - tests/integration/vbt_kth_protocol_pipeline/**/*
       when: on_success
     - when: manual
       allow_failure: true
@@ -272,7 +272,7 @@ vbt_convert_job:
   variables:
     # expose the common VBT variables (they are already defined globally)
     VBT_SUBMODULE_PATH: "${CI_PROJECT_DIR}/ci/template_repo"
-    VBT_CONVERT_PROTOCOL: "amu"
+    VBT_CONVERT_PROTOCOL: "uva"
     VBT_CONVERT_INPUT: "$DATA/VBT_T4-1_UvA_Protocol1/parametersweep_8s_3d_orientation_selective_12012026/"
     VBT_CONVERT_ANY_ARGS: '{"log-level":"INFO","no-raw-bundle":null}'
     VBT_CONVERT_HDF5_ARGS: '{"bin-size":0.001}'
@@ -298,7 +298,7 @@ vbt_convert_job:
           log " Unable to activate vbt‑data after ${max_attempts} attempts – aborting."
           exit 1
         fi
-        log "⚠️  Attempt ${attempt}/${max_attempts} failed – sleeping 10 s and retrying …"
+        log "⚠️  Attempt ${attempt}/${max_attempts} failed – sleeping 10 s and retrying …"
         sleep 10
         ((attempt++))
       done

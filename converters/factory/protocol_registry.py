@@ -1,12 +1,12 @@
 """Provides a small registry of protocol‑specific ``ProtocolBuilder`` objects that
 construct :class:`~converters.schema.master_bundle.MasterBundle` instances from
 raw input data.  Each concrete builder delegates the heavy lifting to a factory
-function (e.g. :func:`converters.factory.amu_factory.build_amu_master_bundle`).
+function (e.g. :func:`converters.factory.uva_factory.build_uva_master_bundle`).
 
 Typical usage
 -------------
 >>> from pathlib import Path
->>> builder = PROTOCOL_BUILDERS["amu"]
+>>> builder = PROTOCOL_BUILDERS["uva"]  # or "kth"
 >>> bundle = builder(
 ...     input_path=Path("/data/raw"),
 ...     embed_raw=True,
@@ -19,8 +19,8 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Dict
 
-from converters.factory.amu_factory import build_amu_master_bundle
-from converters.factory.basal_ganglia_factory import build_bg_master_bundle
+from converters.factory.uva_factory import build_uva_master_bundle
+from converters.factory.kth_factory import build_kth_master_bundle
 from converters.schema.master_bundle import MasterBundle
 
 
@@ -69,11 +69,11 @@ class ProtocolBuilder(ABC):
         raise NotImplementedError
 
 
-class AMUBuilder(ProtocolBuilder):
-    """Builder for the AMU protocol.
+class UVABuilder(ProtocolBuilder):
+    """Builder for the UVA protocol.
 
     This implementation forwards all arguments to
-    :func:`converters.factory.amu_factory.build_amu_master_bundle`.
+    :func:`converters.factory.uva_factory.build_uva_master_bundle`.
     """
 
     def __call__(
@@ -85,13 +85,13 @@ class AMUBuilder(ProtocolBuilder):
             protocol_version: str,
             protocol_info_path: Path
     ) -> MasterBundle:
-        """Create an AMU ``MasterBundle`` from raw input data.
+        """Create an UVA ``MasterBundle`` from raw input data.
 
         The method simply proxies its arguments to
-        :func:`converters.factory.amu_factory.build_amu_master_bundle`.
+        :func:`converters.factory.uva_factory.build_uva_master_bundle`.
 
         Args:
-            input_path: Path to the raw AMU input data.
+            input_path: Path to the raw UVA input data.
             embed_raw: Whether to embed the raw data inside the bundle.
             embed_raw_path: Target path for the embedded raw data.
             output_dir: Directory where the builder may emit auxiliary files.
@@ -99,14 +99,14 @@ class AMUBuilder(ProtocolBuilder):
             protocol_info_path: Path to a PDF file containing protocol information.
 
         Returns:
-            A populated ``MasterBundle`` representing the AMU protocol.
+            A populated ``MasterBundle`` representing the UVA protocol.
 
         Raises:
             FileNotFoundError, PermissionError, ValueError, RuntimeError:
-                Propagated from :func:`build_amu_master_bundle` if the underlying
+                Propagated from :func:`build_uva_master_bundle` if the underlying
                 factory encounters an error.
         """
-        return build_amu_master_bundle(
+        return build_uva_master_bundle(
             input_path,
             embed_raw=embed_raw,
             embed_raw_path=embed_raw_path,
@@ -116,11 +116,11 @@ class AMUBuilder(ProtocolBuilder):
         )
 
 
-class BasalGangliaBuilder(ProtocolBuilder):
-    """Builder for the *Basal Ganglia* protocol.
+class KTHBuilder(ProtocolBuilder):
+    """Builder for the *KTH* protocol.
 
     This implementation forwards all arguments to
-    :func:`converters.factory.basal_ganglia_factory.build_bg_master_bundle`.
+    :func:`converters.factory.kth_factory.build_kth_master_bundle`.
     """
 
     def __call__(
@@ -132,13 +132,13 @@ class BasalGangliaBuilder(ProtocolBuilder):
             protocol_version: str,
             protocol_info_path: Path
     ) -> MasterBundle:
-        """Create a Basal Ganglia ``MasterBundle`` from raw input data.
+        """Create a KTH ``MasterBundle`` from raw input data.
 
         The method simply proxies its arguments to
-        :func:`converters.factory.basal_ganglia_factory.build_bg_master_bundle`.
+        :func:`converters.factory.kth_factory.build_kth_master_bundle`.
 
         Args:
-            input_path: Path to the raw Basal Ganglia input data.
+            input_path: Path to the raw KTH input data.
             embed_raw: Whether to embed the raw data inside the bundle.
             embed_raw_path: Target path for the embedded raw data.
             output_dir: Directory where the builder may emit auxiliary files.
@@ -146,14 +146,14 @@ class BasalGangliaBuilder(ProtocolBuilder):
             protocol_info_path: Path to a PDF file containing protocol information.
 
         Returns:
-            A populated ``MasterBundle`` representing the Basal Ganglia protocol.
+            A populated ``MasterBundle`` representing the KTH protocol.
 
         Raises:
             FileNotFoundError, PermissionError, ValueError, RuntimeError:
-                Propagated from :func:`build_bg_master_bundle` if the underlying
+                Propagated from :func:`build_kth_master_bundle` if the underlying
                 factory encounters an error.
         """
-        return build_bg_master_bundle(
+        return build_kth_master_bundle(
             input_path,
             embed_raw=embed_raw,
             embed_raw_path=embed_raw_path,
@@ -167,6 +167,6 @@ class BasalGangliaBuilder(ProtocolBuilder):
 # ``ProtocolBuilder`` that knows how to produce a ``MasterBundle`` for that
 # protocol.
 PROTOCOL_BUILDERS: Dict[str, ProtocolBuilder] = {
-    "amu": AMUBuilder(),
-    "basal-ganglia": BasalGangliaBuilder(),
+    "uva": UVABuilder(),
+    "kth": KTHBuilder(),
 }

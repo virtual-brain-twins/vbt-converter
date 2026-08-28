@@ -1,6 +1,6 @@
-"""amu_exporter.py – Export AMU‑protocol data from a master HDF5 file.
+"""rate_exporter.py – Export rate data from a master HDF5 file.
 
-The :class:`AMUExporter` class iterates over all simulation groups in a
+The :class:`RateExporter` class iterates over all simulation groups in a
 ``StandardFormat/Simulations`` hierarchy, extracts the stimulus,
 spike‑times and simulation parameters, computes population firing‑rates,
 normalises the data, and finally stores everything in a compressed
@@ -10,11 +10,11 @@ Typical usage (via the generic driver) looks like::
 
     from pathlib import Path
     import h5py
-    from amu_exporter import AMUExporter
+    from rate_exporter import RateExporter
 
     master = h5py.File("master.h5", "r")
     out_dir = Path("./exported")
-    exporter = AMUExporter(master, out_dir, bin_size=0.001)
+    exporter = RateExporter(master, out_dir, bin_size=0.001)
     exporter.run()
 """
 
@@ -36,12 +36,12 @@ from ..schema.spike_map import SpikeMap
 from ..schema.stimuli_group import StimuliGroup
 from ..utils.helpers import normalize, get_discretized_stimulus, get_firing_rates
 
-# The three simulation parameters that are exported for the AMU protocol.
+# The three simulation parameters that are exported for the UVA protocol.
 PARAMETERS = ["numneur", "synstr", "nmdaeff"]
 
 
-class AMUExporter(ProtocolExporter):
-    """Export a collection of simulations in the *AMU* protocol format.
+class RateExporter(ProtocolExporter):
+    """Export a collection of simulations in the *UVA* protocol format.
 
     The exporter follows the generic :class:`~.protocol_exporter.ProtocolExporter`
     contract: the constructor receives a master HDF5 file, an output directory,
@@ -69,7 +69,7 @@ class AMUExporter(ProtocolExporter):
     """
 
     # Public protocol information (used by the generic driver)
-    protocol_name = "amu"
+    protocol_name = "uva_amu_1"
     """Name of the protocol – used to form output file names."""
 
     output_suffix = ".npz"
@@ -101,7 +101,7 @@ class AMUExporter(ProtocolExporter):
             bin_size: float,
             log_level: int = logging.INFO,
     ) -> None:
-        """Create an :class:`AMUExporter`.
+        """Create an :class:`RateExporter`.
 
         Parameters
         ----------
@@ -254,7 +254,7 @@ class AMUExporter(ProtocolExporter):
             # Concatenate spike times of *all* neurons that belong to this population.
             all_times = np.concatenate([n.times for n in pop.neurons]) if pop.neurons else np.empty(0)
 
-            # The AMU protocol does not need per‑neuron indices – they are
+            # The UVA protocol does not need per‑neuron indices – they are
             # kept as ``None`` to simplify downstream processing.
             spikes[pop.population_name] = {"times": all_times, "indices": None}
 
@@ -292,7 +292,7 @@ class AMUExporter(ProtocolExporter):
         """Compatibility shim – the concrete logic lives in :meth:`extract_one_simulation`.
 
         The generic :class:`ProtocolExporter` expects a method named
-        ``export_one_simulation``.  In the AMU implementation the heavy lifting
+            ``export_one_simulation``.  In the UVA implementation the heavy lifting
         is performed by :meth:`extract_one_simulation`; this stub simply
         satisfies the abstract‐base‑class contract and is never called
         directly by the driver.

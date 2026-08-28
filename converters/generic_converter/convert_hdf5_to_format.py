@@ -2,8 +2,7 @@
 Generic master‑HDF5 → protocol‑specific conversion.
 
 Supported protocols (built‑in):
-    * amu            – DS‑R ``.npz`` used by the AMU pipeline
-    * basal-ganglia – simple per‑population ``.npz`` archive
+    * amu_1          – DS‑R ``.npz`` used by the AMU group (see ``converters.exporters.rate_exporter.RateExporter``)
 
 Adding a new protocol:
     1. Create a subclass of ``ProtocolExporter`` (see converters/exporters/…).
@@ -23,16 +22,14 @@ from typing import Dict, Type
 
 import h5py
 
-# Exporter registry – map the sub‑command name → concrete exporter class
-from converters.exporters.amu_exporter import AMUExporter
-from converters.exporters.basal_ganglia_exporter import BasalGangliaExporter
 from converters.exporters.protocol_exporter import ProtocolExporter
+# Exporter registry – map the sub‑command name → concrete exporter class
+from converters.exporters.rate_exporter import RateExporter
 from converters.utils.common import configure_logging
 from converters.utils.validation import validate_master_bundle
 
 PROTOCOL_EXPORTERS: Dict[str, Type[ProtocolExporter]] = {
-    "amu": AMUExporter,
-    "basal-ganglia": BasalGangliaExporter,
+    "uva_amu_1": RateExporter,
 }
 
 
@@ -48,10 +45,11 @@ def _build_main_parser() -> argparse.ArgumentParser:
     """
     parser = argparse.ArgumentParser(
         description=(
-            "Convert a master VBT‑bundle HDF5 file into a protocol‑specific "
-            "format.  The protocol is selected by the sub‑command (e.g. "
-            "`amu` or `basal-ganglia`).  Protocol‑specific options are added "
-            "by the exporter itself."
+            "Convert a standard master VBT‑bundle HDF5 file into a protocol‑specific "
+            "format.  At present the primary use‑case is to extract *rate* data for "
+            "potential downstream visualization.  The protocol is selected by the "
+            "sub‑command (e.g. `uva_amu_1`).  Protocol‑specific options are added by "
+            "the exporter itself."
         )
     )
 
@@ -85,7 +83,7 @@ def _build_main_parser() -> argparse.ArgumentParser:
     )
 
     # Sub‑parsers – one per protocol.  The *dest* argument stores the name
-    # of the selected protocol (e.g. "amu").
+    # of the selected protocol (e.g. "amu_1").
     subparsers = parser.add_subparsers(
         dest="protocol",
         required=True,

@@ -8,19 +8,17 @@
           }
           class exporters {
           }
-          class amu_exporter {
-          }
-          class basal_ganglia_exporter {
-          }
           class protocol_exporter {
+          }
+          class rate_exporter {
           }
           class factory {
           }
-          class amu_factory {
-          }
-          class basal_ganglia_factory {
+          class kth_factory {
           }
           class protocol_registry {
+          }
+          class uva_factory {
           }
           class generic_converter {
           }
@@ -62,17 +60,17 @@
           }
           class utils {
           }
-          class bg_protocol_helper {
-          }
           class common {
           }
-          class compound_attribute {
+          class compound_attribute_helper {
           }
           class data_section_helper {
           }
           class dataset_helpers {
           }
           class helpers {
+          }
+          class kth_protocol_helper {
           }
           class metadata {
           }
@@ -82,52 +80,50 @@
           }
           class zip_helper {
           }
-          amu_exporter --> protocol_exporter
-          basal_ganglia_exporter --> protocol_exporter
           protocol_exporter --> common
-          amu_factory --> configuration
-          amu_factory --> global_section
-          amu_factory --> master_bundle
-          amu_factory --> neuron
-          amu_factory --> population
-          amu_factory --> protocol_group
-          amu_factory --> raw_bundle_group
-          amu_factory --> simulation
-          amu_factory --> simulation_parameters
-          amu_factory --> spike_map
-          amu_factory --> standard_format_group
-          amu_factory --> stimuli_group
-          amu_factory --> stimulus
-          amu_factory --> metadata
-          amu_factory --> units
-          basal_ganglia_factory --> global_section
-          basal_ganglia_factory --> master_bundle
-          basal_ganglia_factory --> neuron
-          basal_ganglia_factory --> population
-          basal_ganglia_factory --> protocol_group
-          basal_ganglia_factory --> raw_bundle_group
-          basal_ganglia_factory --> simulation
-          basal_ganglia_factory --> simulation_parameters
-          basal_ganglia_factory --> spike_map
-          basal_ganglia_factory --> standard_format_group
-          basal_ganglia_factory --> stimuli_group
-          basal_ganglia_factory --> stimulus
-          basal_ganglia_factory --> bg_protocol_helper
-          protocol_registry --> amu_factory
-          protocol_registry --> basal_ganglia_factory
+          rate_exporter --> protocol_exporter
+          kth_factory --> global_section
+          kth_factory --> master_bundle
+          kth_factory --> neuron
+          kth_factory --> population
+          kth_factory --> protocol_group
+          kth_factory --> raw_bundle_group
+          kth_factory --> simulation
+          kth_factory --> simulation_parameters
+          kth_factory --> spike_map
+          kth_factory --> standard_format_group
+          kth_factory --> stimuli_group
+          kth_factory --> stimulus
+          kth_factory --> kth_protocol_helper
+          protocol_registry --> kth_factory
+          protocol_registry --> uva_factory
           protocol_registry --> master_bundle
+          uva_factory --> configuration
+          uva_factory --> global_section
+          uva_factory --> master_bundle
+          uva_factory --> neuron
+          uva_factory --> population
+          uva_factory --> protocol_group
+          uva_factory --> raw_bundle_group
+          uva_factory --> simulation
+          uva_factory --> simulation_parameters
+          uva_factory --> spike_map
+          uva_factory --> standard_format_group
+          uva_factory --> stimuli_group
+          uva_factory --> stimulus
+          uva_factory --> metadata
+          uva_factory --> units
           convert_any_to_hdf5 --> protocol_registry
           convert_any_to_hdf5 --> common
           convert_any_to_hdf5 --> zip_helper
-          convert_hdf5_to_format --> amu_exporter
-          convert_hdf5_to_format --> basal_ganglia_exporter
           convert_hdf5_to_format --> protocol_exporter
+          convert_hdf5_to_format --> rate_exporter
           convert_hdf5_to_format --> common
           convert_hdf5_to_format --> validation
           compound_kv_container --> hdf5_serializable
           configuration --> compound_kv_container
           global_section --> hdf5_serializable
-          global_section --> compound_attribute
+          global_section --> compound_attribute_helper
           global_section --> dataset_helpers
           global_section --> units
           master_bundle --> hdf5_serializable
@@ -159,12 +155,12 @@
           standard_format_group --> simulation
           standard_format_group --> dataset_helpers
           stimuli_group --> stimulus
-          stimuli_group --> compound_attribute
+          stimuli_group --> compound_attribute_helper
           stimuli_group --> units
           stimulus --> hdf5_serializable
           stimulus --> dataset_helpers
           stimulus --> units
-          compound_attribute --> units
+          compound_attribute_helper --> units
           helpers --> stimuli_group
           metadata --> units
           validation --> common

@@ -28,7 +28,7 @@ PARSE_ARGS --> SELECT_BUILDER : --protocol
 LOG_CFG --> ZIP_RAW : logger
 ZIP_RAW --> RAW_ZIP : create zip (if enabled)
 
-SELECT_BUILDER --> BUILD_BUNDLE : builder object (AMUBuilder / BasalGangliaBuilder)
+SELECT_BUILDER --> BUILD_BUNDLE : builder object (UVABuilder / KTHBuilder)
 BUILD_BUNDLE --> IN_DIR : input_path
 BUILD_BUNDLE --> RAW_ZIP : embed_raw_path (optional)
 BUILD_BUNDLE --> PROTO_PDF : protocol_info_path

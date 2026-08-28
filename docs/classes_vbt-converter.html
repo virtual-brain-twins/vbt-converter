@@ -4,26 +4,6 @@
       <div class="mermaid">
     
         classDiagram
-          class AMUBuilder {
-          }
-          class AMUExporter {
-            bin_size : float
-            output_suffix : str
-            protocol_name : str
-            configure_parser(parser: argparse.ArgumentParser) None
-            export_one_simulation(sim_id: str, sim_group: h5py.Group)* None
-            extract_one_simulation(sim_id: str, sim_group: h5py.Group) dict[str, ndarray[tuple[Any, ...], dtype[Any]] | list[str]]
-            run() None
-          }
-          class BasalGangliaBuilder {
-          }
-          class BasalGangliaExporter {
-            output_suffix : str
-            protocol_name : str
-            configure_parser(parser: argparse.ArgumentParser)* None
-            export_one_simulation(sim_id: str, sim_group: h5py.Group) None
-            extract_one_simulation(sim_id: str, sim_group: h5py.Group) dict[str, Any]
-          }
           class Configuration {
           }
           class GlobalSection {
@@ -36,6 +16,8 @@
           class HDF5Serializable {
             from_hdf5(grp: h5py.Group)* _T
             to_hdf5(parent: h5py.Group)* None
+          }
+          class KTHBuilder {
           }
           class KeyValueCompoundContainer {
             kv_pairs : Dict[str, Tuple[Any, Optional[Unit]]]
@@ -104,10 +86,18 @@
             from_hdf5(root: h5py.File) 'ProtocolGroup'
             to_hdf5(root: h5py.File) None
           }
+          class RateExporter {
+            bin_size : float
+            output_suffix : str
+            protocol_name : str
+            configure_parser(parser: argparse.ArgumentParser) None
+            export_one_simulation(sim_id: str, sim_group: h5py.Group)* None
+            extract_one_simulation(sim_id: str, sim_group: h5py.Group) dict[str, ndarray[tuple[Any, ...], dtype[Any]] | list[str]]
+            run() None
+          }
           class RawBundleGroup {
             checksum : Optional[str]
             compression : Optional[Union[str, Tuple[str, int]]]
-            out_path
             zip_path : Path
             extract_to(destination: Union[Path, str]) Path
             from_hdf5(root: h5py.File) 'RawBundleGroup'
@@ -154,6 +144,8 @@
             from_hdf5(grp: h5py.Group) 'Stimulus'
             to_hdf5(parent: h5py.Group) None
           }
+          class UVABuilder {
+          }
           class Unit {
             name
           }
@@ -164,10 +156,9 @@
             location : str | None
             message : str
           }
-          AMUExporter --|> ProtocolExporter
-          BasalGangliaExporter --|> ProtocolExporter
-          AMUBuilder --|> ProtocolBuilder
-          BasalGangliaBuilder --|> ProtocolBuilder
+          RateExporter --|> ProtocolExporter
+          KTHBuilder --|> ProtocolBuilder
+          UVABuilder --|> ProtocolBuilder
           KeyValueCompoundContainer --|> HDF5Serializable
           Configuration --|> KeyValueCompoundContainer
           GlobalSection --|> HDF5Serializable

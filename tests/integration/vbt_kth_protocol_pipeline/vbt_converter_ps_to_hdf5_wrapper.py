@@ -9,10 +9,12 @@ import sys
 import tempfile
 from pathlib import Path
 
-from tests.integration.utils.helper_functions import create_link_html
+from tests.integration.utils.helper_functions import create_link_html, _build_hdf5_tree_html
 
 
+# ----------------------------------------------------------------------
 # Logging helpers
+# ----------------------------------------------------------------------
 def _setup_logging() -> logging.Logger:
     """
     Configure a logger that writes to a file inside the directory pointed to by
@@ -87,40 +89,6 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def move_converted_hdf5(logger: logging.Logger, ci_root: Path, input_dir: Path) -> None:
-    """
-    Move ``ci_root/attachments/converted.hdf5`` into the folder that the
-    converter expects: ``<input_dir>/attachments/converted.hdf5``.
-    """
-    src = ci_root / "attachments" / "converted.hdf5"
-    dst_dir = Path(input_dir) / "attachments"
-    dst = dst_dir / "converted.hdf5"
-
-    # Make sure we have something to move
-    if not src.is_file():
-        logger.error("Source HDF5 file does not exist: %s", src)
-        sys.exit(1)
-
-    # Ensure the destination folder exists (no error if it already does)
-    dst_dir.mkdir(parents=True, exist_ok=True)
-
-    # Move / rename the file
-    try:
-        # Path.replace works like os.rename but raises an OSError if the
-        # source and destination are on different filesystems.
-        # fastest when on same FS
-        src.replace(dst)
-    except OSError:  # (different FS)
-        # Fall back to shutil.move which handles cross‑filesystem moves.
-        try:
-            shutil.move(str(src), str(dst))
-        except OSError as exc:
-            logger.error("Could not move %s → %s: %s", src, dst, exc)
-            sys.exit(1)
-
-    logger.info("Successfully moved %s → %s", src, dst)
-
-
 # Core wrapper logic
 def main() -> None:
     """Entry point – run the converter and copy its output."""
@@ -136,38 +104,36 @@ def main() -> None:
     ci_root = Path(ci_project_dir).resolve()
     logger.info("CI project root resolved to %s", ci_root)
 
-    # Move the hdf5 file to the expected location for the converter
-    move_converted_hdf5(logger, ci_root, args.input_dir)
-
     # Build paths to the converter script and the expected HDF5 output
-    converter_script = ci_root / "converters" / "generic_converter" / "convert_hdf5_to_format.py"
+    converter_script = ci_root / "converters" / "generic_converter" / "convert_any_to_hdf5.py"
     if not converter_script.is_file():
         logger.error("Converter script not found: %s", converter_script)
         sys.exit(1)
 
     logger.info("Using converter script: %s", converter_script)
-    converted_npz = None
-
     with tempfile.TemporaryDirectory() as tmp_dir_str:
-        output_npz_dir = (
+        output_bundle = (
                 Path(tmp_dir_str)
-                / "data"
-                / "converted"
+                / "output"
+                / "bundle"
         )
-        output_npz_dir.parent.mkdir(parents=True, exist_ok=True)  # ensure target folder exists
-        logger.debug("Temporary numpy output will be written to %s", output_npz_dir)
+        output_master_h5 = (
+                Path(output_bundle)
+                / "master.h5"
+        )
+        output_master_h5.parent.mkdir(parents=True, exist_ok=True)  # ensure target folder exists
+        logger.debug("Temporary bundle directory: %s", output_bundle)
 
         # Assemble the command line for the converter
         cmd = [
             sys.executable,  # use the same Python interpreter
             str(converter_script),
             "--input",
-            str(args.input_dir.resolve() / "attachments" / "converted.hdf5"),
-            "--output-dir",
-            str(output_npz_dir),
-            "amu",
-            "--bin-size",
-            "0.1"
+            str(args.input_dir.resolve() / "VBT_KTH_BG_Protocol" / "run_list.csv"),
+            "--output",
+            str(output_master_h5),
+            "--protocol",
+            "kth"
         ]
 
         # Execute the converter
@@ -183,65 +149,75 @@ def main() -> None:
             logger.error("Failed to start converter: %s", exc)
             sys.exit(1)
 
-        # Verify that the converter produced the expected file
-        output_npz = output_npz_dir / "amu.npz"
-        if not output_npz.is_file():
-            logger.error("Expected output file was not created: %s", output_npz)
+        if not output_master_h5.is_file():
+            logger.error("Expected output file was not created: %s", output_master_h5)
             sys.exit(1)
 
-        logger.info("Converter produced expected file: %s", output_npz)
+        logger.info("Converter produced expected file: %s", output_master_h5)
 
-        # Copy the resulting npz file to the user‑specified output directory
+        # Copy the results to the user‑specified output directory
         args.output_dir.mkdir(parents=True, exist_ok=True)
-        converted_npz = Path(str(os.getenv("OUTPUT_NPZ_PATH"))).expanduser().resolve()
-        converted_npz.parent.mkdir(parents=True, exist_ok=True)
+        converted_bundle = Path(str(os.getenv("OUTPUT_BUNDLE_PATH"))).expanduser().resolve()
+        converted_bundle.parent.mkdir(parents=True, exist_ok=True)
 
         try:
-            shutil.copy2(output_npz, converted_npz)
+            shutil.copytree(output_bundle, converted_bundle, dirs_exist_ok=True)
         except OSError as exc:
             logger.error(
-                "Could not copy %s → %s: %s", output_npz, converted_npz, exc
+                "Could not copy %s → %s: %s", output_bundle, converted_bundle, exc
             )
             sys.exit(1)
 
-        logger.info("Conversion successful – file copied to %s", converted_npz)
-    validate_script = ci_root / "tests" / "integration" / "vbt_amu_protocol_pipeline" / "utils" / "validate_and_report.py"
-    report_path: Path = args.output_dir / "test_result_report.html"
+        logger.info("Conversion successful – directory copied to %s", converted_bundle)
+    # ------------------------------------------------------------------
+    # Compare with ground‑truth using h5diff and generate a tiny HTML report
+    # ------------------------------------------------------------------
     ground_truth = (
-            ci_root
-            / "tests"
-            / "test_data"
+            Path(str(os.getenv("VBT_INPUT_PATH")))
             / "ground_truth"
-            / "test_convert_output.npz"
+            / "master.h5"
     )
-    cmd = [
-        sys.executable,
-        str(validate_script),
-        "-i",
-        str(converted_npz),
-        "-o",
-        str(report_path),
-        "-g",
-        str(ground_truth)
-    ]
+    output_master_h5 = (
+            Path(converted_bundle)
+            / "master.h5"
+    )
+    logger.debug("Ground‑truth file: %s", ground_truth)
+    logger.debug("Output file: %s", output_master_h5)
 
-    # Execute the validator
-    try:
-        logger.info("Running validation: %s", " ".join(cmd))
-        result = subprocess.run(cmd, check=True)
-    except subprocess.CalledProcessError as exc:
-        logger.error(
-            "Validation exited with non‑zero status %s.", exc.returncode
-        )
-        sys.exit(exc.returncode)
-    except OSError as exc:
-        logger.error("Failed to start validation: %s", exc)
-        sys.exit(1)
+    result = subprocess.run(
+        ["h5diff", "-q", "--exclude-path", "/RawBundle", str(ground_truth), str(output_master_h5)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True
+    )
     success = result.returncode == 0
     # Build the status_message string
+    # --------------------------------------------------------------
     if result.returncode == 0:
-        status_message = "✅  Validation succeeded."
-    else:
+        # Files are identical – nothing else to report
+        status_message = "✅  Files are identical."
+
+    elif result.returncode == 1:
+        # Files differ – attach the detailed diff
+        status_message = (
+            "❌  Files differ – see the diff below:\n"
+            "stdout:\n"
+            f"{result.stdout}\n"
+            "stderr:\n"
+            f"{result.stderr}"
+        )
+
+    elif result.returncode == 2:
+        # h5diff itself failed – report the error text
+        status_message = (
+            "⚠️  h5diff reported an error:\n"
+            "stdout:\n"
+            f"{result.stdout}\n"
+            "stderr:\n"
+            f"{result.stderr}"
+        )
+
+    else:  # returncode 3 or any unexpected value
         status_message = (
             f"⚠️  Unexpected return code {success}\n"
             "stdout:\n"
@@ -250,32 +226,48 @@ def main() -> None:
             f"{result.stderr}"
         )
     logger.info(
-        "Validation of output npz file, result: %s, status message: %s",
+        "Comparison result: %s, status message: %s",
         "success" if success else "failure",
         status_message
     )
 
-    # Move the input hdf5 to the attachments
-    input_file = args.input_dir.resolve() / "attachments" / "converted.hdf5"
-    input_hdf5_target_path = Path(str(os.getenv("INPUT_HDF5_PATH"))).expanduser().resolve()
-    input_hdf5_target_path.parent.mkdir(parents=True, exist_ok=True)
-
-    try:
-        shutil.move(input_file, input_hdf5_target_path)
-    except OSError as exc:
-        logger.error(
-            "Could not move %s → %s: %s", input_file, input_hdf5_target_path, exc
-        )
-        sys.exit(1)
-    logger.info("Input HDF5 file moved from %s → %s", input_file, input_hdf5_target_path)
+    template_path = ci_root / "tests" / "integration" / "utils" / "hdf5_comparison_template.html"
+    template = template_path.read_text()
+    html_tree = _build_hdf5_tree_html(output_master_h5)
+    filled = (
+        template
+        .replace("{ground_truth_h5}", str(ground_truth))
+        .replace("{output_hdf}", str(output_master_h5))
+        .replace("{status_class_h5}", "success" if success else "failure")
+        .replace("{status_message_h5}", status_message)
+        .replace("{hdf5_tree_html}", html_tree)
+    )
+    report_path: Path = args.output_dir / "test_result_report.html"
+    report_path.write_text(filled)
     create_link_html(
-        output_file=ci_root / "input" / "input_hdf5_link.html",
+        output_file=args.output_dir / "converted_hdf5_link.html",
         logger=logger,
         links=[
-            ("attachments/input.hdf5", "Input HDF5 File", True, False)
+            ("https://vbt-minio.fz-juelich.de/console/browser/vbt-gitlab-cache/project%2F8681%2Fvbt-kth-bg-protocol-cache-bundle-protected",
+             "Converted output bundle including the master HDF5", True, True)
         ]
     )
     logger.info("Report written to %s", report_path)
+
+    # Allure report gets burdened by input sweep directory, hence attaching it as an HTML entry with the actual directory attached to CI job
+    # Delete every file in input directory, since its heavy for the final allure report
+    for entry in Path(str(os.getenv("VBT_INPUT_PATH"))).expanduser().resolve().iterdir():
+        # shutil.rmtree handles both files and directories (and follows symlinks safely)
+        shutil.rmtree(entry, ignore_errors=True)  # ignore_errors to keep it fast & non‑blocking
+    src_sweep = Path(str(os.getenv("VBT_INPUT_PATH")))
+    create_link_html(
+        output_file=src_sweep / "input_sweep_dir_link.html",
+        logger=logger,
+        links=[
+            ("https://vbt-minio.fz-juelich.de/console/browser/vbt-gitlab-cache/project%2F8681%2Fvbt-kth-bg-protocol-cache-protected",
+             "Input Parameter Sweep Directory", False, True)
+        ]
+    )
 
 
 # ----------------------------------------------------------------------

@@ -1,6 +1,5 @@
 """Utilities for constructing a :class:`~converters.schema.master_bundle.MasterBundle`
-from the directory layout produced by the AMU (Amsterdam
-University) simulation pipeline.
+from the directory layout produced by the UVA (Universiteit van Amsterdam) simulation pipeline, See repository: https://gitlab.jsc.fz-juelich.de/virtualbraintwin/vbt_t4-3_amu_protocol4.
 
 The module contains small helper functions that parse NPZ spike files,
 assemble stimulus definitions, and build the high‑level ``MasterBundle``
@@ -8,7 +7,7 @@ object ready for HDF5 serialisation.
 
 Typical usage
 -------------
->>> bundle = build_amu_master_bundle(
+>>> bundle = build_uva_master_bundle(
 ...     sim_dir=Path("/path/to/simulations"),
 ...     embed_raw=True,
 ...     embed_raw_path=Path("/path/to/raw.zip"),
@@ -96,7 +95,7 @@ def _population_from_npz(name: str, npz_path: Path) -> Population:
     return Population(population_name=name, neurons=neurons)
 
 
-def build_amu_master_bundle(
+def build_uva_master_bundle(
         sim_dir: Path,
         *,
         embed_raw: bool = True,

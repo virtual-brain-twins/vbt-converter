@@ -19,8 +19,8 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Dict
 
-from converters.factory.uva_factory import build_uva_master_bundle
 from converters.factory.kth_factory import build_kth_master_bundle
+from converters.factory.uva_factory import build_uva_master_bundle
 from converters.schema.master_bundle import MasterBundle
 
 
@@ -40,6 +40,7 @@ class ProtocolBuilder(ABC):
             output_dir: Path,
             protocol_version: str,
             protocol_info_path: Path,
+            **extra_kwargs: object
     ) -> MasterBundle:
         """Build a :class:`~converters.schema.master_bundle.MasterBundle`.
 
@@ -52,6 +53,7 @@ class ProtocolBuilder(ABC):
                 files (e.g., intermediate JSON, logs).
             protocol_version: The version of the protocol to be incorporated.
             protocol_info_path: Path to a PDF file containing protocol information.
+            **extra_kwargs: Additional keyword arguments for the protocol builder. e.g. a ``parameters`` list
 
         Returns:
             An instance of :class:`~converters.schema.master_bundle.MasterBundle`
@@ -83,7 +85,8 @@ class UVABuilder(ProtocolBuilder):
             embed_raw_path: Path,
             output_dir: Path,
             protocol_version: str,
-            protocol_info_path: Path
+            protocol_info_path: Path,
+            **extra_kwargs: object,
     ) -> MasterBundle:
         """Create an UVA ``MasterBundle`` from raw input data.
 
@@ -97,6 +100,7 @@ class UVABuilder(ProtocolBuilder):
             output_dir: Directory where the builder may emit auxiliary files.
             protocol_version: The version of the protocol to be incorporated.
             protocol_info_path: Path to a PDF file containing protocol information.
+            **extra_kwargs: Additional keyword arguments to pass to the factory function.
 
         Returns:
             A populated ``MasterBundle`` representing the UVA protocol.
@@ -112,7 +116,8 @@ class UVABuilder(ProtocolBuilder):
             embed_raw_path=embed_raw_path,
             output_dir=output_dir,
             protocol_version=protocol_version,
-            protocol_info_path=protocol_info_path
+            protocol_info_path=protocol_info_path,
+            **extra_kwargs
         )
 
 
@@ -130,7 +135,8 @@ class KTHBuilder(ProtocolBuilder):
             embed_raw_path: Path,
             output_dir: Path,
             protocol_version: str,
-            protocol_info_path: Path
+            protocol_info_path: Path,
+            **extra_kwargs: object
     ) -> MasterBundle:
         """Create a KTH ``MasterBundle`` from raw input data.
 
@@ -144,6 +150,7 @@ class KTHBuilder(ProtocolBuilder):
             output_dir: Directory where the builder may emit auxiliary files.
             protocol_version: The version of the protocol to be incorporated.
             protocol_info_path: Path to a PDF file containing protocol information.
+            **extra_kwargs: Additional keyword arguments to pass to the factory function.
 
         Returns:
             A populated ``MasterBundle`` representing the KTH protocol.
@@ -159,7 +166,8 @@ class KTHBuilder(ProtocolBuilder):
             embed_raw_path=embed_raw_path,
             output_dir=output_dir,
             protocol_version=protocol_version,
-            protocol_info_path=protocol_info_path
+            protocol_info_path=protocol_info_path,
+            **extra_kwargs
         )
 
 

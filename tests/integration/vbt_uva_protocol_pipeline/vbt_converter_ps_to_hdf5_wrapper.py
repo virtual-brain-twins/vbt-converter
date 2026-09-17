@@ -144,7 +144,11 @@ def main() -> None:
             "--protocol",
             "uva",
             "--protocol-version",
-            "1.0.0"
+            "1.0.0",
+            "--parameters",
+            "scale_num_neurons",
+            "scale_syn_strength",
+            "scale_nmda_efficacy"
         ]
 
         # ------------------------------------------------------------------
@@ -297,7 +301,8 @@ def main() -> None:
         output_file=src_sweep / "input_sweep_dir_link.html",
         logger=logger,
         links=[
-            ("attachments/parametersweep_8s_3d_orientation_selective_12012026", "Parameter Sweep Directory", False, False)
+            ("attachments/parametersweep_8s_3d_orientation_selective_12012026", "Parameter Sweep Directory", False,
+             False)
         ]
     )
 

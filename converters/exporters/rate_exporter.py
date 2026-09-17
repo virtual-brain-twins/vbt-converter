@@ -36,9 +36,6 @@ from ..schema.spike_map import SpikeMap
 from ..schema.stimuli_group import StimuliGroup
 from ..utils.helpers import normalize, get_discretized_stimulus, get_firing_rates
 
-# The three simulation parameters that are exported for the UVA protocol.
-PARAMETERS = ["numneur", "synstr", "nmdaeff"]
-
 
 class RateExporter(ProtocolExporter):
     """Export a collection of simulations in the *UVA* protocol format.
@@ -145,7 +142,7 @@ class RateExporter(ProtocolExporter):
         )
         r, u, theta = [], [], []
         unique_populations = set()
-
+        result = {}
         for sim_grp in sim_groups:
             # The HDF5 name is ``/StandardFormat/Simulations/Sim_<ID>`` – we keep only the <ID>.
             sim_id = sim_grp.name.split("/", 1)[-1].replace("Sim_", "")
@@ -179,7 +176,7 @@ class RateExporter(ProtocolExporter):
             u=u_norm,
             theta=theta_norm,
             names_x=list(unique_populations),
-            names_theta=PARAMETERS,
+            names_theta=result["params"],
             dt=self.bin_size,
             mu_x=mu_r,
             sd_x=sd_r,
@@ -231,7 +228,7 @@ class RateExporter(ProtocolExporter):
 
         # Pull out the three parameters of interest in the order defined by PARAMETERS.
         param_vals = np.fromiter(
-            (float(param_section.get_value(p)) for p in PARAMETERS),
+            (float(param_section.get_value(p)) for p in param_section.iter_keys()),
             dtype=float,
         )
 
@@ -274,15 +271,17 @@ class RateExporter(ProtocolExporter):
         )
 
         self.log.info(
-            "Simulation %s: firing_rate shape=%s, stimulus shape=%s, param_values=%s",
+            "Simulation %s: firing_rate shape=%s, stimulus shape=%s, param_values=%s, params=%s",
             sim_id,
             firing_rate.shape,
             disc_stim.shape,
             param_vals,
+            param_section.keys(),
         )
         return {
             "firing_rate": firing_rate,
             "stimulus": disc_stim,
+            "params": param_section.keys(),
             "param_values": param_vals,
             "populations": populations,
         }

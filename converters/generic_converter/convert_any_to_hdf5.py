@@ -81,6 +81,16 @@ def main() -> None:
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
         help="Logging verbosity.",
     )
+    parser.add_argument(
+        "--parameters",
+        nargs="+",  # one or more values, space‑separated
+        default=None,
+        help=(
+            "Override the built‑in list of dynamic parameters for the selected "
+            "protocol.  Give a space‑separated list, e.g. "
+            "--parameters scale_num_neurons scale_syn_strength"
+        ),
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -107,6 +117,9 @@ def main() -> None:
     except KeyError:
         logger.error("Unsupported protocol %s", args.protocol)
         sys.exit(1)
+    extra_kwargs: dict = {}
+    if args.parameters is not None:
+        extra_kwargs["parameters"] = args.parameters
 
     master = builder(
         input_path=input_path,
@@ -114,7 +127,8 @@ def main() -> None:
         embed_raw_path=raw_zip,
         output_dir=out_dir,
         protocol_version=args.protocol_version,
-        protocol_info_path=protocol_info_path
+        protocol_info_path=protocol_info_path,
+        **extra_kwargs,
     )
 
     # Write the file

@@ -36,7 +36,7 @@ methods.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Tuple, Optional, Type, TypeVar, ClassVar
+from typing import Any, Dict, Tuple, Optional, Type, TypeVar, ClassVar, List, Iterable
 
 import h5py
 
@@ -188,6 +188,42 @@ class KeyValueCompoundContainer(HDF5Serializable):
             return self.kv_pairs.pop(key)
         else:
             return self.kv_pairs.pop(key, default)
+
+    def keys(self, *, case_insensitive: bool = False) -> List[str]:
+        """
+        Return a **list** of all keys stored in ``kv_pairs`` sorted
+        alphabetically.
+
+        Parameters
+        ----------
+        case_insensitive : bool, optional
+            If ``True`` the sort is performed case‑insensitively
+            (``'A'`` and ``'a'`` are treated as equal).  Defaults to ``False``.
+
+        Returns
+        -------
+        list[str]
+            The sorted keys.
+        """
+        if case_insensitive:
+            return sorted(self.kv_pairs, key=str.lower)
+        return sorted(self.kv_pairs)
+
+    # A lightweight generator version if you only need to iterate
+    # without creating an intermediate list.
+    def iter_keys(self, *, case_insensitive: bool = False) -> Iterable[str]:
+        """
+        Yield the keys in alphabetical order (optionally case‑insensitive).
+
+        This is useful when you want to avoid the temporary list created by
+        :meth:`keys`.
+        """
+        if case_insensitive:
+            for key in sorted(self.kv_pairs, key=str.lower):
+                yield key
+        else:
+            for key in sorted(self.kv_pairs):
+                yield key
 
     # Serialization helpers – **shared by every subclass**
     def to_hdf5(self, parent: h5py.Group) -> None:

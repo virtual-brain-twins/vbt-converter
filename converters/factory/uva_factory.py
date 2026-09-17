@@ -44,8 +44,7 @@ from converters.utils.units import Unit
 
 log = logging.getLogger(__name__)
 
-PARAMETERS = ["scale_num_neurons", "scale_syn_strength", "scale_nmda_efficacy"]
-PARAMETERS_SHORT = ["numneur", "synstr", "nmdaeff"]
+DEFAULT_UVA_PARAMETERS = ["scale_num_neurons", "scale_syn_strength", "scale_nmda_efficacy"]
 
 
 def _population_from_npz(name: str, npz_path: Path) -> Population:
@@ -102,7 +101,8 @@ def build_uva_master_bundle(
         embed_raw_path: Path,
         output_dir: Path,
         protocol_version: str,
-        protocol_info_path: Path) -> MasterBundle:
+        protocol_info_path: Path,
+        parameters: List[str] | None = None, ) -> MasterBundle:
     """Construct a :class:`~converters.schema.master_bundle.MasterBundle` from an AMU run directory.
 
     The function walks the ``sim_dir`` directory, interprets each sub‑folder as
@@ -121,6 +121,8 @@ def build_uva_master_bundle(
         output_dir: Destination directory for the generated raw‑bundle artefact.
         protocol_version: The version of the protocol to be incorporated.
         protocol_info_path: Path to a PDF file containing protocol information.
+        parameters: Optional list of parameter names to extract from the configuration.
+            If ``None``, the default set of parameters is used.
 
     Returns:
         A fully populated :class:`~converters.schema.master_bundle.MasterBundle`
@@ -169,11 +171,9 @@ def build_uva_master_bundle(
             full_cfg["record_neurons"] = ({str(k): int(v) for k, v in rec_raw.items()}, None)
 
         # Extract the selected dynamic parameters, rename them, and wrap values as (value, None)
-        sim_params: dict = {}
-        for long_name, short_name in zip(PARAMETERS, PARAMETERS_SHORT):
-            if long_name in full_cfg:
-                # Unit is not provided inside the parent sweep directory, hence kept None
-                sim_params[short_name] = full_cfg.pop(long_name)
+        # Unit is not provided inside the parent sweep directory, hence kept None
+        param_names = parameters if parameters is not None else DEFAULT_UVA_PARAMETERS
+        sim_params = {p: full_cfg.pop(p) for p in param_names if p in full_cfg}
 
         # Remaining entries belong to the generic configuration object
         # `full_cfg` now contains everything except the three parameters above.

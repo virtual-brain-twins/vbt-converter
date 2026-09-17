@@ -26,7 +26,8 @@ vendored as a Git sub‑module.
 8. [Design Documentation](#design-doc)
 9. [Creation or update of MinIO cache entries](#minio-cache)
 10. [Running the test‑suite (optional)](#testing)
-11. [License & contributing](#license)
+11. [How to create a new release](#release)
+12. [License & contributing](#license)
 
 ---  
 
@@ -203,11 +204,11 @@ external‑dependency information are stored in separate groups.
 
 ### UVA protocol specifics (`/StandardFormat/Simulations/Sim_<id>`)
 
-| Sub‑group                                                                                                                                                                                     | Content                                                                                                                    | HDF5 representation                                                                                                                                                                                                                 |
-|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Sub‑group                                                                                                                                                                                     | Content                                                                                                                     | HDF5 representation                                                                                                                                                                                                                 |
+|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `Parameters`                                                                                                                                                                                  | All scalar simulation parameters – the three scaling factors plus any additional metadata (e.g. `t_sim`, `record_neurons`). | Stored as **attributes** on the group (`SimulationParameters`).                                                                                                                                                                     |
-| `Stimuli`                                                                                                                                                                                     | A *single* uniform stimulus (same for every population) – piece‑wise‑constant.                                             | One `StimuliGroup` named `"default"` for each population; each contains a `Stimulus` (datasets `Limits`, `Values`, `MaxValue`).                                                                                                     |
-| `OutputSpikes`                                                                                                                                                                                | Spike trains for all populations extracted from the sweep directory data.              | `SpikeMap → Population → Neuron → times` (datasets `times`). The optional `indices` dataset is present when the original NPZ included an `indices` array; otherwise a dummy neuron per spike is created during bundle construction. |
+| `Stimuli`                                                                                                                                                                                     | A *single* uniform stimulus (same for every population) – piece‑wise‑constant.                                              | One `StimuliGroup` named `"default"` for each population; each contains a `Stimulus` (datasets `Limits`, `Values`, `MaxValue`).                                                                                                     |
+| `OutputSpikes`                                                                                                                                                                                | Spike trains for all populations extracted from the sweep directory data.                                                   | `SpikeMap → Population → Neuron → times` (datasets `times`). The optional `indices` dataset is present when the original NPZ included an `indices` array; otherwise a dummy neuron per spike is created during bundle construction. |
 | **Optional** `record_neurons` (binary payload) is stored as an attribute inside the `Configuration` group by the factory – later accessed through `Configuration.kv_pairs["record_neurons"]`. |
 
 The **Sample exporter** (`RateExporter`) reads the above sections, discretises spikes with the user‑provided bin size,
@@ -234,7 +235,6 @@ mu_theta, sd_theta → mean / std used for normalisation of theta
 | `Stimuli`                                      | Full stimulus definition – per‑population piece‑wise constant or generic sub‑stimuli.            | One `StimuliGroup` per population; each sub‑stimulus stores a `Stimulus` (datasets `Limits`, `Values`, `MaxValue`) and any scalar attributes (e.g. generator type, cluster size). |
 | `OutputSpikes`                                 | Direct copy of the original Snudda spike‑output HDF5 hierarchy (`meta_data`, `time`, `neurons`). | The factory reads the classic Snudda layout and builds a `SpikeMap` comprised of `Population` and `Neuron` objects (datasets `times`).                                            |
 | **Optional** `RawBundle` behaves like for UVA. |
-
 
 ---  
 
@@ -341,11 +341,94 @@ run the tests locally, ensure you have `pytest` installed in your environment an
 pytest tests/
 ```
 
+---
+
+<a name="release"></a>
+
+## 11. How to create a new release
+
+```bash
+# Make sure you are on the branch you want to release from
+git checkout main               # or any other target branch
+git pull origin main            # latest remote state
+
+# Ensure the working tree is clean
+git status                      # must show “nothing to commit, working tree clean”
+
+# Run the release helper
+#   - default → patch bump (vX.Y.Z → vX.Y.Z+1)
+#   - --minor → minor bump   (vX.Y.Z → vX.Y+1.0)
+#   - --major → major bump   (vX.Y.Z → vX+1.0.0)
+#   - --first-release → force creation of the first tag (v1.0.0)
+./release.sh [--minor|--major|--patch]   # e.g. ./release.sh --minor
+```
+
+The script will:
+
+1. **Prompt you for an optional summary** – type **`y`** to open your terminal’s text editor and write a high‑level
+   manual description of the release.  
+   *The text you enter will be placed at the very top of the new entry in **`CHANGELOG.md`**.*
+
+2. **Create a new commit** with the message
+
+   ```text
+   chore(release): X.Y.Z
+   ```
+
+3. **Tag the commit** with the version tag `vX.Y.Z`.
+
+4. **Generate / update `CHANGELOG.md`** – the script will:
+    - prepend the custom overview you wrote in step 1,
+    - then append the raw list of all commits since the previous tag, formatted nicely.
+
+5. **Push the commit and the tag** back to the remote repository (`origin`).
+
+### Example
+
+```bash
+# First ever release – creates v1.0.0
+./release.sh --first-release
+
+# Later, after some feature work
+./release.sh --minor   # → v1.1.0
+./release.sh            # default patch → v1.1.1
+```
+
+---
+
+### Checklist for first‑time set‑up
+
+| Step                                   | Command                                          | Why                                                   |
+|----------------------------------------|--------------------------------------------------|-------------------------------------------------------|
+| **Install Node & Git**                 | `sudo apt-get install -y git nodejs npm`         | Required for `standard-version`.                      |
+| **Make script executable**             | `chmod +x release.sh`                            | Allows you to run it directly.                        |
+| **(Optional) Initialise package.json** | `npm init -y && npm i -D commit-and-tag-version` | Locks the version of `commit-and-tag-version`.        |
+| **Run first release**                  | `./release.sh --first-release`                   | Tags `v1.0.0` and creates the initial `CHANGELOG.md`. |
+| **Subsequent releases**                | `./release.sh` (or with `--minor/--major`)       | Bumps version & updates changelog automatically.      |
+
+---
+
+### One‑liner for the very first release
+
+```bash
+sudo apt-get update && sudo apt-get install -y git nodejs npm && \
+chmod +x release.sh && \
+./release.sh --first-release
+```
+
+After that, any future release is just:
+
+```bash
+./release.sh          # patch
+./release.sh --minor  # minor
+./release.sh --major  # major
+```
+
 ---  
 
 <a name="license"></a>
 
-## 11. License & contributing
+## 12. License & contributing
 
 *The license is still to be decided.*  
 Contributions are welcome:

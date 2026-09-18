@@ -11,61 +11,35 @@ vendored as a Git sub‑module.
 
 ## Table of contents
 
-1. [Overview](#overview)
-2. [Prerequisites](#prerequisites)
-3. [Add the repository as a sub‑module](#add-as-submodule)
-4. [Installation (Python environment)](#installation)
-5. [Typical workflow](#workflow)
-    * [Step 1 – Build a master HDF5 bundle](#step1-build-bundle)
-    * [Step 2 – Export a protocol‑specific artefact](#step2-export)
-6. [HDF5 bundle layout (schema 1.0)](#bundle-layout)
-    * [Common root structure](#common-root)
-    * [UVA protocol specifics](#uva-layout)
-    * [KTH protocol specifics](#kth-layout)
-7. [Extending the package (new protocol)](#extending)
-8. [Design Documentation](#design-doc)
-9. [Creation or update of MinIO cache entries](#minio-cache)
-10. [Running the test‑suite (optional)](#testing)
-11. [How to create a new release](#release)
-12. [License & contributing](#license)
+* **[User guide](#user-guide)**
+    1. [Installation](#installation)
+    2. [Quick‑start: Convert model output to an HDF5 bundle](#quick-start)
+    3. [Universal HDF5 bundle layout](#bundle-layout)
+    4. [HDF5 Schema Versioning](#hdf5-schema-version)
+    5. [Verifying an HDF5 file](#verifying-hdf5)
+
+* **[Developer guide](#developer-guide)**
+    1. [Overview](#overview)
+    2. [Prerequisites](#prerequisites)
+    3. [Typical workflow (full pipeline)](#full-workflow)
+    4. [Adding a new converter (new protocol)](#adding-new-converter)
+    5. [Design documentation](#design-doc)
+    6. [MinIO cache handling](#minio-cache)
+    7. [Running the test‑suite](#testing)
+    8. [How to create a new release](#release)
+    9. [License & contributing](#license)
 
 ---  
 
-<a name="overview"></a>
+<a name="user-guide"></a>
 
-## 1. Overview
+## User guide
 
-| Script                                                   | Purpose                                                                                                                                                                  | Main entry points                                                            |
-|----------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------|
-| `converters/generic_converter/convert_any_to_hdf5.py`    | Walk an **UVA directory tree** **or** a **KTH CSV** and write a *single* master HDF5 file (`master.h5`) along with the raw_bundle.zip.                                   | `python -m converters.generic_converter.convert_any_to_hdf5 …`               |
-| `converters/generic_converter/convert_hdf5_to_format.py` | Read the master HDF5 and, **per protocol**, produce the downstream artefacts (`*.npz` for UVA, `*.npz` for Basal‑Ganglia).                                               | `python -m converters.generic_converter.convert_hdf5_to_format … <protocol>` |
-| `converters/factory/*_factory.py`                        | Low‑level factories that assemble a :class:`~converters.schema.master_bundle.MasterBundle` from raw input.                                                               |
-| `converters/exporters/*_exporter.py`                     | Concrete exporters that implement the per‑simulation conversion logic for a given protocol.                                                                              |
-| `converters/schema/*`                                    | Dataclasses that capture the new HDF5 schema (`Simulation`, `SpikeMap`, `StimuliGroup`, …) and implement :class:`~converters.schema.hdf5_serializable.HDF5Serializable`. |
-| `converters/utils/*`                                     | Helper utilities – logging, dataset creation, ZIP archiving, CSV handling, **compound‑attribute handling with optional units**, etc.                                     |
+<a name="installation"></a>
 
-All scripts use only the packages listed in `requirements.txt` (NumPy, h5py, PyYAML, tqdm, …).
+### 1. Installation
 
----  
-
-<a name="prerequisites"></a>
-
-## 2. Prerequisites
-
-| Requirement      | Details                                                                                                                                                                                                                                                                                                                                                             |
-|------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Python**       | 3.9+ (the library is type‑annotated and tested on 3.9 – 3.12).                                                                                                                                                                                                                                                                                                      |
-| **Dependencies** | Install from `requirements.txt`.                                                                                                                                                                                                                                                                                                                                    |
-| **Input data**   | <ul><li>**UVA** – a root directory where each immediate sub‑folder is a separate simulation run containing `spike_times/*.npz`, `config.yaml`, `record_info/record_neurons.data`, …</li><li>**KTH** – a *tab‑separated* CSV generated by the original Snudda pipeline; the CSV references per‑run stimulus JSON files and Snudda output‑spike HDF5 files.</li></ul> |
-| **Optional**     | `zstandard` Python package – enables ZSTD compression when creating the optional raw‑data ZIP archive (fallback to DEFLATE is automatic).                                                                                                                                                                                                                           |
-
----  
-
-<a name="add-as-submodule"></a>
-
-## 3. Add the repository as a sub‑module
-
-If you have an existing analysis repository, vendor the converter as a sub‑module:
+The converter is shipped as a **Git sub‑module**, so it can be used inside any analysis repository.
 
 ```bash
 # Inside your main repository
@@ -73,125 +47,122 @@ git submodule add https://gitlab.jsc.fz-juelich.de/virtualbraintwin/vbt-converte
 git submodule update --init --recursive   # fetch the sub‑module contents
 ```
 
-After cloning you can execute the CLI scripts directly:
-
-```bash
-python external/vbt-converter/converters/generic_converter/convert_any_to_hdf5.py …
-python external/vbt-converter/converters/generic_converter/convert_hdf5_to_format.py …
-```
-
-*Tip*: Pin the sub‑module to a stable tag/branch (e.g. `-b main`) and update with `git submodule update --remote` when a
-new version is released.
-
----  
-
-<a name="installation"></a>
-
-## 4. Installation (Python environment)
-
-From the sub‑module root:
+Create a Python environment and install the small scientific stack required by the package:
 
 ```bash
 # (optional) create a virtual environment
 python3 -m venv .venv
 source .venv/bin/activate
 
-# install the required packages
-pip install -r requirements.txt
+# install dependencies from the sub‑module
+pip install -r external/vbt-converter/requirements.txt
 ```
 
-The helper script `setup_environment.sh` (used by the CI) performs the same steps.
-
----  
-
-<a name="workflow"></a>
-
-## 5. Typical workflow
-
-The conversion is a **two‑stage pipeline**:
-
-<a name="step1-build-bundle"></a>
-
-### Step 1 – Build the master HDF5 bundle
+After the sub‑module is cloned you can call the conversion scripts directly, e.g.
 
 ```bash
-# ---- UVA --------------------------------------------------------------
+python external/vbt-converter/converters/generic_converter/convert_any_to_hdf5.py …
+python external/vbt-converter/converters/generic_converter/convert_hdf5_to_format.py …
+```
+
+> **Tip** – pin the sub‑module to a stable tag/branch (e.g. `-b main`) and update with  
+> `git submodule update --remote` when a new release is published.
+
+<a name="quick-start"></a>
+
+### 2. Quick‑start: Convert model output to an HDF5 bundle
+
+The conversion is a **two‑stage pipeline**. The first stage builds a *master* HDF5 file that aggregates all
+simulations belonging to a protocol.
+
+#### Build the master HDF5 bundle
+
+```bash
+# --------------- UVA protocol ------------------------------------------------
 python -m converters.generic_converter.convert_any_to_hdf5 \
     -i /path/to/uva_root                \
     -o /tmp/master.h5                    \
     --protocol uva                       \
-    --log-level INFO                     # optional (DEBUG, INFO, …)
-    # optional arguments introduced in v1.0
-    --protocol-version 1.0.0 \
-    --protocol-info-path /path/to/protocol_info.pdf
+    --log-level INFO                                  \   # One of DEBUG, INFO, WARNING, …
+    --protocol-version 1.0.0                         \   # Stored in the Protocol group
+    --protocol-info-path <PATH/TO/protocol_info.pdf> \   # PDF (or any binary) with the protocol description
+    --parameters scale_num_neurons scale_syn_strength \   # (optional) overwrite the default dynamic‑parameter list
+    --meta-author "John Doe"                          \   # (optional) free‑form metadata
+    --meta-creation-date "2026‑09‑15T12:34:56Z"       \   # ISO‑8601 timestamp
+    --meta-affiliation "University X"                \   # optional
+    --meta-project "NeuroSim"                         \   # optional
+    --meta-simulation-name "Network‑A"                \   # optional
+    --meta-run-id "run‑00123"                         \   # optional
+    --meta-software "NeuroSim‑Sim"                    \   # optional
+    --meta-software-version "2.4.1"                  \   # optional
+    --meta-license "CC‑BY‑4.0"                        \   # optional
+    --meta-contact-email "john.doe@univ-x.edu"       \   # optional
+    --meta-comment "First exploratory batch"         \   # optional
+    # -------------------------------------------------------------------------
+    # By default the raw input directory (the folder that contains the CSV
+    # and the simulation sub‑folders) is zipped and stored under the group
+    # ``raw_bundle``.  Omit the flag below to keep this behaviour.
+    # -------------------------------------------------------------------------
+    # --no-raw-bundle                                 \   # Uncomment to *disable* raw‑bundle embedding
+    # -------------------------------------------------------------------------    
 
 # ---- KTH ----------------------------------------------------
 python -m converters.generic_converter.convert_any_to_hdf5 \
-    -i /path/to/run_list.csv             \
-    -o /tmp/master.h5                    \
-    --protocol kth                       \
-    --log-level INFO \
-    --protocol-version 1.0.0 \
-    --protocol-info-path /path/to/protocol_info.pdf
+    -i <PATH/TO/run_list.csv>                         \   # CSV generated by the KTH protocol
+    -o <PATH/TO/master_bundle.h5>                     \   # Destination HDF5 file
+    --protocol kth                                    \   # Protocol selector (mandatory)
+    --log-level INFO                                  \   # One of DEBUG, INFO, WARNING, …
+    --protocol-version 1.0.0                         \   # Stored in the Protocol group
+    --protocol-info-path <PATH/TO/protocol_info.pdf> \   # PDF (or any binary) with the protocol description
+    --parameters scale_num_neurons scale_syn_strength \   # (optional) overwrite the default dynamic‑parameter list
+    --meta-author "John Doe"                          \   # (optional) free‑form metadata
+    --meta-creation-date "2026‑09‑15T12:34:56Z"       \   # ISO‑8601 timestamp
+    --meta-affiliation "University X"                \   # optional
+    --meta-project "NeuroSim"                         \   # optional
+    --meta-simulation-name "Network‑A"                \   # optional
+    --meta-run-id "run‑00123"                         \   # optional
+    --meta-software "NeuroSim‑Sim"                    \   # optional
+    --meta-software-version "2.4.1"                  \   # optional
+    --meta-license "CC‑BY‑4.0"                        \   # optional
+    --meta-contact-email "john.doe@univ-x.edu"       \   # optional
+    --meta-comment "First exploratory batch"         \   # optional
+    # -------------------------------------------------------------------------
+    # By default the raw input directory (the folder that contains the CSV
+    # and the simulation sub‑folders) is zipped and stored under the group
+    # ``raw_bundle``.  Omit the flag below to keep this behaviour.
+    # -------------------------------------------------------------------------
+    # --no-raw-bundle                                 \   # Uncomment to *disable* raw‑bundle embedding
+    # -------------------------------------------------------------------------
 ```
 
-* **`--protocol`** – either `uva` or `kth` (exact strings used by the CLI).
-* **`--no-raw-bundle`** – disables the optional embedding of the original raw data as a ZIP archive (`raw_bundle.zip`).
-* **`--protocol-version`** – version string that will be stored in the *Protocol* group of the bundle.
-* **`--protocol-info-path`** – path to a PDF (or any binary) containing the protocol description; if omitted the script
-  looks for a file named `protocol_info.pdf` inside the input directory.
-* The script creates the output directory if it does not exist, writes the attribute `format_version = "1.0"` to the
-  root, and builds the *StandardFormat* group (`/StandardFormat`) according to the new schema (see below).
+#### What each argument does
 
-<a name="step2-export"></a>
+| Argument               | Required?                                    | Meaning & Typical Values                                                                                                                                                                                                                                               |
+|------------------------|----------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `-i / --input`         | **yes**                                      | Path to the raw simulation results or *run‑list* CSV generated by the KTH protocol.                                                                                                                                                                                    |
+| `-o / --output`        | **yes**                                      | Full path (including file name) of the HDF5 master bundle that will be created.                                                                                                                                                                                        |
+| `--protocol`           | **yes**                                      | Must be 'uva' or 'kth' (the script validates the string).                                                                                                                                                                                                              |
+| `--log-level`          | no (default = `INFO`)                        | Verbosity of console logging (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`).                                                                                                                                                                                        |
+| `--protocol-version`   | no (default = `1.0.0`)                       | Stored in the *Protocol* group of the bundle.                                                                                                                                                                                                                          |
+| `--protocol-info-path` | no (default = `{{input}}/protocol_info.pdf`) | Path to a PDF (or any binary) that documents the protocol. Use `{{input}}` as a placeholder for the input directory if you prefer the default behaviour.                                                                                                               |
+| `--parameters`         | no                                           | Override the built‑in list of *dynamic* parameters for the KTH protocol. Provide one or more space‑separated identifiers (e.g. `scale_num_neurons scale_syn_strength`).                                                                                                |
+| `--no-raw-bundle`      | no                                           | If supplied, the original raw input directory is **not** zipped and stored under the group `raw_bundle`. By default a `raw_data.zip` archive is created and linked.                                                                                                    |
+| `--meta‑*`             | no                                           | Any of the listed meta‑data fields (`author`, `creation_date`, `affiliation`, `project`, `simulation_name`, `run_id`, `software`, `software_version`, `license`, `contact_email`, `comment`). Only the ones you pass are written to the bundle’s `metadata` attribute. |
+| *(none)*               | –                                            | The script automatically creates the output directory if it does not exist and writes a root attribute `format_version = "1.0"` (the current schema version).                                                                                                          |
 
-### Step 2 – Export a protocol‑specific artefact
-
-```bash
-# ---- Sample Case (produces a single compressed .npz in DS‑R format) ----------
-python -m converters.generic_converter.convert_hdf5_to_format \
-    -i /tmp/master.h5 \
-    -o ./out_amu      \
-    -b 0.001          \   # bin size (seconds) – required by RateExporter
-    uva_amu_1
-
-```
-
-* The **protocol name** is the *sub‑command* (`uva_amu_1`).
-* Protocol‑specific arguments are added automatically – e.g. `--bin-size` (`-b`) for the RateExporter.
-* Output files are written into the directory given with `-o`.
-* A log file `<script_name>.log` is created in the directory defined by the environment variable `VBT_JOB_LOGS`
-  (default: the current working directory) and a copy of all messages is also sent to `stderr`.
-
----  
+The command creates the output directory (if needed), writes the attribute `format_version = "1.0"` to the root,
+and stores the data under the top‑level group **`StandardFormat`** according to the schema described below.
 
 <a name="bundle-layout"></a>
 
-## 6. HDF5 bundle layout (schema 1.0)
+### 3. Universal HDF5 bundle layout
 
-The master file follows a **well‑defined hierarchy** that is versioned (`format_version = "1.0"`). All protocol‑specific
-data lives under the top‑level group **`StandardFormat`**; optional raw data, protocol information and
-external‑dependency information are stored in separate groups.
+All protocols share a **common root hierarchy** (schema 1.0). The layout is versioned via the attribute
+`/format_version = "1.0"` and is documented in the official specification:
+**[Virtual Brain Twin Inter‑Protocol Data Standard Specification and HDF5 Specification v1.0](
+docs/specification/Virtual%20Brain%20Twin%20Inter%20Protocol%20Data%20Standard%20Specification%20and%20HDF5%20Specification_v1.0.docx)**
 
-```
-├─ format_version (attr) = "1.0"
-├─ StandardFormat/
-│   ├─ Global/                ← global experiment metadata (attributes)
-│   ├─ Configuration/         ← optional simulation‑wide configuration (compound attributes)
-│   └─ Simulations/
-│       ├─ Sim_<id_1>/        ← first simulation
-│       │   ├─ Configuration/ ← per‑simulation configuration (compound KV container)
-│       │   ├─ Parameters/    ← scalar key/value pairs (SimulationParameters)
-│       │   ├─ Stimuli/       ← StimuliGroup (population‑wise piece‑wise constants)
-│       │   └─ OutputSpikes/  ← SpikeMap (Populations → Neurons → times/indices)
-│       ├─ Sim_<id_2>/ …
-│       └─ …
-├─ RawBundle/                 ← optional; contains the raw zip archive *as a dataset* (`raw_bundle.zip`)
-├─ Protocol/                  ← optional; stores protocol version and binary documentation (PDF, etc.)
-└─ ExternalDependencies/      ← **removed** – this group is no longer part of the schema
-```
-
-### Common root structure
+#### Common root structure
 
 | Path                                   | Meaning                                                                                                                                                                                                                                       |
 |----------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -202,7 +173,7 @@ external‑dependency information are stored in separate groups.
 | `/RawBundle`                           | If `--no-raw-bundle` is **not** used, a **dataset** `raw_bundle.zip` stores the raw zip archive *inside* the HDF5 file (compressed chunk‑wise) together with a SHA‑256 checksum attribute.                                                    |
 | `/Protocol`                            | **New (v1.0)** – stores protocol meta‑information. Contains the **attribute** `Version` (UTF‑8 string) and a **dataset** `Content` holding the binary protocol description (e.g. a PDF). The `Content` dataset **must be stored compressed**. |
 
-### UVA protocol specifics (`/StandardFormat/Simulations/Sim_<id>`)
+#### UVA protocol specifics (`/StandardFormat/Simulations/Sim_<id>`)
 
 | Sub‑group                                                                                                                                                                                     | Content                                                                                                                     | HDF5 representation                                                                                                                                                                                                                 |
 |-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -227,7 +198,7 @@ mu_u, sd_u → mean / std used for normalisation of u
 mu_theta, sd_theta → mean / std used for normalisation of theta
 ```
 
-### KTH protocol specifics (`/StandardFormat/Simulations/Sim_<id>`)
+#### KTH protocol specifics (`/StandardFormat/Simulations/Sim_<id>`)
 
 | Sub‑group                                      | Content                                                                                          | HDF5 representation                                                                                                                                                               |
 |------------------------------------------------|--------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -236,71 +207,164 @@ mu_theta, sd_theta → mean / std used for normalisation of theta
 | `OutputSpikes`                                 | Direct copy of the original Snudda spike‑output HDF5 hierarchy (`meta_data`, `time`, `neurons`). | The factory reads the classic Snudda layout and builds a `SpikeMap` comprised of `Population` and `Neuron` objects (datasets `times`).                                            |
 | **Optional** `RawBundle` behaves like for UVA. |
 
+<a name="hdf5-schema-version"></a>
+
+### 4. HDF5 Schema Versioning
+
+The HDF5 schema used by this project follows a strict versioning policy to ensure reproducibility, traceability, and
+backward compatibility. Each schema release is documented with its version identifier, release date, and a concise
+description of changes. The version is also referenced in Section 16. “Change Log,” of the specification documentation at the following location: **[Virtual Brain Twin Inter‑Protocol Data Standard Specification and HDF5 Specification v1.0](
+docs/specification/Virtual%20Brain%20Twin%20Inter%20Protocol%20Data%20Standard%20Specification%20and%20HDF5%20Specification_v1.0.docx)**
+
+#### Release History
+
+| Version | Release Date | Description                                                                                                                                                                      |
+|---------|--------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **1.0** | 2026‑09‑17   | Initial release of the HDF5 schema. This version defines the baseline data structures, naming conventions, and attribute specifications required for all needed data attributes. |
+
+#### Current Schema Version
+
+- **Active version:** `1.0`
+
+All data files generated or consumed by the library should conform to this schema version unless explicitly noted
+otherwise in the documentation of a specific tool or workflow.
+
+#### Versioning Guidelines (for future releases)
+
+| Increment                     | Trigger                                                                                                                     |
+|-------------------------------|-----------------------------------------------------------------------------------------------------------------------------|
+| **Patch (x.y.z → x.y.(z+1))** | Minor, backward‑compatible fixes (e.g., typo corrections, clarification of attribute units).                                |
+| **Minor (x.y.z → x.(y+1).0)** | Additions that preserve compatibility with existing files (e.g., new optional groups or attributes).                        |
+| **Major (x.y.z → (x+1).0.0)** | Breaking changes that render older files incompatible (e.g., removal of required groups, renaming of mandatory attributes). |
+
+When a new version is released, the corresponding entry must be added to the **Release History** table above, and any
+migration scripts or compatibility notes should be documented in the project’s changelog.
+
+<a name="verifying-hdf5"></a>
+
+### 5. Verifying an HDF5 file
+
+After a bundle has been created you can quickly validate (See the specification document for detailed information of
+validation rules) if the HDF5 file conforms to the schema by running the below snippet:
+
+```bash
+python -c "
+import pathlib, logging
+from converters.utils.validation import validate_master_bundle
+try:
+    validate_master_bundle(pathlib.Path('<path/to/file.h5>'), strict=True)
+    print('Validation succeeded')
+except Exception as e:
+    print('Validation failed:', e)
+    raise
+"
+```
+
+If the validator returns *no errors* the file conforms to version 1.0 of the VBT specification and can be
+safely handed to downstream analysis pipelines.
+
 ---  
+
+<a name="developer-guide"></a>
+
+## Developer guide
+
+<a name="overview"></a>
+
+### 1. Overview
+
+| Script                                                   | Purpose                                                                                                                                                                  | Main entry points                                                            |
+|----------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------|
+| `converters/generic_converter/convert_any_to_hdf5.py`    | Walk an **UVA directory tree** **or** a **KTH CSV** and write a *single* master HDF5 file (`master.h5`) along with the raw_bundle.zip.                                   | `python -m converters.generic_converter.convert_any_to_hdf5 …`               |
+| `converters/generic_converter/convert_hdf5_to_format.py` | Read the master HDF5 and, **per protocol**, produce the downstream artefacts (`*.npz` for UVA, `*.npz` for Basal‑Ganglia).                                               | `python -m converters.generic_converter.convert_hdf5_to_format … <protocol>` |
+| `converters/factory/*_factory.py`                        | Low‑level factories that assemble a :class:`~converters.schema.master_bundle.MasterBundle` from raw input.                                                               | –                                                                            |
+| `converters/exporters/*_exporter.py`                     | Concrete exporters that implement the per‑simulation conversion logic for a given protocol.                                                                              | –                                                                            |
+| `converters/schema/*`                                    | Dataclasses that capture the new HDF5 schema (`Simulation`, `SpikeMap`, `StimuliGroup`, …) and implement :class:`~converters.schema.hdf5_serializable.HDF5Serializable`. | –                                                                            |
+| `converters/utils/*`                                     | Helper utilities – logging, dataset creation, ZIP archiving, CSV handling, **compound‑attribute handling with optional units**, etc.                                     | –                                                                            |
+
+All scripts use only the packages listed in `requirements.txt` (NumPy, h5py, PyYAML, tqdm, …).
+
+<a name="prerequisites"></a>
+
+### 2. Prerequisites
+
+| Requirement      | Details                                                                                                                                                                                                                                                                                                                                                             |
+|------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Python**       | 3.9+ (the library is type‑annotated and tested on 3.9 – 3.12).                                                                                                                                                                                                                                                                                                      |
+| **Dependencies** | Install from `requirements.txt`.                                                                                                                                                                                                                                                                                                                                    |
+| **Input data**   | <ul><li>**UVA** – a root directory where each immediate sub‑folder is a separate simulation run containing `spike_times/*.npz`, `config.yaml`, `record_info/record_neurons.data`, …</li><li>**KTH** – a *tab‑separated* CSV generated by the original Snudda pipeline; the CSV references per‑run stimulus JSON files and Snudda output‑spike HDF5 files.</li></ul> |
+| **Optional**     | `zstandard` Python package – enables ZSTD compression when creating the optional raw‑data ZIP archive (fallback to DEFLATE is automatic).                                                                                                                                                                                                                           |
+
+<a name="full-workflow"></a>
+
+### 3. Typical workflow (full pipeline)
+
+The conversion is a **two‑stage pipeline**; the user‑oriented quick‑start (see the User guide) shows the first stage.
+The second stage demonstrates how a downstream artefact is generated from the master HDF5 bundle.
+
+#### Step 2 – Export a protocol‑specific artefact
+
+```bash
+# ---- Sample Case (produces a single compressed .npz in DS‑R format) ----------
+python -m converters.generic_converter.convert_hdf5_to_format \
+    -i /tmp/master.h5 \
+    -o ./out_amu      \
+    -b 0.001          \   # bin size (seconds) – required by RateExporter
+    uva_amu_1
+```
+
+* The **protocol name** is the *sub‑command* (`uva_amu_1`).
+* Protocol‑specific arguments are added automatically – e.g. `--bin-size` (`-b`) for the RateExporter.
+* Output files are written into the directory given with `-o`.
+* A log file `<script_name>.log` is created in the directory defined by the environment variable `VBT_JOB_LOGS`
+  (default: the current working directory) and a copy of all messages is also sent to `stderr`.
 
 <a name="extending"></a>
 
-## 7. Extending the package (new protocol)
+<a name="adding-new-converter"></a>
 
-Adding a new protocol is straightforward and does not require touching the existing code. Add a new factory and
-exporter, register them in the dictionaries `PROTOCOL_BUILDERS` and `PROTOCOL_EXPORTERS`, and the generic driver will
-automatically add a new sub‑command to the CLI.
+### 4. Adding a new converter (new protocol)
 
-- Create a new factory that produces a :class:`~converters.schema.master_bundle.MasterBundle` from the raw data. Follow
-  the pattern of `uva_Factory` or `kth_Factory`.
-- Register the factory in `PROTOCOL_BUILDERS` (see `protocol_registry.py`).
+Extending the package to support an additional protocol requires only two small pieces of code:
 
-Adding support for a new downstream format only requires a few well‑defined steps:
+1. **Factory** – builds a :class:`~converters.schema.master_bundle.MasterBundle` from the raw input.  
+   Create a new module (e.g. `new_proto_factory.py`) that follows the pattern of `uva_Factory` or `kth_Factory`
+   and register it in `converters/generic_converter/convert_any_to_hdf5.py` via the dictionary
+   `PROTOCOL_BUILDERS`.
 
-1. **Create a subclass of** :class:`converters.exporters.protocol_exporter.ProtocolExporter`.
-    * Implement
-        * `extract_one_simulation(self, sim_id, sim_group)` → return a plain `dict` (or any structure) that contains the
-          data you need for the final artefact.
-        * `export_one_simulation(self, sim_id, sim_group)` → write the artefact to ``self.out_dir`` (use ``self.log``
-          for messaging).
-    * Optionally override ``protocol_name`` and ``output_suffix``.
-    * Add a ``@classmethod configure_parser(cls, parser)`` that declares any extra CLI arguments (e.g. `--threshold`).
-
-2. **Register the exporter** in `converters/generic_converter/convert_hdf5_to_format.py` by adding an entry to the
-   module‑level dictionary `PROTOCOL_EXPORTERS`:
-
-   ```python
-   from converters.exporters.my_new_exporter import MyNewExporter
-   PROTOCOL_EXPORTERS["my-protocol"] = MyNewExporter
-   ```
-
-3. **Add a builder** if the new protocol also needs to be *created* from raw data.
-    * Implement a factory function that returns a :class:`~converters.schema.master_bundle.MasterBundle`.
-    * Expose it via a concrete subclass of :class:`converters.factory.protocol_registry.ProtocolBuilder` and add the
-      builder to `PROTOCOL_BUILDERS`.
+2. **Exporter** – implements the downstream artefact generation (optional).
+    * Sub‑class :class:`converters.exporters.protocol_exporter.ProtocolExporter`.
+    * Implement the methods
+        * `extract_one_simulation(self, sim_id, sim_group)` – return a plain Python object that contains the data you
+          need.
+        * `export_one_simulation(self, sim_id, sim_group)` – write the final artefact to `self.out_dir`.
+    * Add any protocol‑specific CLI options by defining a `@classmethod configure_parser(cls, parser)`.
+    * Register the exporter in `converters/generic_converter/convert_hdf5_to_format.py` by adding an entry to the
+      module‑level dictionary `PROTOCOL_EXPORTERS`.
 
 The generic driver automatically:
 
-* Adds a sub‑command with the name you used in `PROTOCOL_EXPORTERS`.
-* Injects only the arguments that the exporter’s ``__init__`` signature expects (so adding new CLI options never breaks
+* Generates a new sub‑command (`my-protocol`) for the CLI.
+* Injects only the arguments required by the exporter’s ``__init__`` signature (so new options never break
   existing code).
-* Handles logging, input validation and HDF5 opening.
-
----  
+* Handles logging, HDF5 opening, and error handling.
 
 <a name="design-doc"></a>
 
-## 8. Design Documentation
+### 5. Design documentation
 
-Take a look at the generated UML diagrams, data‑flow diagrams and sequence diagrams in `docs/` for a visual overview of
-the architecture, data flow and execution sequences. See [docs/Readme.md](docs/Readme.md) for more details.
-
-The detailed specification of the HDF5 schema is
-in [docs/specification/Virtual Brain Twin Inter Protocol Data Standard Specification and HDF5 Specification_v1.0.docx](docs/specification/Virtual%20Brain%20Twin%20Inter%20Protocol%20Data%20Standard%20Specification%20and%20HDF5%20Specification_v1.0.docx).
-
----  
+All architecture diagrams, data‑flow charts and sequence diagrams are stored under `docs/`.  
+A short entry point is `docs/Readme.md`.  
+The formal HDF5 schema is documented in  
+`docs/specification/Virtual Brain Twin Inter Protocol Data Standard Specification and HDF5 Specification_v1.0.docx`.
 
 <a name="minio-cache"></a>
 
-## 9. Creation or update of MinIO cache entries
+### 6. Creation or update of MinIO cache entries
 
-If you need to create a new cache entry **or** update an existing one that is used by the integration tests, run the job
-**`update_or_create_new_cache_job`** manually in a pipeline.  
+If you need to create a new cache entry **or** update an existing one that is used by the integration tests,
+run the job **`update_or_create_new_cache_job`** manually in a pipeline.
+
 Set the following CI variables when you trigger the job:
 
 | Variable         | Description                                                                 | Example value                                                                           |
@@ -310,42 +374,24 @@ Set the following CI variables when you trigger the job:
 | `MINIO_SRC_PATH` | Path (relative to the bucket *ci‑temp‑cache*) of the new ground‑truth file. | `VBT_UVA_Protocol/ground_truth/master_v1.h5`                                            |
 | `LOCAL_DEST_DIR` | Full destination path inside the job where the file will be copied to.      | `${CI_PROJECT_DIR}/tests/test_data/ground_truth/test_convert_output.h5`                 |
 
-### What the job does? (Example case: AMU protocol)
-
-The job copies the object located at https://vbt-minio.fz-juelich.de/console/browser/ci-temp-cache/$MINIO_SRC_PATH to
-the local cache location defined by `LOCAL_DEST_DIR`. When the job finishes successfully, the ground‑truth file in the
-cache (`tests/test_data/ground_truth/test_convert_output.h5`) is refreshed, and subsequent integration tests will use
-the updated data.
-
-### How to run it
-
-1. Create a new pipeline (e.g., from **CI/CD → Pipelines → Run pipeline**).
-2. In the pipeline UI locate the job **`update_or_create_new_cache_job`** and click **▶ Play**.
-3. In the “Run job” dialog, add the four variables above with the values you need.
-4. Start the job and wait for it to complete.
-
-After the job succeeds, the MinIO cache entry identified by `CI_CACHE_KEY` contains the new data and is ready for the
-integration tests.
-
----  
+The job copies the object from MinIO to the local cache location; after it finishes, the updated
+ground‑truth file is used in subsequent integration tests.
 
 <a name="testing"></a>
 
-## 10. Running the test‑suite (optional)
+### 7. Running the test‑suite (optional)
 
-The library includes a test‑suite (unit and integration) that can be run with `pytest`. The tests are located in
-`tests/` and cover the schema, factories, exporters and CLI scripts. The test can be run via GitLab CI/CD or locally. To
-run the tests locally, ensure you have `pytest` installed in your environment and execute:
+The library includes unit and integration tests in `tests/`. Run them locally with:
 
 ```bash
 pytest tests/
 ```
 
----
+The CI pipeline executes the same command automatically.
 
 <a name="release"></a>
 
-## 11. How to create a new release
+### 8. How to create a new release
 
 ```bash
 # Make sure you are on the branch you want to release from
@@ -383,7 +429,7 @@ The script will:
 
 5. **Push the commit and the tag** back to the remote repository (`origin`).
 
-### Example
+#### Example
 
 ```bash
 # First ever release – creates v1.0.0
@@ -394,9 +440,7 @@ The script will:
 ./release.sh            # default patch → v1.1.1
 ```
 
----
-
-### Checklist for first‑time set‑up
+#### Checklist for first‑time set‑up
 
 | Step                                   | Command                                          | Why                                                   |
 |----------------------------------------|--------------------------------------------------|-------------------------------------------------------|
@@ -406,9 +450,7 @@ The script will:
 | **Run first release**                  | `./release.sh --first-release`                   | Tags `v1.0.0` and creates the initial `CHANGELOG.md`. |
 | **Subsequent releases**                | `./release.sh` (or with `--minor/--major`)       | Bumps version & updates changelog automatically.      |
 
----
-
-### One‑liner for the very first release
+#### One‑liner for the very first release
 
 ```bash
 sudo apt-get update && sudo apt-get install -y git nodejs npm && \
@@ -424,16 +466,16 @@ After that, any future release is just:
 ./release.sh --major  # major
 ```
 
----  
-
 <a name="license"></a>
 
-## 12. License & contributing
+### 9. License & contributing
 
-*The license is still to be decided.*  
-Contributions are welcome:
+*The license is still to be decided.*
 
-* Fork the repository.
-* Create a feature branch.
-* Ensure the test suite passes (`pytest`).
-* Open a merge request against the `main` branch.
+**Contributions are welcome**
+
+1. Fork the repository.
+2. Create a feature branch.
+3. Ensure the test suite passes (`pytest`).
+4. Open a merge request against the `main` branch.
+

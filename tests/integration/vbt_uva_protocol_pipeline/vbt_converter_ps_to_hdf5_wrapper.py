@@ -148,7 +148,17 @@ def main() -> None:
             "--parameters",
             "scale_num_neurons",
             "scale_syn_strength",
-            "scale_nmda_efficacy"
+            "scale_nmda_efficacy",
+            "--meta-author",
+            "John Doe",
+            "--meta-creation-date",
+            "2026-07-31T12:00:00Z",
+            "--meta-software",
+            "UVA Software",
+            "--meta-software-version",
+            "1.0.0",
+            "--meta-run-id",
+            "e3b0c442-98fc-1c14-9af6-3b33d8fbc123"
         ]
 
         # ------------------------------------------------------------------

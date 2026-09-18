@@ -25,7 +25,7 @@ class ProtocolExporter(abc.ABC):
     # creates one per simulation (e.g. `.npz`, `.dsr.npz`, …) or for the whole list of simulations.
     output_suffix: str = ".out"
 
-    # If the exporter needs extra CLI options (e.g. `--bin-size` for AMU)
+    # If the exporter needs extra CLI options (e.g. `--bin-size` for UVA)
     # they can be added by the class method ``configure_parser``.
     @classmethod
     def configure_parser(cls, parser: "argparse.ArgumentParser") -> None:  # pragma: no cover

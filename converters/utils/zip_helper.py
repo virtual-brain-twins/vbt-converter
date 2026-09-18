@@ -12,6 +12,7 @@ adds all files under a source directory to a destination ``.zip`` file.
 """
 from __future__ import annotations
 
+import os
 import pathlib
 import zipfile
 from typing import Final
@@ -99,6 +100,7 @@ def zip_directory(
     >>> zip_directory(Path("my_folder"), Path("my_folder.zip"))
     """
     files = [p for p in src_root.rglob("*") if p.is_file()]
+    os.makedirs(dst_zip.parent, exist_ok=True)
     with zipfile.ZipFile(
             dst_zip,
             mode="w",

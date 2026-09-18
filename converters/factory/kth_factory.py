@@ -267,7 +267,8 @@ def build_kth_master_bundle(
         output_dir: Path,
         protocol_version: str,
         protocol_info_path: Path,
-        parameters: List[str] | None = None
+        parameters: List[str] | None = None,
+        metadata: dict[str, str] | None = None,
 ) -> MasterBundle:
     """Build a :class:`MasterBundle` from a KTH CSV file.
 
@@ -286,6 +287,8 @@ def build_kth_master_bundle(
         protocol_info_path: Path to the file containing protocol information.
         parameters: Optional list of parameter names to extract from the configuration.
             If ``None``, the default set of parameters is used.
+        metadata: Optional dictionary of global metadata fields to include in the
+            ``GlobalSection``.  If ``None``, default metadata is used.
 
     Returns:
         A fully populated :class:`MasterBundle` instance ready for serialisation.

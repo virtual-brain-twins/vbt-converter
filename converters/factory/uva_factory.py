@@ -20,6 +20,8 @@ from __future__ import annotations
 
 import logging
 import re
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Any, Tuple, Optional
 
@@ -39,7 +41,7 @@ from converters.schema.spike_map import SpikeMap
 from converters.schema.standard_format_group import StandardFormatGroup
 from converters.schema.stimuli_group import StimuliGroup
 from converters.schema.stimulus import Stimulus
-from converters.utils.metadata import MetaDataBuilder
+from converters.utils.metadata import MetaDataBuilder, StandardKey
 from converters.utils.units import Unit
 
 log = logging.getLogger(__name__)
@@ -102,8 +104,9 @@ def build_uva_master_bundle(
         output_dir: Path,
         protocol_version: str,
         protocol_info_path: Path,
-        parameters: List[str] | None = None, ) -> MasterBundle:
-    """Construct a :class:`~converters.schema.master_bundle.MasterBundle` from an AMU run directory.
+        parameters: List[str] | None = None,
+        metadata: dict[str, str] | None = None) -> MasterBundle:
+    """Construct a :class:`~converters.schema.master_bundle.MasterBundle` from an UVA run directory.
 
     The function walks the ``sim_dir`` directory, interprets each sub‑folder as
     an individual simulation run, extracts configuration, spike data and stimulus
@@ -123,6 +126,8 @@ def build_uva_master_bundle(
         protocol_info_path: Path to a PDF file containing protocol information.
         parameters: Optional list of parameter names to extract from the configuration.
             If ``None``, the default set of parameters is used.
+        metadata: Optional dictionary of global metadata fields to include in the
+            ``GlobalSection``.  If ``None``, default metadata is used.
 
     Returns:
         A fully populated :class:`~converters.schema.master_bundle.MasterBundle`
@@ -136,20 +141,39 @@ def build_uva_master_bundle(
         ValueError: If spike files are malformed or missing required arrays.
         OSError: For any I/O‑related errors while reading files or writing the raw
             zip archive.
+        KeyError: If an unsupported metadata key is supplied via the ``metadata`` argument.
 
     """
+
     # Global metadata (same as before, but now lives in the GlobalSection)
     # We keep a very small set of global fields – the rest can be added later.
     mb = MetaDataBuilder()
-    mb.author("John Doe")
-    mb.creation_date("2026-07-31T12:00:00Z")
-    mb.software("AMU Software")
-    mb.software_version("1.0.2", unit=None)
-    mb.run_id("e3b0c442-98fc-1c14-9af6-3b33d8fbc123")
+    # Apply defaults first
+    defaults: dict[StandardKey, Any] = {
+        StandardKey.AUTHOR: "John Doe",
+        StandardKey.CREATION_DATE: datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+        StandardKey.SOFTWARE: "UVA Software",
+        StandardKey.SOFTWARE_VERSION: "1.0.0",
+        StandardKey.RUN_ID: str(uuid.uuid4())
+    }
+    for key, value in defaults.items():
+        mb.set(key, value)
+
+    # Overlay any user‑provided metadata (string → StandardKey conversion)
+    if metadata:
+        for raw_key, val in metadata.items():
+            try:
+                key = StandardKey(raw_key)  # raises ValueError if unknown
+                mb.set(key, val)  # unit is None for CLI strings
+            except ValueError as exc:
+                raise KeyError(f"Unsupported metadata key supplied via CLI: {raw_key!r}") from exc
+
     global_meta = mb.to_dict()
-    global_section = GlobalSection(metadata_mapping=global_meta,
-                                   parameter_simulation_mapping={},
-                                   experiment_info="AMU sweep")
+    global_section = GlobalSection(
+        metadata_mapping=global_meta,
+        parameter_simulation_mapping={},
+        experiment_info="UVA sweep",
+    )
 
     # Walk every sub‑directory → one Simulation entry
     sims: List[Simulation] = []

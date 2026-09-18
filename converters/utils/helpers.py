@@ -134,7 +134,7 @@ def get_firing_rates(
     Args:
         spikes: Mapping from population name to a dictionary with a ``"times"``
             entry (NumPy array of spike timestamps in seconds).  This is the
-            format produced by :class:`AMUExporter`.
+            format produced by :class:`RateExporter`.
         dt: Width of the time bins in seconds (must be positive).
         t0: Start time of the interval to analyse (seconds).
         t1: End time of the interval to analyse (seconds, ``t1 > t0``).

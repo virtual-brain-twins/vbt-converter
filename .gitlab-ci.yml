@@ -156,7 +156,7 @@ vbt_cleanup_job:
     - echo "▶ Installing runtime dependencies …"
     - apk add --no-cache curl
     - |
-      MC_URL="https://dl.min.io/client/mc/release/linux-amd64/mc"
+      MC_URL="${CI_MC_URL}"
       curl -L "${MC_URL}" -o /usr/local/bin/mc && chmod +x /usr/local/bin/mc
 
     # Validate **all** required variables (fail fast)

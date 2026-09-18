@@ -353,10 +353,11 @@ The generic driver automatically:
 
 ### 5. Design documentation
 
-All architecture diagrams, data‑flow charts and sequence diagrams are stored under `docs/`.  
-A short entry point is `docs/Readme.md`.  
-The formal HDF5 schema is documented in  
-`docs/specification/Virtual Brain Twin Inter Protocol Data Standard Specification and HDF5 Specification_v1.0.docx`.
+Take a look at the generated UML diagrams, data‑flow diagrams and sequence diagrams in `docs/` for a visual overview of
+the architecture, data flow and execution sequences. See [docs/Readme.md](docs/Readme.md) for more details.
+
+The detailed specification of the HDF5 schema is
+in [docs/specification/Virtual Brain Twin Inter Protocol Data Standard Specification and HDF5 Specification_v1.0.docx](docs/specification/Virtual%20Brain%20Twin%20Inter%20Protocol%20Data%20Standard%20Specification%20and%20HDF5%20Specification_v1.0.docx).
 
 <a name="minio-cache"></a>
 

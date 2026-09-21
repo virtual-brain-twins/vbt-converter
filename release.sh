@@ -66,7 +66,6 @@ EOF
 done
 
 # Verify npx availability
-STDVER="commit-and-tag-version"
 if ! command -v npx >/dev/null; then
     die "npx not found – please install nodejs & npm (apt-get install nodejs npm)."
 fi
@@ -80,23 +79,23 @@ read -r response
 if [[ "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
     EDITOR=${EDITOR:-nano}
     cat <<EOF > "$SUMMARY_FILE"
-
 ### Release Summary
-- Put your high-level manual summary text here.
-- This text block gets auto-injected right below the version title block.
+- Put your high‑level manual summary text here.
+- This text block gets auto‑injected right below the version title block.
 
 EOF
     log "Opening $EDITOR to write release summary..."
     $EDITOR "$SUMMARY_FILE"
 fi
 
-# FIRST RELEASE or bump version #
+# Perform the release
 if (( CURRENT_TAG_COUNT == 0 )) || $FIRST_RELEASE; then
+    # First ever release → always a clean 1.0.0 tag
     log "No existing release tag – creating the *first* release v1.0.0"
-    npx "$STDVER" --first-release --release-as "$BUMP_TYPE"
+    npx commit-and-tag-version --first-release
 else
     log "Bumping version – $BUMP_TYPE"
-    npx "$STDVER" --release-as "$BUMP_TYPE"
+    npx commit-and-tag-version --release-as "$BUMP_TYPE"
 fi
 
 # Push the new commit and the new tag

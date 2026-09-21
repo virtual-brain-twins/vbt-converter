@@ -7,25 +7,56 @@
   },
   "scripts": {
     "release": "commit-and-tag-version",
-    "release:summary": "bash -c 'if [ -f .release-summary.txt ]; then sed -i \"/## \\[1\\|## [0-9]/r .release-summary.txt\" CHANGELOG.md && rm .release-summary.txt; fi'"
+    "release:summary": "bash update-changelog.sh"
   },
   "standard-version": {
+    "tagPrefix": "v",
     "skip": {
       "commit": false,
       "tag": false
     },
     "header": "# Changelog\n\nAll notable changes to this project will be documented in this file.",
     "types": [
-      { "type": "feat", "section": "New Features" },
-      { "type": "fix", "section": "Bug Fixes" },
-      { "type": "docs", "section": "Documentation" },
-      { "type": "perf", "section": "Performance Improvements" },
-      { "type": "refactor", "section": "Code Refactoring" },
-      { "type": "chore", "hidden": true },
-      { "type": "style", "hidden": true },
-      { "type": "test", "hidden": true },
-      { "type": "build", "hidden": true },
-      { "type": "ci", "hidden": true }
+      {
+        "type": "feat",
+        "section": "New Features"
+      },
+      {
+        "type": "fix",
+        "section": "Bug Fixes"
+      },
+      {
+        "type": "docs",
+        "section": "Documentation"
+      },
+      {
+        "type": "perf",
+        "section": "Performance Improvements"
+      },
+      {
+        "type": "refactor",
+        "section": "Code Refactoring"
+      },
+      {
+        "type": "chore",
+        "hidden": true
+      },
+      {
+        "type": "style",
+        "hidden": true
+      },
+      {
+        "type": "test",
+        "hidden": true
+      },
+      {
+        "type": "build",
+        "hidden": true
+      },
+      {
+        "type": "ci",
+        "hidden": true
+      }
     ],
     "scripts": {
       "postchangelog": "npm run release:summary"

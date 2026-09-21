@@ -398,6 +398,7 @@ The CI pipeline executes the same command automatically.
 # Make sure you are on the branch you want to release from
 git checkout main               # or any other target branch
 git pull origin main            # latest remote state
+git fetch origin --tags         # fetch all tags from the remote
 
 # Ensure the working tree is clean
 git status                      # must show “nothing to commit, working tree clean”

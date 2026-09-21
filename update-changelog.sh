@@ -35,19 +35,21 @@ fi
 ESCAPED_SUM=$(sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' .release-summary.txt)
 
 # Insert the summary after the matching version header.
-#   • The header line can be any of the common forms:
+#   • The header line can be any of the common forms, for example:
 #        ## 1.1.0
 #        ## 1.1.0 (2023‑09‑21)
 #        ## 1.1.0 – 2023‑09‑21
-#   • We use a regex match (`~`) instead of a strict string compare.
-#   • The variable `txt` (the summary) is printed *as‑is*.
+#        ## 1.1.0 (https://…)(2026‑09‑17)
+#   • We simply look for a line that starts with "##", optional blanks,
+#     and the exact version number.  Anything that follows the version
+#     (URL, date, dash, …) is accepted.
 awk -v ver="${VERSION}" -v txt="${ESCAPED_SUM}" '
-    # The header line – we accept any characters after the version number.
-    $0 ~ "^##[[:space:]]*" ver "([[:space:]].*)?$" {
+    # Header line – accept any characters after the version number.
+    $0 ~ "^##[[:space:]]*" ver {
         print               # keep the original header line
         print txt           # insert the whole multi‑line summary
         inserted = 1       # flag for later sanity check
-        next                # skip the rest of processing for this line
+        next                # skip further processing for this line
     }
     { print }               # everything else is copied unchanged
     END {

@@ -39,23 +39,23 @@
       },
       {
         "type": "chore",
-        "hidden": true
+        "section": "Chores"
       },
       {
         "type": "style",
-        "hidden": true
+        "section": "Styling"
       },
       {
         "type": "test",
-        "hidden": true
+        "section": "Tests"
       },
       {
         "type": "build",
-        "hidden": true
+        "section": "Build System"
       },
       {
         "type": "ci",
-        "hidden": true
+        "section": "Continuous Integration"
       }
     ],
     "scripts": {

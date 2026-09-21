@@ -1,6 +1,60 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [1.1.0](https://gitlab.jsc.fz-juelich.de/virtualbraintwin/vbt-converter/compare/v1.0.0...v1.1.0) (2026-09-21)
+### Release Summary
+
+*Release engineering & tooling*  
+- Added **`update‑changelog.sh`** – a dedicated script that reads `.release‑summary.txt`, extracts the version from `package.json`, safely escapes special characters and injects the summary into `CHANGELOG.md` using a robust `awk`‑based approach.  
+- Re‑implemented the `release:summary` npm script to call the new script; removed the obsolete `STDVER` variable and simplified version‑tag handling (creates a clean `v1.0.0` tag on first release).  
+- Updated release checklist, added a full changelog, release script, and package configuration to the repository.
+
+*Documentation*  
+- Split the README into **User‑Guide** and **Developer‑Guide** sections, improving navigation.  
+- Added Markdown links to UML, data‑flow, and sequence diagrams; URL‑encoded HDF5 spec reference.  
+- Clarified installation steps (sub‑module cloning, environment setup, version pinning) and expanded quick‑start examples with optional metadata flags and raw‑bundle handling.  
+- Introduced a “Verifying an HDF5 file” snippet and refreshed licensing, contribution guidelines, and release instructions.
+
+*Metadata handling*  
+- Introduced a configurable **`metadata`** argument for `build_kth_master_bundle` and `build_uva_master_bundle`.  
+- Global metadata (author, creation date, software, version, UUID) now defaults to values from `MetaDataBuilder` and can be overridden via new `--meta-<key>` CLI options in `convert_any_to_hdf5.py`.  
+- Updated CI to fetch the MinIO client from a configurable `${CI_MC_URL}`.
+
+*Converters & simulation parameters*  
+- Removed hard‑coded parameter lists; parameters are now derived dynamically from the configuration section.  
+- Added `DEFAULT_UVA_PARAMETERS` and optional `parameters` arguments to both UVA and KTH bundle builders.  
+- Extended `protocol_registry` to forward `**extra_kwargs` (e.g., `parameters`) to the appropriate builder.  
+- New `--parameters` CLI flag allows users to specify a custom parameter set at runtime.  
+- Implemented `keys()` / `iter_keys()` in `CompoundKVContainer` for case‑insensitive, sorted key retrieval.  
+- Adjusted integration tests to use the new flag.
+
+*Protocol renaming & CI updates*  
+- Renamed all AMU / Basal‑Ganglia references to **UVA / KTH** across code, docs, CI pipelines, and Allure reports.  
+- Updated cache key names, input‑path variables, and wrapper script references to match the new protocol names.  
+- Fixed CI configuration for the KTH and UVA pipelines.
+
+*Other*  
+- Minor code formatting, doc‑string refinements, and log‑message updates for better readability.  
+
+### New Features
+
+* broaden changelog header parsing to support bracketed and linked versions ([0dd2780](https://gitlab.jsc.fz-juelich.de/virtualbraintwin/vbt-converter/commit/0dd27802b7e22df3e91219d9efe9f487e10c0c1a))
+* **converters:** make simulation parameters configurable via CLI and factory API ([f4ed85f](https://gitlab.jsc.fz-juelich.de/virtualbraintwin/vbt-converter/commit/f4ed85f909fc8944308987668cd74091066c700a))
+
+### Documentation
+
+* **readme:** clarify design documentation links and update HDF5 spec reference ([a55757d](https://gitlab.jsc.fz-juelich.de/virtualbraintwin/vbt-converter/commit/a55757db3d70e7df5727ed9a986ef67f85a0c985))
+* **readme:** restructure README into user‑guide and developer‑guide sections ([dca51dd](https://gitlab.jsc.fz-juelich.de/virtualbraintwin/vbt-converter/commit/dca51ddfe823251177f5f084e2996402dcbd7e2d))
+
+### Code Refactoring
+
+* group commit types into sections and broaden changelog header matching ([a12d446](https://gitlab.jsc.fz-juelich.de/virtualbraintwin/vbt-converter/commit/a12d446b2098dcf047d53348b3544e72ad26213f))
+* **metadata:** add configurable global metadata via CLI and propagate to factories ([fd330a3](https://gitlab.jsc.fz-juelich.de/virtualbraintwin/vbt-converter/commit/fd330a35db31d7b796ec2256153b0e4e0f662595))
+
+### Chores
+
+* **release:** enhance release workflow and documentation ([2581a8c](https://gitlab.jsc.fz-juelich.de/virtualbraintwin/vbt-converter/commit/2581a8c1737af9236343dc1eae53c9acf840e8b4))
+
 ## 1.0.0 (2026-09-17)
 
 ### Release Summary

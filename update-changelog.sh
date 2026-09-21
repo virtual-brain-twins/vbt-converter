@@ -36,23 +36,27 @@ ESCAPED_SUM=$(sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' .release-summary.txt)
 
 # Insert the summary after the matching version header.
 #   • The header line can be any of the common forms, for example:
-#        ## 1.1.0
-#        ## 1.1.0 (2023‑09‑21)
-#        ## 1.1.0 – 2023‑09‑21
-#        ## 1.1.0 (https://…)(2026‑09‑17)
+#       ## 1.1.0 …
+#       ## [1.1.0] …
+#       ## [1.1.0](…) …
 #   • We simply look for a line that starts with "##", optional blanks,
 #     and the exact version number.  Anything that follows the version
 #     (URL, date, dash, …) is accepted.
 printf 'Inserting summary for version %s into CHANGELOG.md...\n' "${VERSION}"
 awk -v ver="${VERSION}" -v txt="${ESCAPED_SUM}" '
-    # Header line – accept any characters after the version number.
-    $0 ~ "^##[[:space:]]*" ver {
-        print               # keep the original header line
-        print txt           # insert the whole multi‑line summary
-        inserted = 1       # flag for later sanity check
-        next                # skip further processing for this line
+    #   ^##            → line starts with “##”
+    #   [[:space:]]*   → optional whitespace
+    #   \[?            → optional opening bracket
+    #   ver            → the version number
+    #   \]?            → optional closing bracket
+    #   (\\([^)]*\\))? → optional “( … )” part (the markdown link)
+    $0 ~ "^##[[:space:]]*\\[?" ver "\\]?(\\([^)]*\\))?" {
+        print               # keep the original heading
+        print txt           # inject the multi‑line summary
+        inserted = 1
+        next
     }
-    { print }               # everything else is copied unchanged
+    { print }
     END {
         if (!inserted) {
             printf "ERROR: Could not find a version header for %s in CHANGELOG.md\n", ver > "/dev/stderr"

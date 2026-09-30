@@ -1,41 +1,72 @@
 @startuml dfd_level_1
-' ==== Actors ====
+' ==============================
+' Actors
+' ==============================
 actor User
 
-' ==== Data Stores ====
-folder "Input Directory / CSV" as IN_DIR
-folder "Protocol PDF (optional)" as PROTO_PDF
-file "Raw ZIP (tmp)" as RAW_ZIP
-database "MasterBundle (HDF5)" as H5_BUNDLE
+' ==============================
+' Data Stores (persistent)
+' ==============================
+folder "Input Directory / CSV"      as IN_DIR
+folder "Protocol PDF (optional)"    as PROTO_PDF
+file   "Raw ZIP (tmp)"              as RAW_ZIP
+database "MasterBundle (HDF5)"      as H5_BUNDLE
 folder "Exported Files (.npz, .dsr.npz)" as OUT_FILES
 
-' ==== Processes (inside convert_any_to_hdf5) ====
-rectangle "Parse CLI arguments\n(argparse)" as PARSE_ARGS
+' ==============================
+' Processes (inside convert_any_to_hdf5)
+' ==============================
+rectangle "Parse CLI arguments\n(argparse)\n- --meta-author, --meta-creation-date, …" as PARSE_ARGS
+rectangle "Collect Metadata\n(MetaDataBuilder)" as COLLECT_META
 rectangle "Configure Logging\n(configure_logging)" as LOG_CFG
 rectangle "Zip raw data (optional)\n(zip_directory)" as ZIP_RAW
 rectangle "Select Protocol Builder\n(PROTOCOL_BUILDERS)" as SELECT_BUILDER
 rectangle "Build MasterBundle\n(ProtocolBuilder.__call__)" as BUILD_BUNDLE
-rectangle "Write HDF5 file\n(MasterBundle.to_hdf5)" as WRITE_H5
+rectangle "Write HDF5 file\n(MasterBundle.to_hdf5)\n- writes format_version (string)\n- writes format_version_major/minor (int)\n- stores Global metadata\n- stores Output/Map hierarchy" as WRITE_H5
 
-' ==== Data Flows ====
+' ==============================
+' Data Flows
+' ==============================
 User --> PARSE_ARGS : run script
-PARSE_ARGS --> LOG_CFG : log‑level
-PARSE_ARGS --> IN_DIR : -i / --input
+PARSE_ARGS --> LOG_CFG   : log‑level
+PARSE_ARGS --> IN_DIR    : -i / --input
 PARSE_ARGS --> PROTO_PDF : --protocol‑info‑path
-PARSE_ARGS --> RAW_ZIP : --no‑raw‑bundle (negated)
+PARSE_ARGS --> RAW_ZIP   : --no‑raw‑bundle (negated)
 PARSE_ARGS --> SELECT_BUILDER : --protocol
+PARSE_ARGS --> COLLECT_META   : --meta‑author, --meta‑creation‑date, --meta‑software, --meta‑run‑id
+COLLECT_META --> BUILD_BUNDLE : injected Global metadata (dict)
 
 LOG_CFG --> ZIP_RAW : logger
 ZIP_RAW --> RAW_ZIP : create zip (if enabled)
 
 SELECT_BUILDER --> BUILD_BUNDLE : builder object (UVABuilder / KTHBuilder)
-BUILD_BUNDLE --> IN_DIR : input_path
-BUILD_BUNDLE --> RAW_ZIP : embed_raw_path (optional)
-BUILD_BUNDLE --> PROTO_PDF : protocol_info_path
-BUILD_BUNDLE --> H5_BUNDLE : returns MasterBundle
 
-WRITE_H5 --> H5_BUNDLE : serialize + metadata
+BUILD_BUNDLE --> IN_DIR   : input_path
+BUILD_BUNDLE --> RAW_ZIP  : embed_raw_path (optional)
+BUILD_BUNDLE --> PROTO_PDF: protocol_info_path
+BUILD_BUNDLE --> H5_BUNDLE : returns MasterBundle (contains Global, StandardFormat, optional RawBundle & Protocol)
+
+WRITE_H5 --> H5_BUNDLE : serialize + version attributes + Global metadata
 WRITE_H5 --> OUT_FILES : .h5 file created
 
 User --> OUT_FILES : final master bundle ready
+
+' ==============================
+' Optional groups (shown for completeness)
+' ==============================
+note right of H5_BUNDLE
+  ├─ StandardFormat
+  │    ├─ Global (contains metadata: author, creation_date, software, software_version, run_id)
+  │    ├─ Simulations
+  │    │    └─ Sim_<id>
+  │    │         ├─ Configuration
+  │    │         ├─ Parameters
+  │    │         ├─ Stimuli
+  │    │         └─ Output
+  │    │               └─ Map (populations → neurons)
+  │    └─ …
+  ├─ RawBundle (optional, zip of raw input)
+  └─ Protocol (optional, v2.0 validation)
+end note
+
 @enduml

@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, call
 
 import allure
 
@@ -156,7 +156,15 @@ class TestMasterBundle:
             h5py_open_mock.assert_called_once_with(self.output_path, "w")
 
         with allure.step("✅ Verify that the ``format_version`` attribute was set"):
-            mock_h5_file.attrs.__setitem__.assert_called_once_with("format_version", "1.0")
+            expected_calls = [
+                call("format_version", "2.0"),
+                call("format_version_major", 2),
+                call("format_version_minor", 0),
+            ]
+
+            # Check order **and** count
+            mock_h5_file.attrs.__setitem__.assert_has_calls(expected_calls, any_order=False)
+            assert mock_h5_file.attrs.__setitem__.call_count == 3
 
         with allure.step("✅ Verify that each sub‑group received the HDF5 file handle"):
             self.standard_group_mock.to_hdf5.assert_called_once_with(mock_h5_file)

@@ -190,6 +190,17 @@ vbt_cleanup_job:
       echo "▶ Configuring MinIO alias ‘minio’ …"
       mc alias set minio "${MINIO_ENDPOINT}" "${MINIO_ACCESS_KEY}" "${MINIO_SECRET_KEY}" --api S3v4
 
+    # Print the resolved variables (for debugging)
+    - |
+      echo "▶ Resolved variables:"
+      # List the variable *names* you want to dump
+      vars="LOCAL_DEST_DIR LOCAL_DEST_PATH MINIO_SRC_PATH CI_CACHE_DIR CI_CACHE_KEY"
+      # Loop over each name, use indirect expansion to fetch its value
+      for v in $vars; do
+        eval "value=\${$v-}"
+        printf '%s=%s\n' "$v" "$value"
+      done
+
     # Verify the source path exists on MinIO
     - |
       echo "▶ Checking existence of minio/${MINIO_BUCKET}/${MINIO_SOURCE_PATH} …"
@@ -213,14 +224,9 @@ vbt_cleanup_job:
     - |
       echo "▶ Copying from MinIO …"            
       SRC="minio/${MINIO_BUCKET}/${MINIO_SOURCE_PATH}"
-      DST="${LOCAL_DEST_PATH}"            
-      if [[ -d "$DST" ]]; then
-          # Destination already exists and is a folder → copy everything
-          mc cp --recursive "$SRC" "$DST"
-      else
-          # Destination is a file (or does not exist) → plain copy
-          mc cp "$SRC" "$DST"
-      fi
+      DST="${LOCAL_DEST_PATH}"
+      mkdir -p "$DST"  # ensure the destination exists
+      mc cp --recursive "$SRC" "$DST"
   # Cache definition – **key & path are variable‑driven**
   cache:
     - key: "$CACHE_KEY"

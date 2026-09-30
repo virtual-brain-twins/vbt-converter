@@ -10,24 +10,63 @@ participant "Factory Function\nbuild_uva_master_bundle / build_kth_master_bundle
 participant "MasterBundle" as bundle
 database "HDF5 file\n(master.h5)" as h5file
 
-u -> cli : python convert_any_to_hdf5.py -i <inp> -o <out> --protocol uva
+== Argument parsing ==
+u -> cli : python convert_any_to_hdf5.py -i <inp> -o <out> --protocol kth \n --meta-author "John Doe" \n --meta-creation-date "2026-07-31T12:00:00Z" \n --meta-software "KTH Software" \n --meta-run-id "<uuid>"
 cli -> args : parser.parse_args()
 cli -> rootlog : logging.basicConfig(level=args.log_level)
+
+== (optional) embed raw bundle ==
 alt embed raw bundle?
     cli -> zipper : zip_directory(src_root, dst_zip)
     zipper --> cli : raw_zip created
 end
+
+== Resolve protocol builder ==
 cli -> registry : PROTOCOL_BUILDERS[args.protocol]
-registry --> cli : builder instance
-cli -> builder : __call__(input_path, embed_raw, embed_raw_path, output_dir, protocol_version, protocol_info_path)
-builder -> factory : build_uva_master_bundle(...)
-factory --> bundle : MasterBundle object
+registry --> cli : builder instance (KTHBuilder / UVABuilder)
+
+== Build master bundle ==
+cli -> builder :  _ _call _ _(input_path, embed_raw, embed_raw_path,\n output_dir, protocol_version, protocol_info_path,\n metadata_dict)
+note right of builder
+    • Extracts metadata arguments
+    • Calls ``MetaDataBuilder`` to populate the
+      ``Global`` section (author, creation‑date, software,
+      run‑id, …)
+    • Delegates to the appropriate factory:
+        – build_uva_master_bundle(...)
+        – build_kth_master_bundle(...)
+end note
+builder -> factory : build_*_master_bundle(...)
+factory --> bundle : MasterBundle object\n (contains StandardFormatGroup, optional RawBundleGroup,\n optional ProtocolGroup)
+
+== Write HDF5 bundle ==
 cli -> bundle : bundle.to_hdf5(out_path)
-bundle -> h5file : write / set format_version
+bundle -> h5file : create parent directories
+bundle -> h5file : set attribute ``format_version`` = "2.0"
+bundle -> h5file : set integer attributes\n ``format_version_major`` = 2\n ``format_version_minor`` = 0\n (patch omitted when zero)
 bundle -> h5file : write StandardFormat group
-bundle -> h5file : (optional) write RawBundle group
-bundle -> h5file : (optional) write Protocol group
+note right of h5file
+    StandardFormat/
+        Global/            ← contains metadata written by
+                              MetaDataBuilder
+        Simulations/
+            Sim_<id>/
+                Configuration/
+                Parameters/
+                Stimuli/
+                Output/
+                    Map/
+                        <populations …>
+end note
+alt raw bundle requested
+    bundle -> h5file : write RawBundle group (external‑link zip)
+end
+alt protocol information supplied
+    bundle -> h5file : write Protocol group\n attribute ``Version`` (UTF‑8 string)\n dataset ``Content`` (uint8, compressed)
+end
 h5file --> cli : HDF5 written
-cli -> rootlog : logger.info("Finished …")
+
+== Finish up ==
+cli -> rootlog : logger.info("Finished conversion, file written to {out_path}")
 cli --> u : exit 0
 @enduml

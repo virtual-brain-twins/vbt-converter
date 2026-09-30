@@ -25,13 +25,24 @@
             get(key: str) Tuple[Any, Optional[Unit]]
             get_unit(key: str) Optional[Unit]
             get_value(key: str) Any
+            iter_keys() Iterable[str]
+            keys() List[str]
             pop(key: str, default: Any) Tuple[Any, Optional[Unit]]
             set(key: str, value: Any, unit: Optional[Unit]) None
             to_hdf5(parent: h5py.Group) None
           }
+          class Map {
+            populations : List[Population]
+            from_hdf5(grp: h5py.Group) 'Map'
+            to_hdf5(parent: h5py.Group) None
+          }
           class MasterBundle {
-            protocol : ProtocolGroup | None
-            raw : RawBundleGroup | None
+            format_version : str
+            format_version_major : int
+            format_version_minor : int
+            format_version_patch : int
+            protocol : Optional[ProtocolGroup]
+            raw : Optional[RawBundleGroup]
             standard
             from_hdf5(in_path: Path) 'MasterBundle'
             to_hdf5(out_path: Path) None
@@ -57,6 +68,9 @@
             index : int
             times : ndarray
             times_unit : Optional[Unit]
+            virtual : bool
+            voltage : ndarray
+            voltage_unit : Optional[Unit]
             from_hdf5(grp: h5py.Group) 'Neuron'
             to_hdf5(parent: h5py.Group) None
           }
@@ -105,19 +119,14 @@
           }
           class Simulation {
             configuration
-            output_spike
+            output_map
             parameters
             simulation_id : str
-            stimulus
+            stimuli
             from_hdf5(grp: h5py.Group) 'Simulation'
             to_hdf5(parent: h5py.Group) None
           }
           class SimulationParameters {
-          }
-          class SpikeMap {
-            populations : List[Population]
-            from_hdf5(grp: h5py.Group) 'SpikeMap'
-            to_hdf5(parent: h5py.Group) None
           }
           class StandardFormatGroup {
             global_section
@@ -162,6 +171,7 @@
           KeyValueCompoundContainer --|> HDF5Serializable
           Configuration --|> KeyValueCompoundContainer
           GlobalSection --|> HDF5Serializable
+          Map --|> HDF5Serializable
           MasterBundle --|> HDF5Serializable
           Neuron --|> HDF5Serializable
           Population --|> HDF5Serializable
@@ -169,15 +179,14 @@
           RawBundleGroup --|> HDF5Serializable
           Simulation --|> HDF5Serializable
           SimulationParameters --|> KeyValueCompoundContainer
-          SpikeMap --|> HDF5Serializable
           StandardFormatGroup --|> HDF5Serializable
           Stimulus --|> HDF5Serializable
           Simulation --> Configuration : configuration
           StandardFormatGroup --> GlobalSection : global_section
+          Simulation --> Map : output_map
           Simulation --> SimulationParameters : parameters
-          Simulation --> SpikeMap : output_spike
           MasterBundle --> StandardFormatGroup : standard
-          Simulation --> StimuliGroup : stimulus
+          Simulation --> StimuliGroup : stimuli
   
        </div>
   </body>

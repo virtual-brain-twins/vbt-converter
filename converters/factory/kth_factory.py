@@ -23,13 +23,17 @@ from __future__ import annotations
 import json
 import os
 import re
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 import h5py
 import numpy as np
 
+from converters.schema.configuration import Configuration
 from converters.schema.global_section import GlobalSection
+from converters.schema.map import Map
 from converters.schema.master_bundle import MasterBundle
 from converters.schema.neuron import Neuron
 from converters.schema.population import Population
@@ -37,11 +41,12 @@ from converters.schema.protocol_group import ProtocolGroup
 from converters.schema.raw_bundle_group import RawBundleGroup
 from converters.schema.simulation import Simulation
 from converters.schema.simulation_parameters import SimulationParameters
-from converters.schema.spike_map import SpikeMap
 from converters.schema.standard_format_group import StandardFormatGroup
 from converters.schema.stimuli_group import StimuliGroup
 from converters.schema.stimulus import Stimulus
 from converters.utils.kth_protocol_helper import stream_csv_as_dicts
+from converters.utils.metadata import MetaDataBuilder, StandardKey
+from converters.utils.units import Unit
 
 # Helper regular expression for simple arithmetic strings.
 _ARITHMETIC_RE = re.compile(
@@ -54,6 +59,7 @@ _ARITHMETIC_RE = re.compile(
     re.VERBOSE,
 )
 
+DEFAULT_KTH_PARAMETERS = ["network_state", "duration", "da_level", "input_conductance", "input_scale_factor"]
 
 def _eval_arith_string(val: Any) -> Any:
     """Convert a string that looks like a simple arithmetic expression to a number.
@@ -223,41 +229,135 @@ def _parse_input_config(input_config: Path) -> StimuliGroup:
 
 
 def _populations_from_output_spikes(h5_path: Path) -> List[Population]:
-    """Read the classic Snudda output‑spikes HDF5 layout and create ``Population`` objects.
+    """Read the classic KTH *output‑spikes* HDF5 file and build ``Population`` objects.
 
-    The HDF5 file contains three top‑level groups: ``meta_data``, ``time`` and
-    ``neurons``.  For each neuron (identified by its global ID) the function
-    extracts the spike times and groups neurons by the population name stored in
-    ``meta_data/name``.
+    The Snudda layout is::
 
-    Args:
-        h5_path: Path to the HDF5 file containing spike data.
+        /meta_data
+            name               – 1‑D array of bytes, length = #neurons
+            virtual_neuron    – 1‑D bool array, length = #neurons
+        /neurons
+            <gid>/spikes      – spike times (shape (1, N_spikes))
+            <gid>/voltage     – membrane voltage (shape (1, N_samples))
+            …                 – other datasets that we simply ignore here
 
-    Returns:
-        A list of :class:`Population` objects, each containing a collection of
-        :class:`Neuron` instances for that population.
+    For every global‑ID (gid) we create a :class:`Neuron` and fill **all** fields
+    that are available:
 
-    Raises:
-        FileNotFoundError: If ``h5_path`` does not exist.
-        OSError: If the HDF5 file cannot be opened (corrupted, permission error, …).
-        KeyError: If the expected groups or datasets are missing in the file.
+    * ``times``               – the spike‑time vector (float64)
+    * ``times_unit``          – the ``unit`` attribute attached to the ``spikes`` dataset,
+                               if it exists.
+    * ``voltage``             – the voltage trace (float64)
+    * ``voltage_unit``        – the ``unit`` attribute attached to the ``voltage`` dataset,
+                               if it exists.
+    * ``virtual``             – taken from the ``virtual_neuron`` array in ``meta_data``.
+
+    Afterwards the neurons are grouped by the population name stored in
+    ``meta_data/name`` and a list of :class:`Population` objects is returned.
+
+    Parameters
+    ----------
+    h5_path : Path
+        Path to the KTH ``output‑spikes`` HDF5 file.
+
+    Returns
+    -------
+    List[Population]
+        One ``Population`` per distinct name, each containing the corresponding
+        ``Neuron`` objects.
+
+    Raises
+    ------
+    FileNotFoundError
+        If ``h5_path`` does not exist.
+    OSError
+        If the file cannot be opened (corrupt, permission error, …).
+    KeyError
+        If the expected groups/datasets are missing.
     """
     with h5py.File(h5_path, "r") as f:
-        population_name = f["meta_data"]["name"][()]
+        # Global meta‑data
+        # `name` is stored as a 1‑D array of bytes; we keep it as‑is and decode
+        # lazily when we need the string for a particular gid.
+        population_name: np.ndarray = f["meta_data"]["name"][()]  # shape (N_neurons,)
+        # ``virtual_neuron`` is a 1‑D boolean array that lines‑up with the order
+        # of the groups under /neurons (i.e. with the gid value).
+        virtual_flags: np.ndarray = f["meta_data"]["virtual_neuron"][()].astype(bool)
+
+        # The per‑neuron group container
         neuron_grp = f["neurons"]
+        # ``neuron_grp`` behaves like a dict mapping ``gid_str`` → h5py.Group.
+        # We'll build a temporary dict mapping population‑name → list[Neuron].
         populations: Dict[str, List[Neuron]] = {}
 
         for gid_str, ngrp in neuron_grp.items():
-            spikes = ngrp["spikes"][()]  # shape (1, N_spikes)
-            times = spikes.squeeze().astype(np.float64)
+            gid = int(gid_str)  # the global identifier
 
-            # ``population_name`` is an array where the index corresponds to the GID.
-            pop_name = population_name[int(gid_str)].decode("utf-8")
-            populations.setdefault(pop_name, []).append(
-                Neuron(index=int(gid_str), times=times)
+            # Spike times
+            # KTH stores spikes as a (1, N) array; `squeeze` removes the
+            # leading dimension.  We also force ``float64`` to match the
+            # Neuron dataclass contract.
+            spikes_raw = ngrp["spikes"][()]
+            times: np.ndarray = spikes_raw.squeeze().astype(np.float64)
+
+            # Optional unit attribute – may be missing → ``None``.
+            times_unit = ngrp["spikes"].attrs.get("unit", None)
+            # If the attribute is a byte‑string, keep it as‑is; the Neuron class
+            # stores whatever is provided (the Unit wrapper will handle it later).
+            if isinstance(times_unit, bytes):
+                times_unit = times_unit.decode("utf-8")
+
+            # Voltage trace (may be absent for some neurons)
+            if "voltage" in ngrp:
+                voltage_raw = ngrp["voltage"][()]
+                voltage: np.ndarray = voltage_raw.squeeze().astype(np.float64)
+
+                voltage_unit = ngrp["voltage"].attrs.get("unit", None)
+                if isinstance(voltage_unit, bytes):
+                    voltage_unit = voltage_unit.decode("utf-8")
+            else:
+                # No voltage recorded → store an empty array.
+                voltage = np.empty(0, dtype=np.float64)
+                voltage_unit = None
+
+            # Virtual flag – taken from the pre‑loaded ``virtual_flags`` array.
+            # Guard against out‑of‑range indices (mal‑formed files); we treat
+            # missing entries as *non‑virtual* but raise a warning so the caller
+            # can investigate.
+            try:
+                is_virtual = bool(virtual_flags[gid])
+            except IndexError:
+                import warnings
+                warnings.warn(
+                    f"virtual_neuron flag missing for gid={gid}; assuming False",
+                    RuntimeWarning,
+                )
+                is_virtual = False
+
+            # Build the Neuron instance
+            neuron = Neuron(
+                index=gid,
+                times=times,
+                times_unit=Unit(times_unit) if times_unit is not None else None,
+                voltage=voltage,
+                voltage_unit=Unit(voltage_unit) if voltage_unit is not None else None,
+                virtual=is_virtual,
             )
 
-        return [Population(name, neurons) for name, neurons in populations.items()]
+            # Associate the neuron with its population
+            # ``population_name`` is a byte array where the element index equals
+            # the gid.  It must be decoded to a normal string.
+            pop_name_bytes = population_name[gid]
+            if isinstance(pop_name_bytes, (bytes, np.bytes_)):
+                pop_name = pop_name_bytes.decode("utf-8")
+            else:
+                # Unexpected datatype – fall back to ``str`` conversion.
+                pop_name = str(pop_name_bytes)
+
+            populations.setdefault(pop_name, []).append(neuron)
+
+        # Convert the temporary dict into the final list of Population
+        return [Population(population_name=pop, neurons=neurons) for pop, neurons in populations.items()]
 
 
 def build_kth_master_bundle(
@@ -313,39 +413,73 @@ def build_kth_master_bundle(
         )
     )
 
+    # Global metadata (same as before, but now lives in the GlobalSection)
+    # We keep a very small set of global fields – the rest can be added later.
+    mb = MetaDataBuilder()
+    # Apply defaults first
+    defaults: dict[StandardKey, Any] = {
+        StandardKey.AUTHOR: "John Doe",
+        StandardKey.CREATION_DATE: datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+        StandardKey.SOFTWARE: "KTH Software",
+        StandardKey.SOFTWARE_VERSION: "1.0.0",
+        StandardKey.RUN_ID: str(uuid.uuid4())
+    }
+    for key, value in defaults.items():
+        mb.set(key, value)
+
+    # Overlay any user‑provided metadata (string → StandardKey conversion)
+    if metadata:
+        for raw_key, val in metadata.items():
+            try:
+                key = StandardKey(raw_key)  # raises ValueError if unknown
+                mb.set(key, val)  # unit is None for CLI strings
+            except ValueError as exc:
+                raise KeyError(f"Unsupported metadata key supplied via CLI: {raw_key!r}") from exc
+
+    global_meta = mb.to_dict()
+
     # Global section – reuse high‑level fields from each CSV row.
     global_section = GlobalSection(
-        metadata_mapping={"network_state": ("network_state", None), "duration": ("duration", None)},
-        experiment_info="KTH simulation",
+        metadata_mapping=global_meta,
+        parameter_simulation_mapping={},
+        experiment_info="KTH sweep experiment",
     )
 
     runs: List[Simulation] = []
     for row in csv_rows:
         # Simulation parameters taken directly from the CSV row.
-        meta = {
-            "network_state": (row["network_state"], None),
-            "duration": (row["duration"], None),
-            "da_level": (row["da_level"], None),
-            "input_conductance": (row["input_conductance"], None),
-            "input_scale_factor": (row["input_scale_factor"], None),
-        }
-        parameters = SimulationParameters(kv_pairs=meta)
+        # Extract the selected dynamic parameters, rename them, and wrap values as (value, None)
+        # Unit is not provided inside the parent sweep directory, hence kept None
+        full_cfg = {k: (v, None) for k, v in row.items()}  # copy the entire row to a new dict
+        param_names = parameters if parameters is not None else DEFAULT_KTH_PARAMETERS
+        sim_params = {p: full_cfg.pop(p) for p in param_names if p in full_cfg}
+
+        # Remaining entries belong to the generic configuration object
+        # `full_cfg` now contains everything except the default parameters above.
+        sim_parameters = SimulationParameters(kv_pairs=sim_params)
+        config = Configuration(kv_pairs=full_cfg)  # ← all other config items
+
 
         # Load spikes.
         spikes_h5 = Path(row["output_file"])
         pops = _populations_from_output_spikes(spikes_h5)
-        spike_map = SpikeMap(populations=pops)
+        out_map = Map(populations=pops)
 
         # Load stimulus.
         stimulus_set = _parse_input_config(Path(row["input_config"]))
 
+        # Extract a friendly simulation identifier from the CSV row.
+        # The CSV column sim_info_file (file_path) contains a path like: /some/dir/simulation‑metadata‑<SIM_ID>.json
+        # We want only the `<SIM_ID>` part (the text after the final hyphen, without the file‑extension).
+        sim_id: str = Path(row["sim_info_file"]).stem.rsplit("-", 1)[-1]
         # Assemble a ``Simulation`` entry.
         runs.append(
             Simulation(
-                simulation_id=Path(row["sim_info_file"]).stem,
-                parameters=parameters,
-                stimulus=stimulus_set,
-                output_spike=spike_map,
+                simulation_id=sim_id,
+                configuration=config,
+                parameters=sim_parameters,
+                stimuli=stimulus_set,
+                output_map=out_map
             )
         )
 

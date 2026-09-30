@@ -8,6 +8,8 @@
           }
           class exporters {
           }
+          class data_utils {
+          }
           class protocol_exporter {
           }
           class rate_exporter {
@@ -36,6 +38,8 @@
           }
           class hdf5_serializable {
           }
+          class map {
+          }
           class master_bundle {
           }
           class neuron {
@@ -49,8 +53,6 @@
           class simulation {
           }
           class simulation_parameters {
-          }
-          class spike_map {
           }
           class standard_format_group {
           }
@@ -82,7 +84,9 @@
           }
           protocol_exporter --> common
           rate_exporter --> protocol_exporter
+          kth_factory --> configuration
           kth_factory --> global_section
+          kth_factory --> map
           kth_factory --> master_bundle
           kth_factory --> neuron
           kth_factory --> population
@@ -90,16 +94,18 @@
           kth_factory --> raw_bundle_group
           kth_factory --> simulation
           kth_factory --> simulation_parameters
-          kth_factory --> spike_map
           kth_factory --> standard_format_group
           kth_factory --> stimuli_group
           kth_factory --> stimulus
           kth_factory --> kth_protocol_helper
+          kth_factory --> metadata
+          kth_factory --> units
           protocol_registry --> kth_factory
           protocol_registry --> uva_factory
           protocol_registry --> master_bundle
           uva_factory --> configuration
           uva_factory --> global_section
+          uva_factory --> map
           uva_factory --> master_bundle
           uva_factory --> neuron
           uva_factory --> population
@@ -107,7 +113,6 @@
           uva_factory --> raw_bundle_group
           uva_factory --> simulation
           uva_factory --> simulation_parameters
-          uva_factory --> spike_map
           uva_factory --> standard_format_group
           uva_factory --> stimuli_group
           uva_factory --> stimulus
@@ -126,6 +131,9 @@
           global_section --> compound_attribute_helper
           global_section --> dataset_helpers
           global_section --> units
+          map --> hdf5_serializable
+          map --> population
+          map --> dataset_helpers
           master_bundle --> hdf5_serializable
           master_bundle --> protocol_group
           master_bundle --> raw_bundle_group
@@ -142,14 +150,11 @@
           raw_bundle_group --> dataset_helpers
           simulation --> configuration
           simulation --> hdf5_serializable
+          simulation --> map
           simulation --> simulation_parameters
-          simulation --> spike_map
           simulation --> stimuli_group
           simulation --> dataset_helpers
           simulation_parameters --> compound_kv_container
-          spike_map --> hdf5_serializable
-          spike_map --> population
-          spike_map --> dataset_helpers
           standard_format_group --> global_section
           standard_format_group --> hdf5_serializable
           standard_format_group --> simulation

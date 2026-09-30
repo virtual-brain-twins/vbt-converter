@@ -29,7 +29,7 @@ package "Protocol Registry" {
 
 package "Builders / Factories" {
     [converters.factory.uva_factory]          as UVAFactory
-    [converters.factory.kth_factory] as KTHFactory
+    [converters.factory.kth_factory]          as KTHFactory
 }
 
 package "Schema Objects" {
@@ -38,10 +38,12 @@ package "Schema Objects" {
     [RawBundleGroup]             as RawGrp
     [ProtocolGroup]              as ProtoGrp
     [Simulation]                 as Sim
-    [SpikeMap]                   as SpikeMap
+    [Map]                        as MapObj
     [StimuliGroup]               as StimGrp
     [Population]                 as Pop
     [Neuron]                     as Neur
+    [Configuration]              as Config
+    [SimulationParameters]       as SimParams
 }
 
 package "Exporters" {
@@ -86,7 +88,7 @@ BuilderRegistry --> KTHFactory : KTHBuilder
 
 ' Builders → Factory functions (self‑call shown for clarity)
 UVAFactory --> UVAFactory : build_uva_master_bundle(...)
-KTHFactory --> KTHFactory : build_bg_master_bundle(...)
+KTHFactory --> KTHFactory : build_kth_master_bundle(...)
 
 ' Factory → Schema objects (populate)
 UVAFactory --> MB : returns MasterBundle
@@ -96,12 +98,22 @@ MB --> RawGrp
 MB --> ProtoGrp
 
 ' Schema → HDF5 (serialization helpers)
-StdFmt  --> DSHelpers : make_group / store_dataset
-RawGrp  --> DSHelpers : make_group / store_dataset
+StdFmt   --> DSHelpers : make_group / store_dataset
+RawGrp   --> DSHelpers : make_group / store_dataset
 ProtoGrp --> DSHelpers : make_group / store_dataset
-StimGrp --> CompAttr  : write_compound_attr / read_compound_attr
+StimGrp  --> CompAttr  : write_compound_attr / read_compound_attr
+
 Population --> Neur   : to_hdf5 / from_hdf5
 Neuron --> DSHelpers : store_dataset / read_dataset
+
+MapObj --> Population : contains / iterates over
+MapObj --> DSHelpers   : make_group / store_dataset
+
+' Simulation structure
+Sim --> Config    : configuration
+Sim --> SimParams : parameters
+Sim --> StimGrp   : stimuli
+Sim --> MapObj    : output_map
 
 ' CLI (convert_hdf5_to_format) → Validator
 ConvOut --> Validator : validate_master_bundle()
@@ -110,28 +122,30 @@ ConvOut --> Validator : validate_master_bundle()
 ConvOut --> ExporterRegistry : PROTOCOL_EXPORTERS[protocol]
 
 ' Exporter Registry → Concrete Exporter
-ExporterRegistry --> UVA_AMUExp : RateExporter
-UVA_AMUExp --> BaseExp : implements
+ExporterRegistry --> RateExp : RateExporter
+RateExp --> BaseExp : implements
 
 ' Exporter → Helpers (stimulus, firing‑rate, normalisation)
-UVA_AMUExp --> Helpers : get_discretized_stimulus\nget_firing_rates\nnormalize
-KTHExp --> Helpers : (none – uses only HDF5 helpers)
+RateExp --> Helpers : get_discretized_stimulus\nget_firing_rates\nnormalize
+' KTH exporter now works directly with the new Map object (no extra helper calls)
+' (If a specific KTH exporter exists, it would also reference Helpers only for HDF5 access)
 
 ' Exporter → Schema objects (read)
-UVA_AMUExp --> Sim : read Config / SimParams / StimuliGroup / SpikeMap
+RateExp --> Sim   : read Configuration / SimulationParameters / StimuliGroup / Map
+' (KTH exporter would read the same objects – omitted for brevity)
 
 ' Exporter → numpy (output)
-UVA_AMUExp --> npz : np.savez_compressed()
+RateExp --> npz : np.savez_compressed()
 
 ' Exporter → Logging
-UVA_AMUExp --> LogUtil : logger.info / error
+RateExp --> LogUtil : logger.info / error
 
 ' Validation uses low‑level checks
 Validator --> DSHelpers : _require_*, _require_group, …
 
 ' Units & Compound Attribute are used by many schema classes
-StdFmt --> Units
-StimGrp --> Units
+StdFmt   --> Units
+StimGrp  --> Units
 CompAttr --> Units
 
 @enduml

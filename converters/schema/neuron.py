@@ -1,21 +1,15 @@
-"""Utility definitions for storing neuronal spike times in HDF5 files.
+"""Neuron serialization utilities.
 
-This module provides the :class:`Neuron` dataclass, which encapsulates a
-single neuron's identifier and its spike timestamps.  The class implements the
-:class:`~converters.schema.hdf5_serializable.HDF5Serializable` protocol, allowing
-instances to be written to and restored from an HDF5 group using the helper
-functions :func:`~converters.utils.dataset_helpers.make_group` and
-:func:`~converters.utils.dataset_helpers.store_dataset`.
-
-Typical usage
--------------
->>> neuron = Neuron(index=5, times=np.array([0.1, 0.3, 0.7]))
->>> with h5py.File("spikes.h5", "w") as f:
-...     neuron.to_hdf5(f)
-
->>> with h5py.File("spikes.h5", "r") as f:
-...     loaded = Neuron.from_hdf5(f["5"])
+This module defines the :class:`Neuron` data class used to store spike times and
+membrane voltage traces for a single neuron.  The class provides methods for
+serialising the data to an HDF5 group and for reconstructing a :class:`Neuron`
+instance from such a group.  The implementation relies on the helper functions
+:func:`converters.utils.dataset_helpers.make_group` and
+:func:`converters.utils.dataset_helpers.store_dataset`, as well as the
+:class:`converters.utils.units.Unit` class for optional physical units.
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Optional
@@ -23,37 +17,145 @@ from typing import Optional
 import h5py
 import numpy as np
 
-from converters.schema.hdf5_serializable import HDF5Serializable
+from converters.schema.hdf5_serializable import HDF5Serializable, _decode
 from converters.utils.dataset_helpers import make_group, store_dataset
 from converters.utils.units import Unit
 
 
 @dataclass
 class Neuron(HDF5Serializable):
-    """Container for a single neuron's spike times.
+    """Container for a single neuron's recorded data.
 
     Attributes
     ----------
     index : int
-        Unique identifier for the neuron.  Used as the name of the HDF5 group
-        when the object is serialized.
+        Unique identifier for the neuron within a dataset.
     times : np.ndarray
-        One‑dimensional array of spike timestamps (float64).  Empty by default.
+        Array of spike times (seconds).  Empty by default.
+    times_unit : Optional[Unit]
+        Physical unit associated with ``times``.  ``None`` indicates that no unit
+        metadata is stored.
+    voltage : np.ndarray
+        Membrane voltage trace (volts).  Empty by default.
+    voltage_unit : Optional[Unit]
+        Physical unit associated with ``voltage``.  ``None`` indicates that no
+        unit metadata is stored.
+    virtual : bool
+        Flag indicating whether the neuron is a virtual (synthetic) entry.
     """
 
     index: int
     times: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=np.float64))
     times_unit: Optional[Unit] = None
+    voltage: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=np.float64))
+    voltage_unit: Optional[Unit] = None
+    virtual: bool = False
 
+    # Serialisation
     def to_hdf5(self, parent: h5py.Group) -> None:
+        """Serialise the neuron into an HDF5 group.
+
+        A new subgroup named after ``self.index`` is created under ``parent``.
+        Within this subgroup the following datasets are stored:
+
+        * ``times`` – spike times as ``float64``.
+        * ``voltage`` – voltage trace as ``float64``.
+        * ``virtual`` – scalar boolean indicating virtual status.
+
+        Unit information, when present, is stored as an attribute named ``unit``
+        attached to the corresponding dataset.
+
+        Args
+        ----
+        parent : h5py.Group
+            The HDF5 group that will contain the neuron's subgroup.
+
+        Raises
+        ------
+        OSError
+            If the HDF5 file cannot be written to, e.g., due to I/O errors or
+            insufficient permissions.
+        TypeError
+            If the provided data cannot be converted to the required NumPy dtype.
+        """
         grp = make_group(parent, str(self.index))
+
+        # times
         store_dataset(grp, "times", self.times.astype(np.float64), compression=True)
         if self.times_unit is not None:
             grp["times"].attrs["unit"] = self.times_unit
 
+        # voltage
+        store_dataset(grp, "voltage", self.voltage.astype(np.float64), compression=True)
+        if self.voltage_unit is not None:
+            grp["voltage"].attrs["unit"] = self.voltage_unit
+
+        # virtual
+        # Store as a scalar boolean dataset.
+        store_dataset(
+            grp, "virtual", np.array(self.virtual, dtype=np.bool_), compression=False
+        )
+
+    # Deserialisation
     @classmethod
     def from_hdf5(cls, grp: h5py.Group) -> "Neuron":
+        """Create a :class:`Neuron` instance from an HDF5 group.
+
+        The function expects the group structure generated by :meth:`to_hdf5`:
+        datasets named ``times``, ``voltage`` and ``virtual`` with optional
+        ``unit`` attributes on the first two.
+
+        Args
+        ----
+        grp : h5py.Group
+            The HDF5 group that stores a neuron's data.
+
+        Returns
+        -------
+        Neuron
+            A new :class:`Neuron` populated with the data from ``grp``.
+
+        Raises
+        ------
+        KeyError
+            If any of the required datasets (``times``, ``voltage``, ``virtual``)
+            are missing from the group.
+        OSError
+            If reading from the HDF5 file fails.
+        TypeError
+            If the stored datasets cannot be interpreted as the expected NumPy
+            dtypes.
+        """
         idx = int(grp.name.split("/")[-1])
+
         times = grp["times"][()]
-        unit = grp["times"].attrs.get("unit")
-        return cls(index=idx, times=times, times_unit=unit)
+        times_unit = _decode(grp["times"].attrs.get("unit"))
+
+        # backward compatibility: some legacy files may not have the ``voltage`` dataset
+        if "voltage" in grp:
+            voltage = grp["voltage"][()]
+            voltage_unit = _decode(grp["voltage"].attrs.get("unit"))
+        else:
+            voltage = np.empty(0, dtype=float)
+            voltage_unit = None
+
+        # backward compatibility: some legacy files may not have the ``virtual`` dataset
+        if "virtual" in grp:
+            # ``bool(np.array(...))`` works for scalar datasets (e.g. stored
+            # as a uint8, int8, or bool).  For safety we also accept the common
+            # string representation “True/False”.
+            raw_virtual = grp["virtual"][()]
+            # HDF5 may return a NumPy scalar, a plain Python scalar, or a
+            # zero‑dimensional array – ``bool()`` normalises all of them.
+            virtual = bool(raw_virtual)
+        else:
+            virtual = False
+
+        return cls(
+            index=idx,
+            times=times,
+            times_unit=Unit(times_unit) if times_unit is not None else None,
+            voltage=voltage,
+            voltage_unit=Unit(voltage_unit) if voltage_unit is not None else None,
+            virtual=virtual,
+        )

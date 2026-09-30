@@ -150,36 +150,38 @@ python -m converters.generic_converter.convert_any_to_hdf5 \
 | `--meta‑*`             | no                                           | Any of the listed meta‑data fields (`author`, `creation_date`, `affiliation`, `project`, `simulation_name`, `run_id`, `software`, `software_version`, `license`, `contact_email`, `comment`). Only the ones you pass are written to the bundle’s `metadata` attribute. |
 | *(none)*               | –                                            | The script automatically creates the output directory if it does not exist and writes a root attribute `format_version = "1.0"` (the current schema version).                                                                                                          |
 
-The command creates the output directory (if needed), writes the attribute `format_version = "1.0"` to the root,
+The command creates the output directory (if needed), writes the attributes `format_version = "2.0"` (legacy string),
+`format_version_major = 2`, `format_version_minor = 0`, and `format_version_patch = 0` to the root,
 and stores the data under the top‑level group **`StandardFormat`** according to the schema described below.
 
 <a name="bundle-layout"></a>
 
 ### 3. Universal HDF5 bundle layout
 
-All protocols share a **common root hierarchy** (schema 1.0). The layout is versioned via the attribute
-`/format_version = "1.0"` and is documented in the official specification:
-**[Virtual Brain Twin Inter‑Protocol Data Standard Specification and HDF5 Specification v1.0](
-docs/specification/Virtual%20Brain%20Twin%20Inter%20Protocol%20Data%20Standard%20Specification%20and%20HDF5%20Specification_v1.0.docx)**
+All protocols share a **common root hierarchy** (schema 2.0). The layout is versioned via the attributes
+`/format_version = "2.0"`, `format_version_major = 2`, `format_version_minor = 0`, and `format_version_patch = 0`, and
+is documented in the official specification:
+**[Virtual Brain Twin Inter‑Protocol Data Standard Specification and HDF5 Specification v2.0](
+docs/specification/Virtual%20Brain%20Twin%20Inter%20Protocol%20Data%20Standard%20Specification%20and%20HDF5%20Specification_v2.0.docx)**
 
 #### Common root structure
 
-| Path                                   | Meaning                                                                                                                                                                                                                                       |
-|----------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `/format_version`                      | String attribute – current schema version (`"1.0"`).                                                                                                                                                                                          |
-| `/StandardFormat/Global`               | Attributes holding free‑form global metadata (`experiment_info`, **`parameter_simulation_mapping`**, arbitrary key/value pairs).                                                                                                              |
-| `/StandardFormat/Configuration`        | **New (v1.0)** – a group that contains arbitrary key‑value pairs stored as **compound attributes** (value + optional unit). Typically used for global configuration that applies to all simulations.                                          |
-| `/StandardFormat/Simulations/Sim_<id>` | One group per simulation. The `<id>` is taken from the source (CSV `sim_info_file` stem for KTH, directory name for UVA).                                                                                                                     |
-| `/RawBundle`                           | If `--no-raw-bundle` is **not** used, a **dataset** `raw_bundle.zip` stores the raw zip archive *inside* the HDF5 file (compressed chunk‑wise) together with a SHA‑256 checksum attribute.                                                    |
-| `/Protocol`                            | **New (v1.0)** – stores protocol meta‑information. Contains the **attribute** `Version` (UTF‑8 string) and a **dataset** `Content` holding the binary protocol description (e.g. a PDF). The `Content` dataset **must be stored compressed**. |
+| Path                                   | Meaning                                                                                                                                                                                                                      |
+|----------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `/format_version`                      | String attribute – current schema version (`"2.0"`).                                                                                                                                                                         |
+| `/StandardFormat/Global`               | Attributes holding free‑form global metadata (`experiment_info`, **`parameter_simulation_mapping`**, arbitrary key/value pairs).                                                                                             |
+| `/StandardFormat/Configuration`        | Group that contains arbitrary key‑value pairs stored as **compound attributes** (value + optional unit). Typically used for global configuration that applies to all simulations.                                            |
+| `/StandardFormat/Simulations/Sim_<id>` | One group per simulation. The `<id>` is taken from the source (CSV `sim_info_file` stem for KTH, directory name for UVA).                                                                                                    |
+| `/RawBundle`                           | If `--no-raw-bundle` is **not** used, a **dataset** `raw_bundle.zip` stores the raw zip archive *inside* the HDF5 file (compressed chunk‑wise) together with a SHA‑256 checksum attribute.                                   |
+| `/Protocol`                            | Stores protocol meta‑information. Contains the **attribute** `Version` (UTF‑8 string) and a **dataset** `Content` holding the binary protocol description (e.g. a PDF). The `Content` dataset **must be stored compressed**. |
 
 #### UVA protocol specifics (`/StandardFormat/Simulations/Sim_<id>`)
 
-| Sub‑group                                                                                                                                                                                     | Content                                                                                                                     | HDF5 representation                                                                                                                                                                                                                 |
-|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `Parameters`                                                                                                                                                                                  | All scalar simulation parameters – the three scaling factors plus any additional metadata (e.g. `t_sim`, `record_neurons`). | Stored as **attributes** on the group (`SimulationParameters`).                                                                                                                                                                     |
-| `Stimuli`                                                                                                                                                                                     | A *single* uniform stimulus (same for every population) – piece‑wise‑constant.                                              | One `StimuliGroup` named `"default"` for each population; each contains a `Stimulus` (datasets `Limits`, `Values`, `MaxValue`).                                                                                                     |
-| `OutputSpikes`                                                                                                                                                                                | Spike trains for all populations extracted from the sweep directory data.                                                   | `SpikeMap → Population → Neuron → times` (datasets `times`). The optional `indices` dataset is present when the original NPZ included an `indices` array; otherwise a dummy neuron per spike is created during bundle construction. |
+| Sub‑group                                                                                                                                                                                     | Content                                                                                                                     | HDF5 representation                                                                                                                                                                                                                                                                                                                                                                                              |
+|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `Parameters`                                                                                                                                                                                  | All scalar simulation parameters – the three scaling factors plus any additional metadata (e.g. `t_sim`, `record_neurons`). | Stored as **attributes** on the group (`SimulationParameters`).                                                                                                                                                                                                                                                                                                                                                  |
+| `Stimuli`                                                                                                                                                                                     | A *single* uniform stimulus (same for every population) – piece‑wise‑constant.                                              | One `StimuliGroup` named `"default"` for each population; each contains a `Stimulus` (datasets `Limits`, `Values`).                                                                                                                                                                                                                                                                                              |
+| `Output`                                                                                                                                                                                      | Spike & voltage trains for all populations extracted from the sweep directory data.                                         | `Map → Population → Neuron → times` (datasets `times`). The optional `indices` dataset is present when the original NPZ included an `indices` array; otherwise a dummy neuron per spike is created during bundle construction.<br/>`Map → Population → Neuron → voltage` (datasets `voltage`). Voltage trace for he neuron. <br/> `Map → Population → Neuron → virtual`. Boolean flag in case of virtual neurons |
 | **Optional** `record_neurons` (binary payload) is stored as an attribute inside the `Configuration` group by the factory – later accessed through `Configuration.kv_pairs["record_neurons"]`. |
 
 The **Sample exporter** (`RateExporter`) reads the above sections, discretises spikes with the user‑provided bin size,
@@ -200,11 +202,11 @@ mu_theta, sd_theta → mean / std used for normalisation of theta
 
 #### KTH protocol specifics (`/StandardFormat/Simulations/Sim_<id>`)
 
-| Sub‑group                                      | Content                                                                                          | HDF5 representation                                                                                                                                                               |
-|------------------------------------------------|--------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `Parameters`                                   | Simulation meta‑data (network state, duration, DA level, input conductance, …).                  | Stored as attributes (string‑encoded or JSON‑encoded) in the `Parameters` group.                                                                                                  |
-| `Stimuli`                                      | Full stimulus definition – per‑population piece‑wise constant or generic sub‑stimuli.            | One `StimuliGroup` per population; each sub‑stimulus stores a `Stimulus` (datasets `Limits`, `Values`, `MaxValue`) and any scalar attributes (e.g. generator type, cluster size). |
-| `OutputSpikes`                                 | Direct copy of the original Snudda spike‑output HDF5 hierarchy (`meta_data`, `time`, `neurons`). | The factory reads the classic Snudda layout and builds a `SpikeMap` comprised of `Population` and `Neuron` objects (datasets `times`).                                            |
+| Sub‑group                                      | Content                                                                                          | HDF5 representation                                                                                                                                                   |
+|------------------------------------------------|--------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `Parameters`                                   | Simulation meta‑data (network state, duration, DA level, input conductance, …).                  | Stored as attributes (string‑encoded or JSON‑encoded) in the `Parameters` group.                                                                                      |
+| `Stimuli`                                      | Full stimulus definition – per‑population piece‑wise constant or generic sub‑stimuli.            | One `StimuliGroup` per population; each sub‑stimulus stores a `Stimulus` (datasets `Limits`, `Values`) and any scalar attributes (e.g. generator type, cluster size). |
+| `Output`                                       | Direct copy of the original Snudda spike‑output HDF5 hierarchy (`meta_data`, `time`, `neurons`). | The factory reads the classic Snudda layout and builds a `Map` comprised of `Population` and `Neuron` objects (datasets `times`).                                     |
 | **Optional** `RawBundle` behaves like for UVA. |
 
 <a name="hdf5-schema-version"></a>
@@ -213,8 +215,10 @@ mu_theta, sd_theta → mean / std used for normalisation of theta
 
 The HDF5 schema used by this project follows a strict versioning policy to ensure reproducibility, traceability, and
 backward compatibility. Each schema release is documented with its version identifier, release date, and a concise
-description of changes. The version is also referenced in Section 16. “Change Log,” of the specification documentation at the following location: **[Virtual Brain Twin Inter‑Protocol Data Standard Specification and HDF5 Specification v1.0](
-docs/specification/Virtual%20Brain%20Twin%20Inter%20Protocol%20Data%20Standard%20Specification%20and%20HDF5%20Specification_v1.0.docx)**
+description of changes. The version is also referenced in Section 16. “Change Log,” of the specification documentation
+at the following location:
+**[Virtual Brain Twin Inter‑Protocol Data Standard Specification and HDF5 Specification v2.0](
+docs/specification/Virtual%20Brain%20Twin%20Inter%20Protocol%20Data%20Standard%20Specification%20and%20HDF5%20Specification_v2.0.docx)**
 
 #### Release History
 
@@ -224,7 +228,7 @@ docs/specification/Virtual%20Brain%20Twin%20Inter%20Protocol%20Data%20Standard%2
 
 #### Current Schema Version
 
-- **Active version:** `1.0`
+- **Active version:** `2.0`
 
 All data files generated or consumed by the library should conform to this schema version unless explicitly noted
 otherwise in the documentation of a specific tool or workflow.
@@ -244,24 +248,37 @@ migration scripts or compatibility notes should be documented in the project’s
 
 ### 5. Verifying an HDF5 file
 
-After a bundle has been created you can quickly validate (See the specification document for detailed information of
-validation rules) if the HDF5 file conforms to the schema by running the below snippet:
+The bundled validator lives in **`converters.utils.validation`** and can be run
+directly from the command line. It performs a fast, attribute‑only inspection
+of the file and exits with a clear status code.
 
 ```bash
-python -c "
-import pathlib, logging
-from converters.utils.validation import validate_master_bundle
-try:
-    validate_master_bundle(pathlib.Path('<path/to/file.h5>'), strict=True)
-    print('Validation succeeded')
-except Exception as e:
-    print('Validation failed:', e)
-    raise
-"
+# Core validation (only the mandatory StandardFormat hierarchy)
+python -m converters.utils.validation /path/to/bundle.h5
+
+# Strict validation – also checks the optional RawBundle and Protocol groups
+python -m converters.utils.validation /path/to/bundle.h5 --strict
+
+# Verbose mode – prints the individual checks that are executed (helps debugging)
+python -m converters.utils.validation /path/to/bundle.h5 --strict --verbose
+
+# Force a particular schema version (useful when the file’s attribute is missing)
+python -m converters.utils.validation /path/to/bundle.h5 --version 2.0
 ```
 
-If the validator returns *no errors* the file conforms to version 1.0 of the VBT specification and can be
-safely handed to downstream analysis pipelines.
+**Exit codes**
+
+| Code | Meaning                                                                                                                              |
+|------|--------------------------------------------------------------------------------------------------------------------------------------|
+| `0`  | Validation succeeded.                                                                                                                |
+| `1`  | A `ValidationError` – the file violates the schema; the error message (written to **stderr**) points to the offending HDF5 location. |
+| `2`  | An unexpected exception (e.g., I/O error).                                                                                           |
+
+* Use `--strict` when you need the full set of checks, otherwise the validator
+  only ensures that the essential `StandardFormat` groups and attributes are
+  present. The `--version` flag overrides the `format_version` attribute in the
+  file and lets you validate against a specific supported version (`1.0` or
+  `2.0`).
 
 ---  
 
@@ -273,14 +290,14 @@ safely handed to downstream analysis pipelines.
 
 ### 1. Overview
 
-| Script                                                   | Purpose                                                                                                                                                                  | Main entry points                                                            |
-|----------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------|
-| `converters/generic_converter/convert_any_to_hdf5.py`    | Walk an **UVA directory tree** **or** a **KTH CSV** and write a *single* master HDF5 file (`master.h5`) along with the raw_bundle.zip.                                   | `python -m converters.generic_converter.convert_any_to_hdf5 …`               |
-| `converters/generic_converter/convert_hdf5_to_format.py` | Read the master HDF5 and, **per protocol**, produce the downstream artefacts (`*.npz` for UVA, `*.npz` for Basal‑Ganglia).                                               | `python -m converters.generic_converter.convert_hdf5_to_format … <protocol>` |
-| `converters/factory/*_factory.py`                        | Low‑level factories that assemble a :class:`~converters.schema.master_bundle.MasterBundle` from raw input.                                                               | –                                                                            |
-| `converters/exporters/*_exporter.py`                     | Concrete exporters that implement the per‑simulation conversion logic for a given protocol.                                                                              | –                                                                            |
-| `converters/schema/*`                                    | Dataclasses that capture the new HDF5 schema (`Simulation`, `SpikeMap`, `StimuliGroup`, …) and implement :class:`~converters.schema.hdf5_serializable.HDF5Serializable`. | –                                                                            |
-| `converters/utils/*`                                     | Helper utilities – logging, dataset creation, ZIP archiving, CSV handling, **compound‑attribute handling with optional units**, etc.                                     | –                                                                            |
+| Script                                                   | Purpose                                                                                                                                                             | Main entry points                                                            |
+|----------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------|
+| `converters/generic_converter/convert_any_to_hdf5.py`    | Walk an **UVA directory tree** **or** a **KTH CSV** and write a *single* master HDF5 file (`master.h5`) along with the raw_bundle.zip.                              | `python -m converters.generic_converter.convert_any_to_hdf5 …`               |
+| `converters/generic_converter/convert_hdf5_to_format.py` | Read the master HDF5 and, **per protocol**, produce the downstream artefacts (`*.npz` for UVA, `*.npz` for Basal‑Ganglia).                                          | `python -m converters.generic_converter.convert_hdf5_to_format … <protocol>` |
+| `converters/factory/*_factory.py`                        | Low‑level factories that assemble a :class:`~converters.schema.master_bundle.MasterBundle` from raw input.                                                          | –                                                                            |
+| `converters/exporters/*_exporter.py`                     | Concrete exporters that implement the per‑simulation conversion logic for a given protocol.                                                                         | –                                                                            |
+| `converters/schema/*`                                    | Dataclasses that capture the new HDF5 schema (`Simulation`, `Map`, `StimuliGroup`, …) and implement :class:`~converters.schema.hdf5_serializable.HDF5Serializable`. | –                                                                            |
+| `converters/utils/*`                                     | Helper utilities – logging, dataset creation, ZIP archiving, CSV handling, **compound‑attribute handling with optional units**, etc.                                | –                                                                            |
 
 All scripts use only the packages listed in `requirements.txt` (NumPy, h5py, PyYAML, tqdm, …).
 
@@ -357,7 +374,7 @@ Take a look at the generated UML diagrams, data‑flow diagrams and sequence dia
 the architecture, data flow and execution sequences. See [docs/Readme.md](docs/Readme.md) for more details.
 
 The detailed specification of the HDF5 schema is
-in [docs/specification/Virtual Brain Twin Inter Protocol Data Standard Specification and HDF5 Specification_v1.0.docx](docs/specification/Virtual%20Brain%20Twin%20Inter%20Protocol%20Data%20Standard%20Specification%20and%20HDF5%20Specification_v1.0.docx).
+in [docs/specification/Virtual Brain Twin Inter Protocol Data Standard Specification and HDF5 Specification_v2.0.docx](docs/specification/Virtual%20Brain%20Twin%20Inter%20Protocol%20Data%20Standard%20Specification%20and%20HDF5%20Specification_v2.0.docx).
 
 <a name="minio-cache"></a>
 

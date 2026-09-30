@@ -20,7 +20,7 @@ import h5py
 _T = TypeVar("_T", bound="HDF5Serializable")
 
 
-def _decode(attr):
+def _decode(attr) -> str | None:
     """Return a clean text value for an HDF5 attribute.
 
     * If the attribute is ``bytes`` – decode as UTF‑8, replacing any illegal

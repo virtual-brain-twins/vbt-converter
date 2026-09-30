@@ -14,19 +14,19 @@ import allure
 import h5py
 
 from converters.schema.configuration import Configuration
+from converters.schema.map import Map
 # ----------------------------------------------------------------------
 # Import the objects under test – adjust the import path to match your repo
 # ----------------------------------------------------------------------
 from converters.schema.simulation import Simulation
 from converters.schema.simulation_parameters import SimulationParameters
-from converters.schema.spike_map import SpikeMap
 from converters.schema.stimuli_group import StimuliGroup
 
 # ----------------------------------------------------------------------
 # Helper constants for readability / report consistency
 # ----------------------------------------------------------------------
 _SIM_GROUP_NAME_FMT = "Sim_{sim_id}"
-_ROOT_SUBGROUPS = ("Configuration", "Parameters", "Stimuli", "OutputSpikes")
+_ROOT_SUBGROUPS = ("Configuration", "Parameters", "Stimuli", "Output")
 
 
 @allure.parent_suite("VBT‑converter CI/CD")
@@ -93,7 +93,7 @@ class TestSimulationHDF5:
                 mock.patch.object(Configuration, "to_hdf5", autospec=True) as cfg_to_h5, \
                 mock.patch.object(SimulationParameters, "to_hdf5", autospec=True) as params_to_h5, \
                 mock.patch.object(StimuliGroup, "to_hdf5", autospec=True) as stim_to_h5, \
-                mock.patch.object(SpikeMap, "to_hdf5", autospec=True) as spike_to_h5:
+                mock.patch.object(Map, "to_hdf5", autospec=True) as spike_to_h5:
             # ------------------------------------------------------------------
             # 2️⃣  Prepare deterministic fake group objects for each ``make_group`` call
             # ------------------------------------------------------------------
@@ -101,14 +101,14 @@ class TestSimulationHDF5:
             fake_cfg_grp = mock.MagicMock(spec=h5py.Group, name="Configuration")
             fake_params_grp = mock.MagicMock(spec=h5py.Group, name="Parameters")
             fake_stim_grp = mock.MagicMock(spec=h5py.Group, name="Stimuli")
-            fake_spike_grp = mock.MagicMock(spec=h5py.Group, name="OutputSpikes")
+            fake_output_grp = mock.MagicMock(spec=h5py.Group, name="Output")
 
             mk_group.side_effect = [
                 fake_root_grp,
                 fake_cfg_grp,
                 fake_params_grp,
                 fake_stim_grp,
-                fake_spike_grp,
+                fake_output_grp,
             ]
 
             # ------------------------------------------------------------------
@@ -127,7 +127,7 @@ class TestSimulationHDF5:
                     mock.call(fake_root_grp, "Configuration"),
                     mock.call(fake_root_grp, "Parameters"),
                     mock.call(fake_root_grp, "Stimuli"),
-                    mock.call(fake_root_grp, "OutputSpikes"),
+                    mock.call(fake_root_grp, "Output"),
                 ]
                 assert mk_group.mock_calls == expected_calls, \
                     "Unexpected make_group call order or arguments"
@@ -143,8 +143,8 @@ class TestSimulationHDF5:
             with allure.step("Validate each component's ``to_hdf5`` call"):
                 cfg_to_h5.assert_called_once_with(self.simulation.configuration, fake_cfg_grp)
                 params_to_h5.assert_called_once_with(self.simulation.parameters, fake_params_grp)
-                stim_to_h5.assert_called_once_with(self.simulation.stimulus, fake_stim_grp)
-                spike_to_h5.assert_called_once_with(self.simulation.output_spike, fake_spike_grp)
+                stim_to_h5.assert_called_once_with(self.simulation.stimuli, fake_stim_grp)
+                spike_to_h5.assert_called_once_with(self.simulation.output_map, fake_output_grp)
 
                 # Human‑readable summary for the report
                 calls_summary = "\n".join(
@@ -189,7 +189,7 @@ class TestSimulationHDF5:
         #       ├─ Configuration
         #       ├─ Parameters
         #       ├─ Stimuli
-        #       └─ OutputSpikes
+        #       └─ Output
         # ------------------------------------------------------------------
         mock_root_grp = mock.MagicMock(spec=h5py.Group, name="Sim_99")
         mock_root_grp.name = "/some/path/Sim_99"
@@ -197,14 +197,14 @@ class TestSimulationHDF5:
         mock_cfg_grp = mock.MagicMock(name="Configuration")
         mock_params_grp = mock.MagicMock(name="Parameters")
         mock_stim_grp = mock.MagicMock(name="Stimuli")
-        mock_spike_grp = mock.MagicMock(name="OutputSpikes")
+        mock_out_grp = mock.MagicMock(name="Output")
 
         # ``group['sub_name']`` returns the appropriate subgroup
         mock_root_grp.__getitem__.side_effect = lambda key: {
             "Configuration": mock_cfg_grp,
             "Parameters": mock_params_grp,
             "Stimuli": mock_stim_grp,
-            "OutputSpikes": mock_spike_grp,
+            "Output": mock_out_grp,
         }[key]
 
         # ------------------------------------------------------------------
@@ -229,11 +229,11 @@ class TestSimulationHDF5:
                     return_value=StimuliGroup(),
                 ) as stim_from, \
                 mock.patch.object(
-                    SpikeMap,
+                    Map,
                     "from_hdf5",
                     autospec=True,
-                    return_value=SpikeMap(),
-                ) as spike_from:
+                    return_value=Map(),
+                ) as output_from:
             # ------------------------------------------------------------------
             # 3️⃣  Execute the method under test
             # ------------------------------------------------------------------
@@ -258,7 +258,7 @@ class TestSimulationHDF5:
                 cfg_from.assert_called_once_with(mock_cfg_grp)
                 params_from.assert_called_once_with(mock_params_grp)
                 stim_from.assert_called_once_with(mock_stim_grp)
-                spike_from.assert_called_once_with(mock_spike_grp)
+                output_from.assert_called_once_with(mock_out_grp)
 
                 # Attach a readable call‑summary
                 calls_summary = "\n".join(
@@ -266,7 +266,7 @@ class TestSimulationHDF5:
                         f"Configuration.from_hdf5 → {cfg_from.call_args}",
                         f"SimulationParameters.from_hdf5 → {params_from.call_args}",
                         f"StimuliGroup.from_hdf5 → {stim_from.call_args}",
-                        f"SpikeMap.from_hdf5 → {spike_from.call_args}",
+                        f"Map.from_hdf5 → {output_from.call_args}",
                     ]
                 )
                 allure.attach(
@@ -282,8 +282,8 @@ class TestSimulationHDF5:
                 assert isinstance(result, Simulation), "Result is not a Simulation"
                 assert isinstance(result.configuration, Configuration)
                 assert isinstance(result.parameters, SimulationParameters)
-                assert isinstance(result.stimulus, StimuliGroup)
-                assert isinstance(result.output_spike, SpikeMap)
+                assert isinstance(result.stimuli, StimuliGroup)
+                assert isinstance(result.output_map, Map)
 
                 # Full object dump for debugging purposes
                 allure.attach(

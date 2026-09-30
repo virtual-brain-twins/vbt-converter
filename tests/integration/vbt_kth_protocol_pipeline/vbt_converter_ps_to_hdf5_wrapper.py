@@ -133,7 +133,21 @@ def main() -> None:
             "--output",
             str(output_master_h5),
             "--protocol",
-            "kth"
+            "kth",
+            "--parameters",
+            "network_state",
+            "duration",
+            "da_level",
+            "input_conductance",
+            "input_scale_factor",
+            "--meta-author",
+            "John Doe",
+            "--meta-creation-date",
+            "2026-07-31T12:00:00Z",
+            "--meta-software",
+            "KTH Software",
+            "--meta-run-id",
+            "e3b0c442-98fc-1c14-9af6-3b33d8fbc123"
         ]
 
         # Execute the converter

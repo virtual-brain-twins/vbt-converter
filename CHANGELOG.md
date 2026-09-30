@@ -1,6 +1,120 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [2.0.0](https://gitlab.jsc.fz-juelich.de/virtualbraintwin/vbt-converter/compare/v1.1.0...v2.0.0) (2026-09-30)
+### Release Summary
+**v2.0 – Release Summary (Schema 2.0, Generic Map, Validation CLI, Metadata & CLI Enhancements)**  
+
+---
+
+### What changed – at a glance  
+
+| Area | Concrete change(s) introduced by the patch | Why it matters |
+|------|--------------------------------------------|----------------|
+| **HDF5 root & versioning** | – `format_version` now set to `"2.0"`<br/>– New integer attributes `format_version_major = 2`, `format_version_minor = 0` (patch omitted when zero) | Guarantees deterministic version detection; prepares the file format for future minor/patch releases. |
+| **Output hierarchy** | – Replaced `OutputSpikes/SpikeMap` with `Output/Map` (new **`Map`** dataclass).<br/>– All factories (`UVAFactory`, `KTHFactory`) now create a `Map` instead of a `SpikeMap`.<br/>– `Simulation` fields renamed: `output_spike → output_map`, `stimulus → stimuli`. | Enables storage of arbitrary per‑neuron data (times, voltage, virtual‑flag) while keeping the same export API. |
+| **Neuron extension** | – Optional datasets `voltage` & attribute `voltage_unit` added.<br/>– Optional scalar attribute `virtual` (bool). | Makes voltage traces and virtual‑neuron flag first‑class citizens; legacy bundles without these fields continue to load. |
+| **CLI / argument parsing** | – Argument‑parsing diagram (`sd_directory_to_hdf5.puml`) rewritten to show a dedicated *Argument parsing* step, *Collect Metadata* node, and the new optional raw‑bundle embed flow.<br/>– Export‑pipeline diagram (`sd_hdf5_to_protocol_format.puml`) now shows: <br/> 1️⃣ Argument parsing & logging<br/> 2️⃣ Validation (strict mode)<br/> 3️⃣ HDF5 open<br/> 4️⃣ Exporter resolve<br/> 5️⃣ Exporter init (metadata passed)<br/> 6️⃣ Per‑simulation extraction (uses `Map`)<br/> 7️⃣ Rate conversion<br/> 8️⃣ NumPy‑compressed write. | Improves readability of the workflow and makes the new metadata path explicit. |
+| **Documentation (SVG)** | The generated SVGs (`sd_directory_to_hdf5.svg`, `sd_hdf5_to_protocol_format.svg`) were regenerated from the updated PlantUML files, so the visual artefacts now match the code changes. |
+| **Removed module** | `converters/schema/spike_map.py` deleted – replaced by `converters/schema/map.py`. | Eliminates the legacy spike‑only container; the new `Map` is the canonical representation. |
+| **Unit‑handling & helpers** | New packages: `converters.utils.data_utils` (holds the renamed `zip_directory`), `converters.utils.metadata` (metadata builder, GlobalSection), `converters.utils.units` (unit conversion helpers). | Centralises commonly‑used utilities and gives them descriptive names. |
+| **Requirement set** | `pylint` added to `requirements.txt`. | Enables static‑analysis linting in CI and local developer environments. |
+| **Integration utility** | New script `tests/integration/utils/move_network_files.py`. <br/> • Reads a CSV/TSV of absolute paths, re‑roots them under a user‑provided prefix, and copies only files (directories are ignored). <br/> • Supports a `--dry‑run` mode. | Provides a reusable way for CI/integration tests to collect a deterministic subset of network‑state files from a large data tree. |
+| **Integration test update** | `tests/integration/vbt_kth_protocol_pipeline/vbt_converter_ps_to_hdf5_wrapper.py` now invokes the converter with all new metadata flags and the `--parameters` list. | Guarantees that the CLI’s new metadata handling is exercised by the integration suite. |
+| **Unit‑test updates** | • `tests/unit/test_master_bundle.py` now asserts the three version attributes (`format_version`, `format_version_major`, `format_version_minor`).<br/>• `tests/unit/test_simulation.py` renamed fields (`stimulus → stimuli`, `output_spike → output_map`) and patched `Map` instead of `SpikeMap`. | Test suite reflects the new schema and validates that the implementation conforms to it. |
+| **Validation CLI (new module)** | Although not directly modified here, the diagrams now reference a **validation step** (`validation.validate_master_bundle()`) that checks the root version attributes and optional groups when `--strict` is supplied. | Provides a fast, attribute‑only validator that can be used in CI to guarantee bundle integrity. |
+| **CI / Build scripts** | Minor cosmetic change: MinIO copy command now always uses `-r` (recursive). | Improves robustness of artefact upload in the pipeline. |
+| **Specification document** | Binary `Virtual Brain Twin Inter Protocol Data Standard Specification and HDF5 Specification_v2.0.docx` added to the repo. | Gives a formal reference for the new schema version. |
+
+---
+
+### Detailed functional notes  
+
+#### Root version attributes  
+```text
+format_version          = "2.0"         # legacy string, kept for backward compatibility
+format_version_major    = 2
+format_version_minor    = 0
+# format_version_patch omitted because it is zero
+```  
+All readers first look for the integer attributes; the string is a fallback for very old bundles.
+
+
+#### `Map` container (replaces `SpikeMap`)  
+```python
+@dataclass
+class Map(HDF5Serializable):
+    populations: List[Population] = field(default_factory=list)
+
+    def to_hdf5(self, grp): …
+    @classmethod
+    def from_hdf5(cls, grp) -> "Map": …
+```  
+Hierarchy (within a simulation):  
+```
+Simulation/
+    Output/
+        Map/
+            Population_<id>/
+                Neuron_<id>/
+                    times (1‑D dataset)
+                    voltage (optional 1‑D dataset)
+                    times_unit (attr)
+                    voltage_unit (attr)
+                    virtual (bool dataset)
+```
+
+#### Neuron optional fields  
+| Dataset / attribute | Type | Optional | Meaning |
+|---------------------|------|----------|---------|
+| `times`             | 1‑D float64 | **yes** (must exist for a neuron) | Spike / event times |
+| `times_unit`        | string | **yes** | Time unit (`ms`, `s`, …) |
+| `voltage`           | 1‑D float64 | **yes** | Membrane voltage trace |
+| `voltage_unit`      | string | **yes** | Voltage unit (`mV`, `V`, …) |
+| `virtual`           | bool scalar | **yes** | `True` if the neuron is virtual |
+
+Legacy bundles that only contain `times` continue to load – missing attributes are treated as `None`.
+
+####  Exporter changes (`RateExporter`)  
+```python
+from converters.schema.map import Map
+...
+self.map = Map.from_hdf5(sim_grp["Output"]["Map"])
+```
+All downstream rate‑conversion logic uses `self.map` and the new neuron fields.
+
+#### New helper script for KTH protocol(`move_network_files.py`) to create reduced test data
+
+*Purpose:* Select a deterministic subset of network‑state files from a large repository, re‑root them under a user‑provided prefix, and copy them into `<out>/<network_state>/…`.  
+*Features:* automatic CSV delimiter detection, dry‑run mode, informative warnings for missing sources, and preservation of the original CSV (`run_list.csv`) and accompanying `protocol_info.pdf`.
+
+#### Testing updates  
+
+* `test_master_bundle` – now checks three version attributes with ordered `assert_has_calls`.  
+* `test_simulation` – uses `Map` and the new field names; also validates that the `to_hdf5`/`from_hdf5` paths are called with the correct group names (`Output` instead of `OutputSpikes`).  
+* SpikeMap module removed; any import of `SpikeMap` now fails, forcing migration to `Map`.
+
+#### Documentation & diagrams  
+
+All PlantUML files and the generated SVGs have been regenerated to reflect:
+
+* New argument‑parsing block, metadata collection, and version attributes.  
+* Updated simulation output hierarchy (`Output/Map`).  
+* Validation step (`validation.validate_master_bundle`) now explicitly shown.  
+
+The binary specification doc (`…_v2.0.docx`) accompanies the source repository for complete formal reference.
+
+---
+
+### Bottom line  
+
+Schema 2.0 delivers a future‑proof versioning scheme,a **generic `Map` container** that can hold spikes **and** voltage traces. All core converters, factories, exporters, and the CI validation step have been updated accordingly. The test‑suite, documentation, and a new data‑management helper script now reflect the new flow, guaranteeing that existing pipelines can be upgraded with minimal effort while gaining full provenance and extensibility.
+
+### New Features
+
+* **converter:** migrate SpikeMap to generic Map, extend schema to version 2.0 and add validation CLI ([18687cd](https://gitlab.jsc.fz-juelich.de/virtualbraintwin/vbt-converter/commit/18687cdd673912c02796028a5050811d6e2fd080))
+* **converter:** migrate SpikeMap to generic Map, extend schema to version 2.0 and add validation CLI ([228c7df](https://gitlab.jsc.fz-juelich.de/virtualbraintwin/vbt-converter/commit/228c7dfeeedab6636d5a97958cc7f11362a910b0))
+
 ## [1.1.0](https://gitlab.jsc.fz-juelich.de/virtualbraintwin/vbt-converter/compare/v1.0.0...v1.1.0) (2026-09-21)
 ### Release Summary
 

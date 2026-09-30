@@ -6,8 +6,8 @@ Generate the documentation:
 
 Generate the UML diagrams for the converters module:
 - cd <path_to_your_project>/docs
-- pyreverse -o html -p vbt-converter converters/
-- pyreverse -o svg -p vbt-converter converters/
+- pyreverse -o html -p vbt-converter ../converters/
+- pyreverse -o svg -p vbt-converter ../converters/
 
 Generate the UML diagrams for the core module:
 

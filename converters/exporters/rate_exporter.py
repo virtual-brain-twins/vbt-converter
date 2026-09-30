@@ -31,8 +31,8 @@ from numpy import dtype, ndarray
 
 from .protocol_exporter import ProtocolExporter
 from ..schema.configuration import Configuration
+from ..schema.map import Map
 from ..schema.simulation_parameters import SimulationParameters
-from ..schema.spike_map import SpikeMap
 from ..schema.stimuli_group import StimuliGroup
 from ..utils.helpers import normalize, get_discretized_stimulus, get_firing_rates
 
@@ -208,7 +208,7 @@ class RateExporter(ProtocolExporter):
             Human‑readable identifier of the simulation (derived from the group name).
         sim_group : h5py.Group
             HDF5 group that contains the ``Parameters``, ``Configuration``,
-            ``Stimuli`` and ``OutputSpikes`` sub‑groups for a single simulation.
+            ``Stimuli`` and ``Output`` sub‑groups for a single simulation.
 
         Returns
         -------
@@ -237,7 +237,7 @@ class RateExporter(ProtocolExporter):
         disc_stim = get_discretized_stimulus(stimuli_group, self.bin_size)
 
         # Build the spike dictionary expected by ``get_firing_rates``
-        spike_map = SpikeMap.from_hdf5(sim_group["OutputSpikes"])
+        output_map = Map.from_hdf5(sim_group["Output"])
 
         # ``spikes`` maps ``population_name → {"times": np.ndarray, "indices": …}``.
         spikes: dict[str, dict[str, Any]] = {}
@@ -245,9 +245,9 @@ class RateExporter(ProtocolExporter):
         neurons_count: dict[str, int] = config_section.get_value("record_neurons")
 
         # Keep a list of population names to forward back to the caller.
-        populations = [pop.population_name for pop in spike_map.populations]
+        populations = [pop.population_name for pop in output_map.populations]
 
-        for pop in spike_map.populations:
+        for pop in output_map.populations:
             # Concatenate spike times of *all* neurons that belong to this population.
             all_times = np.concatenate([n.times for n in pop.neurons]) if pop.neurons else np.empty(0)
 

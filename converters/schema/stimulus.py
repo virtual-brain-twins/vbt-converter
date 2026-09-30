@@ -145,7 +145,7 @@ class Stimulus(HDF5Serializable):
         return cls(
             limits=limits,
             values=values,
-            stim_type=stim_type,
-            limits_unit=lim_u,
-            values_unit=val_u,
+            stim_type=stim_type if stim_type is not None else "",
+            limits_unit=Unit(lim_u) if lim_u is not None else None,
+            values_unit=Unit(val_u) if val_u is not None else None,
         )

@@ -1,29 +1,53 @@
 @startuml dfd_level_0
-' === Actors / External Entities ===
+' ==========================================================
+' Actors / External Entities
+' ==========================================================
 actor User
 
-' === External Data Stores ===
+' ==========================================================
+' External Data Stores
+' ==========================================================
 folder "Raw Input (CSV / Directory)" as INPUT
-database "Master HDF5 Bundle\n(.h5)" as MASTER
+database "Master HDF5 Bundle\n(.h5)\n(version 2.0, major/minor/patch attrs)" as MASTER
 folder "Protocol PDF / Info" as PROTOINFO
 folder "Raw ZIP Bundle (optional)" as RAWZIP
 folder "Exported Protocol Files\n(.npz, .dsr.npz, …)" as EXPORT
 
-' === Processes ===
+' ==========================================================
+' Processes
+' ==========================================================
 rectangle "convert_any_to_hdf5\n(main)" as CONV_IN
 rectangle "convert_hdf5_to_format\n(main)" as CONV_OUT
 
-' === Data Flows ===
+' ==========================================================
+' Data Flows
+' ==========================================================
 User --> CONV_IN : invoke CLI\n(-i, -o, --protocol …)
-CONV_IN --> INPUT : reads raw data
-CONV_IN --> PROTOINFO : reads protocol PDF (optional)
-CONV_IN --> RAWZIP : creates zipped raw bundle (optional)
+CONV_IN --> INPUT    : reads raw data
+CONV_IN --> PROTOINFO: reads protocol PDF (optional)
+CONV_IN --> RAWZIP   : creates zipped raw bundle (optional)
 
-CONV_IN --> MASTER : writes MasterBundle (HDF5)
+' New output hierarchy inside the master bundle:
+'   /StandardFormat/Output/Map  (contains populations → neurons → times/voltage/virtual)
+CONV_IN --> MASTER   : writes MasterBundle (incl. Output/Map, version attrs)
 
-User --> CONV_OUT : invoke CLI\n(-i, -o, protocol sub‑command …)
-CONV_OUT --> MASTER : reads MasterBundle
-CONV_OUT --> PROTOINFO : may need protocol PDF (validation)
-CONV_OUT --> EXPORT : writes protocol‑specific files (.npz, …)
+User --> CONV_OUT  : invoke CLI\n(-i, -o, protocol sub‑command …)
+CONV_OUT --> MASTER   : reads MasterBundle
+CONV_OUT --> PROTOINFO: may need protocol PDF (validation / metadata)
+CONV_OUT --> EXPORT   : writes protocol‑specific files (.npz, …)
+
+' ==========================================================
+' Notes
+' ==========================================================
+note right of MASTER
+  • Root attribute: format_version (legacy string)
+  • New integer attrs: format_version_major, format_version_minor,
+    format_version_patch
+  • Global section now stores a mapping of standard metadata keys
+  • Output group renamed from “OutputSpikes” → “Output/Map”
+  • Protocol group stores:
+      – “Version” attribute (UTF‑8 string)
+      – Compressed “Content” dataset (uint8 PDF bytes)
+end note
 
 @enduml

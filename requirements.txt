@@ -12,3 +12,4 @@ pyyaml
 tqdm
 numpy
 zstandard
+pylint

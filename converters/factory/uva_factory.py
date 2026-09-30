@@ -37,7 +37,7 @@ from converters.schema.protocol_group import ProtocolGroup
 from converters.schema.raw_bundle_group import RawBundleGroup
 from converters.schema.simulation import Simulation
 from converters.schema.simulation_parameters import SimulationParameters
-from converters.schema.spike_map import SpikeMap
+from converters.schema.map import Map
 from converters.schema.standard_format_group import StandardFormatGroup
 from converters.schema.stimuli_group import StimuliGroup
 from converters.schema.stimulus import Stimulus
@@ -210,17 +210,17 @@ def build_uva_master_bundle(
         for npz_file in sorted(spike_dir.glob("*.npz")):
             pop_name = npz_file.stem
             populations.append(_population_from_npz(pop_name, npz_file))
-        spike_map = SpikeMap(populations=populations)
+        out_map = Map(populations=populations)
 
         # stimulus (piecewise‑constant)
-        stimuli_group = _parse_stimulus_group(full_cfg, run_dir, [pop.population_name for pop in spike_map.populations])
+        stimuli_group = _parse_stimulus_group(full_cfg, run_dir, [pop.population_name for pop in out_map.populations])
 
         sim = Simulation(
             simulation_id=run_dir.name,
             configuration=config,
             parameters=param,
-            stimulus=stimuli_group,
-            output_spike=spike_map,
+            stimuli=stimuli_group,
+            output_map=out_map,
         )
         sims.append(sim)
 

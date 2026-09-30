@@ -1,23 +1,38 @@
-"""Fast validation of a MasterBundle HDF5 file.
+"""
+Fast validation of a MasterBundle HDF5 file.
 
 The public entry point is :func:`validate_master_bundle`.  It raises a
 :class:`ValidationError` with an informative message as soon as a rule is
 violated.  The function is deliberately lightweight – it never reads large
 datasets, it only inspects attributes, group names and dataset shapes.
-"""
 
+Both format versions **1.0** (original) and **2.0** (new) are supported.
+The newer implementation of :class:`~converters.schema.master_bundle.MasterBundle`
+stores the version in three integer attributes
+(``format_version_major``, ``format_version_minor``, ``format_version_patch``)
+*in addition* to the legacy dotted‑string attribute ``format_version``.
+The validator therefore understands *both* representations and prefers the
+integer representation when it is present.
+
+Adding a future version only requires implementing a new per‑simulation check
+and adding it to ``VERSION_REGISTRY``.
+"""
 from __future__ import annotations
 
+import argparse
 import logging
+import sys
 from pathlib import Path
-from typing import Callable, List, Sequence
+from typing import Callable, List, Sequence, Tuple
 
 import h5py
 import numpy as np
 
 from converters.utils.common import configure_logging
 
-SUPPORTED_VERSIONS = {"1.0"}  # add future versions here
+# Constants & public‑API items
+SUPPORTED_VERSIONS = {"1.0", "2.0"}  # add future versions here
+DEFAULT_VERSION = None  # if None we use the file’s version
 
 
 # Public exception – callers may catch this to turn the message into a CLI error
@@ -69,23 +84,82 @@ def _require_attr(obj: h5py.Group | h5py.Dataset, name: str) -> None:
 def _attr_equals(obj: h5py.Group | h5py.Dataset, name: str, expected) -> None:
     _require_attr(obj, name)
     actual = obj.attrs[name]
-    _require(actual == expected, f"Attribute '{name}' must be {expected!r}, got {actual!r}", obj.name)
+    _require(actual == expected,
+             f"Attribute '{name}' must be {expected!r}, got {actual!r}",
+             obj.name)
 
 
 def _attr_is_string(obj: h5py.Group | h5py.Dataset, name: str) -> None:
     """ExternalDependencies attributes must be plain strings."""
     _require_attr(obj, name)
     val = obj.attrs[name]
-    _require(isinstance(val, (str, bytes)), f"Attribute '{name}' must be a string", obj.name)
+    _require(isinstance(val, (str, bytes)),
+             f"Attribute '{name}' must be a string", obj.name)
 
 
-# Individual rule implementations – each receives the open H5 file.
+def _require_scalar(dataset: h5py.Dataset, name: str) -> None:
+    """Raise ``ValidationError`` if ``dataset`` is not a scalar (shape == ())."""
+    _require(dataset.shape == (),
+             f"{name} must be a scalar dataset (shape == ()), got {dataset.shape}",
+             location=dataset.name)
+
+
+#   Helper – version detection (string *or* integer attributes)
+def _detect_version(attrs: h5py.AttributeManager) -> str | None:
+    """
+    Resolve the bundle's version as a dotted string.
+
+    Preference order:
+        1. Integer attributes ``format_version_major``/``format_version_minor``.
+           If ``format_version_patch`` is present and non‑zero, it is appended.
+        2. Legacy string attribute ``format_version``.
+        3. ``None`` → callers must decide what to do (usually raise).
+
+    The function never raises; it simply returns ``None`` when no information
+    can be found.
+    """
+    # Integer based representation – the new canonical form.
+    major = attrs.get("format_version_major")
+    minor = attrs.get("format_version_minor")
+    if major is not None and minor is not None:
+        # ``attrs.get`` may return NumPy scalar types – cast to int.
+        try:
+            major_i = int(major)
+            minor_i = int(minor)
+        except Exception:          # pragma: no cover – defensive
+            return None
+
+        patch = attrs.get("format_version_patch")
+        if patch is None or int(patch) == 0:
+            return f"{major_i}.{minor_i}"
+        else:
+            return f"{major_i}.{minor_i}.{int(patch)}"
+
+    # Legacy string representation.
+    legacy = attrs.get("format_version")
+    if legacy is not None:
+        # The attribute may be stored as bytes; decode if necessary.
+        if isinstance(legacy, bytes):
+            try:
+                legacy = legacy.decode("utf-8")
+            except Exception:      # pragma: no cover
+                return None
+        return str(legacy)
+
+    return None
+
+
+#   COMMON (version‑agnostic) checks
 def _check_root(file: h5py.File) -> None:
-    """The root attribute ``format_version`` must exist and be supported."""
-    _require_attr(file, "format_version")
-    version = file.attrs["format_version"]
+    """Root attribute ``format_version`` *or* integer version attributes must exist
+    and be supported."""
+    version = _detect_version(file.attrs)
+    _require(version is not None,
+             "Unable to determine bundle version – missing both string and integer version attributes",
+             "/")
     _require(version in SUPPORTED_VERSIONS,
-             f"Unsupported format_version {version!r}", "/")
+             f"Unsupported format_version {version!r}",
+             "/")
 
 
 def _check_standardformat(file: h5py.File) -> None:
@@ -94,7 +168,7 @@ def _check_standardformat(file: h5py.File) -> None:
 
 
 def _check_global(file: h5py.File) -> None:
-    """``/StandardFormat/Global``  + attribute experiment_info and parameter_simulation_mapping."""
+    """``/StandardFormat/Global`` with the two mandatory attributes."""
     std = file["StandardFormat"]
     glob = _require_group(std, "Global")
     _require_attr(glob, "experiment_info")
@@ -102,95 +176,22 @@ def _check_global(file: h5py.File) -> None:
 
 
 def _check_simulations(file: h5py.File) -> List[h5py.Group]:
-    """``/StandardFormat/Simulations`` with at least one child ``Sim_<ID>``."""
+    """``/StandardFormat/Simulations`` must contain at least one ``Sim_<ID>``."""
     std = file["StandardFormat"]
     sims_grp = _require_group(std, "Simulations")
-    sim_groups = [g for n, g in sims_grp.items() if isinstance(g, h5py.Group) and n.startswith("Sim_")]
-    _require(len(sim_groups) > 0, "No simulation groups (Sim_<ID>) found", sims_grp.name)
-    return sim_groups  # return for the per‑simulation checks
-
-
-def _check_one_simulation(sim_grp: h5py.Group, populations: List[str]) -> List[str]:
-    """
-    Everything that lives inside a single ``Sim_<ID>`` group.
-    """
-    # The group name must match the attribute ``simulation_id`` (if present)
-    sim_id = sim_grp.name.split("/")[-1].replace("Sim_", "")
-    # The attribute is *not* required by the schema, but we verify it if present.
-    if "simulation_id" in sim_grp.attrs:
-        _require(sim_grp.attrs["simulation_id"] == sim_id,
-                 f"simulation_id attribute must equal '{sim_id}'",
-                 sim_grp.name)
-
-    # Required sub‑groups
-    config = _require_group(sim_grp, "Configuration")
-    params = _require_group(sim_grp, "Parameters")
-    stimuli = _require_group(sim_grp, "Stimuli")
-    out_spikes = _require_group(sim_grp, "OutputSpikes")
-
-    # ``Configuration`` must have at least one attribute
-    _require(len(config.attrs) > 0,
-             "Configuration group must contain at least one attribute",
-             config.name)
-
-    # ``Parameters`` must have at least one attribute
-    _require(len(params.attrs) > 0,
-             "Parameters group must contain at least one attribute",
-             params.name)
-
-    # Each population under ``Stimuli`` must have ≥ 1 sub‑stimulus
-    for stimuli_name, stimuli_grp in stimuli.items():
-        _require(isinstance(stimuli_grp, h5py.Group), f"Stimuli '{stimuli_name}' is not a group", stimuli_name)
-        _require(len(stimuli_grp) > 0,
-                 f"Stimuli group '{stimuli_name}' must contain at least one sub‑stimulus group",
-                 stimuli_name)
-
-        # Each sub‑stimulus must have the three datasets with shape checks
-        # for sub_name, sub_grp in stimuli_grp.items():
-        #     _require(isinstance(sub_grp, h5py.Group), f"Sub‑stimulus '{sub_name}' not a group", pop_grp.name)
-
-        limits = _require_dataset(stimuli_grp, "Limits")
-        values = _require_dataset(stimuli_grp, "Values")
-        stim_type = _require_dataset(stimuli_grp, "StimType")
-
-        # Shape checks – we only need the rank & length, not the data itself
-        _require(limits.ndim == 1,
-                 "Limits must be 1‑D", limits.name)
-        _require(values.ndim == 1,
-                 "Values must be 1‑D", values.name)
-        _require(limits.shape[0] == values.shape[0] + 1,
-                 f"len(Limits) ({limits.shape[0]}) must be len(Values)+1 ({values.shape[0] + 1})",
-                 stimuli_name)
-
-    # ``OutputSpikes/SpikeMap`` must exist and contain at least one neuron per population
-    spike_map = _require_group(out_spikes, "SpikeMap")
-    populations_extracted = []
-    for pop_name, pop_grp in spike_map.items():
-        populations_extracted.append(pop_name)
-        _require(isinstance(pop_grp, h5py.Group), f"Population '{pop_name}' in SpikeMap is not a group", spike_map.name)
-        # there must be at least one neuron subgroup (the name is the neuron index)
-        neuron_groups = [g for n, g in pop_grp.items() if isinstance(g, h5py.Group)]
-        _require(len(neuron_groups) > 0,
-                 f"Population '{pop_name}' must contain at least one neuron group",
-                 pop_grp.name)
-
-        # Each neuron group must have a 1‑D ``times`` dataset (empty allowed)
-        for neu_name, neu_grp in pop_grp.items():
-            times = _require_dataset(neu_grp, "times")
-            _require(times.ndim == 1,
-                     "Neuron times must be 1‑D", times.name)
-    if len(populations) > 0:
-        # Check that the populations in SpikeMap is the same for all simulations
-        _require(set(populations_extracted) == set(populations),
-                 f"Populations in SpikeMap {populations_extracted} do not match expected {populations}",
-                 spike_map.name)
-    return populations_extracted
+    sim_groups = [
+        g for n, g in sims_grp.items()
+        if isinstance(g, h5py.Group) and n.startswith("Sim_")
+    ]
+    _require(len(sim_groups) > 0,
+             "No simulation groups (Sim_<ID>) found", sims_grp.name)
+    return sim_groups
 
 
 def _check_rawbundle(file: h5py.File) -> None:
-    """External‑link dataset with the four mandatory attributes."""
+    """Optional ``RawBundle`` group – external‑link dataset with four attributes."""
     if "RawBundle" not in file:
-        return  # optional group – nothing to validate
+        return
     raw_grp = _require_group(file, "RawBundle")
     dset = _require_dataset(raw_grp, "raw_bundle.zip")
     for attr in ("original_name", "original_size", "format", "checksum"):
@@ -199,87 +200,235 @@ def _check_rawbundle(file: h5py.File) -> None:
 
 def _check_protocol(file: h5py.File) -> None:
     """
-    Validate the optional ``Protocol`` group.
-
-    The group is optional, but when it is present it must contain:
-
-    * An attribute ``Version`` – a UTF‑8 string (``str`` or ``bytes``) –‑ **mandatory**.
-    * A dataset ``Content`` – ``uint8`` dtype, storing the PDF bytes –‑ **mandatory**.
-    * The ``Content`` dataset must be **compressed** (any HDF5 compression filter).
+    Optional ``Protocol`` group: a UTF‑8 ``Version`` attribute and a *compressed*
+    ``Content`` dataset of dtype ``uint8``.
     """
-    # The whole group is optional – if it does not exist we simply exit.
     if "Protocol" not in file:
         return
 
-    # Make sure the group actually exists (creates it if it was a dangling
-    #    reference) and keep a reference for later checks.
     protocol_grp = _require_group(file, "Protocol")
 
-    # Version attribute -------------------------------------------------- #
-    _require(
-        "Version" in protocol_grp.attrs,
-        "Protocol group is missing required attribute 'Version'",
-        protocol_grp.name,
-    )
+    # attribute
+    _require("Version" in protocol_grp.attrs,
+             "Protocol group is missing required attribute 'Version'",
+             protocol_grp.name)
     version_val = protocol_grp.attrs["Version"]
-    _require(
-        isinstance(version_val, (str, bytes)),
-        "Protocol attribute 'Version' must be a UTF‑8 string (str or bytes)",
-        protocol_grp.name,
-    )
+    _require(isinstance(version_val, (str, bytes)),
+             "Protocol attribute 'Version' must be a UTF‑8 string (str or bytes)",
+             protocol_grp.name)
 
-    # Content dataset ---------------------------------------------------- #
-    _require(
-        "Content" in protocol_grp,
-        "Protocol group must contain a dataset named 'Content'",
-        protocol_grp.name,
-    )
+    # dataset
+    _require("Content" in protocol_grp,
+             "Protocol group must contain a dataset named 'Content'",
+             protocol_grp.name)
     content_ds = protocol_grp["Content"]
-
-    # Verify that we really have a Dataset object (not a Group, etc.)
-    _require(
-        isinstance(content_ds, h5py.Dataset),
-        "Protocol member 'Content' must be a dataset, not a group",
-        protocol_grp.name,
-    )
-
-    # Check dtype – it must be unsigned 8‑bit (raw bytes).
-    _require(
-        content_ds.dtype == np.uint8,
-        f"Protocol dataset 'Content' must have dtype uint8, got {content_ds.dtype}",
-        content_ds.name,
-    )
-
-    # Verify that the dataset is stored compressed.
-    #     h5py reports the filter name (e.g. 'gzip', 'lzf', ...) via the
-    #     ``compression`` attribute; ``None`` means "no compression".
-    _require(
-        content_ds.compression is not None,
-        "Protocol dataset 'Content' must be stored compressed (compression filter missing)",
-        content_ds.name,
-    )
+    _require(isinstance(content_ds, h5py.Dataset),
+             "Protocol member 'Content' must be a dataset, not a group",
+             protocol_grp.name)
+    _require(content_ds.dtype == np.uint8,
+             f"Protocol dataset 'Content' must have dtype uint8, got {content_ds.dtype}",
+             content_ds.name)
+    _require(content_ds.compression is not None,
+             "Protocol dataset 'Content' must be stored compressed (compression filter missing)",
+             content_ds.name)
 
 
-# Public API – a single function that runs all checks.
-CHECKS: Sequence[Callable[[h5py.File], None | List[h5py.Group]]] = (
-    _check_root,
-    _check_standardformat,
-    _check_global,
-    _check_simulations,  # returns the list of simulation groups
-    _check_rawbundle,
-    _check_protocol,
-)
+# PER‑SIMULATION checks – one implementation per supported version
+def _common_simulation_prelude(sim_grp: h5py.Group) -> Tuple[h5py.Group, h5py.Group, h5py.Group]:
+    """
+    Checks that are identical for *all* versions:
+
+    * ``Configuration`` & ``Parameters`` groups exist and contain at least one
+      attribute,
+    * ``Stimuli`` group exists and contains at least one sub‑stimulus per
+      population,
+    * each stimulus sub‑group must contain the three mandatory datasets
+      (``Limits``, ``Values`` and ``StimType``) with the shape constraints that
+      are part of the original schema.
+
+    Returns the three groups ``(config, params, stimuli)`` for the caller.
+    """
+    config = _require_group(sim_grp, "Configuration")
+    params = _require_group(sim_grp, "Parameters")
+    stimuli = _require_group(sim_grp, "Stimuli")
+
+    _require(len(config.attrs) > 0,
+             "Configuration group must contain at least one attribute",
+             config.name)
+    _require(len(params.attrs) > 0,
+             "Parameters group must contain at least one attribute",
+             params.name)
+
+    # Stimuli checks (identical for v1.0 and v2.0)
+    for pop_name, pop_grp in stimuli.items():
+        _require(isinstance(pop_grp, h5py.Group),
+                 f"Stimuli '{pop_name}' is not a group", pop_grp.name)
+        _require(len(pop_grp) > 0,
+                 f"Stimuli group '{pop_name}' must contain at least one sub‑stimulus group",
+                 pop_grp.name)
+
+        if {"Limits", "Values", "StimType"}.issubset(pop_grp):
+            # Flat layout (v1.0)
+            limits = _require_dataset(pop_grp, "Limits")
+            values = _require_dataset(pop_grp, "Values")
+            _require(limits.ndim == 1,
+                     "Limits must be 1‑D", limits.name)
+            _require(values.ndim == 1,
+                     "Values must be 1‑D", values.name)
+            _require(limits.shape[0] == values.shape[0] + 1,
+                     f"len(Limits) ({limits.shape[0]}) must be len(Values)+1 ({values.shape[0] + 1})",
+                     pop_grp.name)
+        else:
+            # Nested layout – each sub‑stimulus must have Limits/Values.
+            for sub_name, sub_grp in pop_grp.items():
+                _require(isinstance(sub_grp, h5py.Group),
+                         f"Sub‑stimulus '{sub_name}' not a group", sub_grp.name)
+                limits = _require_dataset(sub_grp, "Limits")
+                values = _require_dataset(sub_grp, "Values")
+                _require(limits.ndim == 1,
+                         "Limits must be 1‑D", limits.name)
+                _require(values.ndim == 1,
+                         "Values must be 1‑D", values.name)
+                _require(limits.shape[0] == values.shape[0] + 1,
+                         f"len(Limits) ({limits.shape[0]}) must be len(Values)+1 ({values.shape[0] + 1})",
+                         sub_grp.name)
+            # In both layouts we also require a ``StimType`` dataset somewhere.
+            _require_dataset(pop_grp, "StimType")
+    return config, params, stimuli
 
 
+def _check_one_simulation_v1(sim_grp: h5py.Group, seen_populations: List[str]) -> List[str]:
+    """
+    Validation for *format version 1.0*.
+
+    * Output hierarchy is ``OutputSpikes/SpikeMap``.
+    * Each neuron group must contain **only** a 1‑D ``times`` dataset.
+    """
+    # optional sanity‑check for a matching ``simulation_id`` attribute
+    sim_id = sim_grp.name.split("/")[-1].replace("Sim_", "")
+    if "simulation_id" in sim_grp.attrs:
+        _require(sim_grp.attrs["simulation_id"] == sim_id,
+                 f"simulation_id attribute must equal '{sim_id}'",
+                 sim_grp.name)
+
+    # common part (config, params, stimuli)
+    _common_simulation_prelude(sim_grp)
+
+    # OutputSpikes → SpikeMap (v1.0)
+    out_spikes = _require_group(sim_grp, "OutputSpikes")
+    spike_map = _require_group(out_spikes, "SpikeMap")
+
+    pop_extracted: List[str] = []
+    for pop_name, pop_grp in spike_map.items():
+        pop_extracted.append(pop_name)
+        _require(isinstance(pop_grp, h5py.Group),
+                 f"Population '{pop_name}' in SpikeMap is not a group",
+                 spike_map.name)
+
+        neuron_groups = [g for n, g in pop_grp.items() if isinstance(g, h5py.Group)]
+        _require(len(neuron_groups) > 0,
+                 f"Population '{pop_name}' must contain at least one neuron group",
+                 pop_grp.name)
+
+        for neu_name, neu_grp in pop_grp.items():
+            times = _require_dataset(neu_grp, "times")
+            _require(times.ndim == 1,
+                     "Neuron times must be 1‑D", times.name)
+
+    # Consistency of population names across simulations (if we already saw
+    # some)
+    if seen_populations:
+        _require(set(pop_extracted) == set(seen_populations),
+                 f"Populations in SpikeMap {pop_extracted} do not match expected {seen_populations}",
+                 spike_map.name)
+
+    return pop_extracted
+
+
+def _check_one_simulation_v2(sim_grp: h5py.Group, seen_populations: List[str]) -> List[str]:
+    """
+    Validation for *format version 2.0*.
+
+    Changes compared to 1.0:
+
+    * The output hierarchy is ``Output/Map`` (note the renamed top‑level group).
+    * Each neuron group **must** contain three datasets:
+        * ``times`` – 1‑D (may be empty)
+        * ``voltage`` – 1‑D
+        * ``virtual`` – **scalar** (shape == ()).
+    """
+    # optional sanity‑check for a matching ``simulation_id`` attribute
+    sim_id = sim_grp.name.split("/")[-1].replace("Sim_", "")
+    if "simulation_id" in sim_grp.attrs:
+        _require(sim_grp.attrs["simulation_id"] == sim_id,
+                 f"simulation_id attribute must equal '{sim_id}'",
+                 sim_grp.name)
+
+    # common part (config, params, stimuli)
+    _common_simulation_prelude(sim_grp)
+
+    # Output → Map (v2.0)
+    out_grp = _require_group(sim_grp, "Output")
+    spike_map = _require_group(out_grp, "Map")
+
+    pop_extracted: List[str] = []
+    for pop_name, pop_grp in spike_map.items():
+        pop_extracted.append(pop_name)
+        _require(isinstance(pop_grp, h5py.Group),
+                 f"Population '{pop_name}' in Map is not a group",
+                 spike_map.name)
+
+        neuron_groups = [g for n, g in pop_grp.items() if isinstance(g, h5py.Group)]
+        _require(len(neuron_groups) > 0,
+                 f"Population '{pop_name}' must contain at least one neuron group",
+                 pop_grp.name)
+
+        for neu_name, neu_grp in pop_grp.items():
+            # times
+            times = _require_dataset(neu_grp, "times")
+            _require(times.ndim == 1,
+                     "Neuron times must be 1‑D", times.name)
+
+            # voltage
+            voltage = _require_dataset(neu_grp, "voltage")
+            _require(voltage.ndim == 1,
+                     "Neuron voltage must be 1‑D", voltage.name)
+
+            # virtual – scalar
+            virtual = _require_dataset(neu_grp, "virtual")
+            _require_scalar(virtual, "Neuron virtual")
+
+    # Consistency of population names across simulations (if we already saw
+    # some)
+    if seen_populations:
+        _require(set(pop_extracted) == set(seen_populations),
+                 f"Populations in Map {pop_extracted} do not match expected {seen_populations}",
+                 spike_map.name)
+
+    return pop_extracted
+
+
+# Version‑dispatch table – makes it easy to add a new schema version
+VERSION_REGISTRY: dict[
+    str,
+    Callable[[h5py.Group, List[str]], List[str]]
+] = {
+    "1.0": _check_one_simulation_v1,
+    "2.0": _check_one_simulation_v2,
+}
+
+
+# Public validation function (used by the CLI and by library callers)
 def validate_master_bundle(
         bundle_path: Path,
         *,
         strict: bool = True,
+        version: str | None = None,
         logger: logging.Logger | None = None,
 ) -> None:
     """
-    Validate a master HDF5 bundle against the minimal schema described in the
-    question.
+    Validate a master HDF5 bundle against the schema for the requested format
+    version.
 
     Parameters
     ----------
@@ -287,9 +436,13 @@ def validate_master_bundle(
         Path to the ``*.h5`` file that should be checked.
     strict : bool, default=True
         When ``True`` all rules (including the optional ``RawBundle`` and
-        ``ExternalDependencies`` groups) are enforced.  When ``False`` only the
-        core ``StandardFormat`` hierarchy is validated – useful for quick unit
-        tests.
+        ``Protocol`` groups) are enforced.  When ``False`` only the core
+        ``StandardFormat`` hierarchy is validated – useful for quick unit tests.
+    version : str, optional
+        If supplied, forces validation against that version, *ignoring* the
+        ``format_version`` attribute stored in the file.  Useful for CI when the
+        file is known to be of a particular version but the attribute is missing
+        or broken.
     logger : logging.Logger, optional
         If supplied, progress and the exact location of a failure are logged at
         *DEBUG* level before raising the exception.
@@ -302,41 +455,162 @@ def validate_master_bundle(
         If the file cannot be opened or is corrupted.
     """
     if logger is None:
-        # Logging configuration (root logger)
         logger = configure_logging(
             __name__,
             log_file_name=Path(__file__).with_suffix(".log").name,
-            level=getattr(logging, "DEBUG" if strict else "INFO"),
+            level=logging.DEBUG if strict else logging.INFO,
         )
 
-    logger.debug("Opening master bundle %s for validation", bundle_path)
+    logger.debug("Opening master bundle %s", bundle_path)
     with h5py.File(bundle_path, "r") as hf:
-        # Run the static checks that do not need per‑simulation data.
-        for fn in CHECKS[:4]:
+        #   Run version‑agnostic (common) checks
+        for fn in (_check_root, _check_standardformat, _check_global, _check_simulations):
             logger.debug("Running check %s", fn.__name__)
-            result = fn(hf)  # type: ignore[arg-type]
-            # ``_check_simulations`` returns the list of simulation groups,
-            # everything else returns ``None``.
+            result = fn(hf)                          # type: ignore[arg-type]
             if fn is _check_simulations:
                 sim_groups: List[h5py.Group] = result  # type: ignore[assignment]
 
-        # Per‑simulation checks – iterate only once, abort on first failure.
+        #   Resolve the format version
+        detected_version = version or hf.attrs.get("format_version")
+        _require(detected_version is not None,
+                 "Unable to determine format version (attribute missing and no '--version' supplied)",
+                 "/")
+        _require(detected_version in SUPPORTED_VERSIONS,
+                 f"Unsupported format_version {detected_version!r}",
+                 "/")
+        per_sim_check = VERSION_REGISTRY[detected_version]
+
+        logger.debug(
+            "Detected format version %s – using %s",
+            detected_version,
+            per_sim_check.__name__,
+        )
+
+        #   Per‑simulation checks (the only part that differs per version)
         logger.debug("Running per‑simulation checks (%d sims)", len(sim_groups))
-        populations = []
+        populations: List[str] = []
         for sim in sim_groups:
             try:
-                sim_populations = _check_one_simulation(sim, populations)
-                if populations.count(sim_populations) == 0:
+                sim_populations = per_sim_check(sim, populations)
+                # ``populations`` stores the *first* simulation’s list; all later
+                # simulations are compared to it inside the per‑sim function.
+                if not populations:
                     populations.extend(sim_populations)
             except ValidationError as exc:
-                logger.debug("Validation failed in simulation %s → %s", sim.name, exc)
+                logger.debug(
+                    "Validation failed in simulation %s → %s",
+                    sim.name,
+                    exc,
+                )
                 raise
 
-        # Optional groups
+        #   Optional groups – controlled by the ``strict`` flag
         if strict:
             logger.debug("Running optional RawBundle check")
             _check_rawbundle(hf)
-            logger.debug("Running optional ExternalDependencies check")
+            logger.debug("Running optional Protocol check")
             _check_protocol(hf)
 
-    logger.info("Master bundle %s passed validation", bundle_path)
+    logger.info(
+        "Master bundle %s passed validation (version %s)",
+        bundle_path,
+        detected_version,
+    )
+
+
+#   Command‑line interface
+def _parse_cli_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    """
+    Parse the command‑line arguments for the validator script.
+
+    Parameters
+    ----------
+    argv : sequence of str, optional
+        Arguments to parse (defaults to ``sys.argv[1:]``).
+
+    Returns
+    -------
+    argparse.Namespace
+        Parsed arguments.
+    """
+    parser = argparse.ArgumentParser(
+        prog=Path(__file__).name,
+        description=(
+            "Validate a MasterBundle HDF5 file against the minimal schema. "
+            "Exit status 0 indicates success, >0 indicates failure."
+        ),
+    )
+    parser.add_argument(
+        "bundle_path",
+        type=Path,
+        help="Path to the *.h5 file that should be validated.",
+    )
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        default=False,
+        help=(
+            "Enforce strict validation (includes optional RawBundle and Protocol "
+            "checks).  When omitted only the core StandardFormat hierarchy is "
+            "validated."
+        ),
+    )
+    parser.add_argument(
+        "--version",
+        choices=sorted(SUPPORTED_VERSIONS),
+        help=(
+            "Force validation against a particular version (e.g. ``--version 2.0``). "
+            "If omitted the validator uses the ``format_version`` attribute stored "
+            "in the file."
+        ),
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Enable verbose (DEBUG) logging output.",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """
+    Entry‑point used by ``python -m converters.utils.validation`` or a direct
+    script run.
+
+    Returns
+    -------
+    int
+        Exit status: ``0`` if validation passes, ``1`` for a ``ValidationError``,
+        ``2`` for any unexpected exception.
+    """
+    args = _parse_cli_args(argv)
+
+    logger = configure_logging(
+        __name__,
+        log_file_name=Path(__file__).with_suffix(".log").name,
+        level=logging.DEBUG if args.verbose else logging.INFO,
+    )
+
+    try:
+        validate_master_bundle(
+            bundle_path=args.bundle_path,
+            strict=args.strict,
+            version=args.version,
+            logger=logger,
+        )
+    except ValidationError as exc:
+        logger.error("Validation failed: %s", exc)
+        return 1
+    except Exception:  # pragma: no cover – unexpected errors
+        logger.exception("Unexpected error while validating %s", args.bundle_path)
+        return 2
+
+    logger.info("Validation succeeded.")
+    return 0
+
+
+if __name__ == "__main__":
+    # ``sys.exit`` makes sure the integer return value becomes the process' exit
+    # code – this mirrors the behaviour of typical CLI utilities.
+    sys.exit(main())

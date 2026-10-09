@@ -222,9 +222,10 @@ docs/specification/Virtual%20Brain%20Twin%20Inter%20Protocol%20Data%20Standard%2
 
 #### Release History
 
-| Version | Release Date | Description                                                                                                                                                                      |
-|---------|--------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **1.0** | 2026‑09‑17   | Initial release of the HDF5 schema. This version defines the baseline data structures, naming conventions, and attribute specifications required for all needed data attributes. |
+| Version | Release Date | Description                                                                                                                                                                                                                                               |
+|---------|--------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **1.0** | 2026‑09‑17   | Initial release of the HDF5 schema. This version defines the baseline data structures, naming conventions, and attribute specifications required for all needed data attributes.                                                                          |
+| **2.0** | 2026‑09‑30   | Migrated `SpikeMap` to a generic `Map`, extended the schema (new fields for Neuron abstraction: voltage, virtual, renamed groups, version‑attributes), extended validation for 2.0 and enabled CLI, and updated documentation & tests for the 2.0 format. |
 
 #### Current Schema Version
 

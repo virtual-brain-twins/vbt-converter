@@ -92,9 +92,9 @@ def move_converted_hdf5(logger: logging.Logger, ci_root: Path, input_dir: Path) 
     Move ``ci_root/attachments/converted.hdf5`` into the folder that the
     converter expects: ``<input_dir>/attachments/converted.hdf5``.
     """
-    src = ci_root / "attachments" / "converted.hdf5"
-    npz_dir = Path(input_dir) / "attachments"
-    dst = npz_dir / "converted.hdf5"
+    src = ci_root / "attachments" / "bundle" / "master.h5"
+    dest_dir = Path(input_dir) / "attachments"
+    dst = dest_dir / "converted.hdf5"
 
     # Make sure we have something to move
     if not src.is_file():
@@ -102,7 +102,7 @@ def move_converted_hdf5(logger: logging.Logger, ci_root: Path, input_dir: Path) 
         sys.exit(1)
 
     # Ensure the destination folder exists (no error if it already does)
-    npz_dir.mkdir(parents=True, exist_ok=True)
+    dest_dir.mkdir(parents=True, exist_ok=True)
 
     # Move / rename the file
     try:

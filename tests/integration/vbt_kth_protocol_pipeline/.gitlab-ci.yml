@@ -111,8 +111,8 @@ test_vbt_convert_hdf5_to_npz:
     - export VBT_ENTRY_SCRIPT="${CI_PROJECT_DIR}/tests/integration/vbt_kth_protocol_pipeline/vbt_converter_hdf5_to_npz_wrapper.py"
     - export VBT_INPUT_PATH="${CI_PROJECT_DIR}/input/"
     - export VBT_OUTPUT_PATH="${CI_PROJECT_DIR}/output/"
-    - export INPUT_HDF5_PATH="${CI_PROJECT_DIR}/attachments/input.hdf5"
-    - export OUTPUT_NPZ_PATH="${CI_PROJECT_DIR}/attachments/converted.npz" # Path to the converted numpy file (which is the only output artifact we want to attach to CI Job)
+    - export INPUT_HDF5_PATH="${CI_PROJECT_DIR}/attachments/bundle/master.h5"
+    - export OUTPUT_NPZ_PATH="${CI_PROJECT_DIR}/attachments/bundle/converted.npz" # Path to the converted numpy file (which is the only output artifact we want to attach to CI Job)
     - echo "Installing dependencies in the docker runner …"
     - apk add --no-cache jq python3 bash perl gettext curl
     - !reference [ .VBT_RUN, before_script ]  # Calls the base "method"

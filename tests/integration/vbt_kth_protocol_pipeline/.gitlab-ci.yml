@@ -146,7 +146,6 @@ test_vbt_convert_hdf5_to_npz:
     when: always
     paths:
       - allure-results/
-      - "${CI_PROJECT_DIR}/attachments/"
     expire_in: 6 week
 
 vbt_publish_job:
@@ -157,7 +156,7 @@ vbt_publish_job:
     - jsc-cloud
     - fenix
   needs:
-    - job: test_vbt_convert_parameter_sweep_dir_to_hdf5
+    - job: test_vbt_convert_hdf5_to_npz
       artifacts: true
   before_script:
     - export VBT_ALLURE_LINK_PIPELINE="${CI_PIPELINE_URL}"

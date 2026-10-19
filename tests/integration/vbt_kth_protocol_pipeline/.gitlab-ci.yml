@@ -3,10 +3,8 @@
 # -------------------------------------------------
 # Stages
 stages:
-  - setup_environment
   - test
   - publish_report
-  - cleanup
 
 # -----------------------------------------------------------------
 # Global variables – keep the same behavior as the original template
@@ -151,21 +149,3 @@ vbt_publish_job:
     - echo "Installing dependencies in the Alpine runner …"
     - apk add --no-cache jq unzip
     - !reference [ .VBT_PUBLISH, before_script ]  # Calls the base "method"
-
-vbt_cleanup_job:
-  extends: .VBT_CLEANUP
-  stage: cleanup
-  tags:
-    - docker
-    - jsc-cloud
-    - fenix
-  needs:
-    - job: vbt_publish_job
-      artifacts: false
-  variables:
-    VBT_CLEANUP_SCRIPT: "${CI_PROJECT_DIR}/ci/template_repo/ci/scripts/cleanup_environment.sh"
-  before_script:
-    - export VBT_SUBMODULE_PATH="${CI_PROJECT_DIR}/ci/template_repo"
-    - export VBT_CLEANUP_SCRIPT="${CI_PROJECT_DIR}/ci/template_repo/ci/scripts/cleanup_environment.sh"
-    - apk add --no-cache jq bash
-    - !reference [ .VBT_RUN, before_script ]  # Calls the base "method"

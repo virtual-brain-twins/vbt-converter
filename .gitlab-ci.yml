@@ -97,6 +97,8 @@ trigger-integration-kth:
   trigger:
     include: tests/integration/vbt_kth_protocol_pipeline/.gitlab-ci.yml
     strategy: depend
+  variables:
+    PARENT_PIPELINE_ID: "$CI_PIPELINE_ID"
   rules:
     - changes:
         - tests/integration/vbt_kth_protocol_pipeline/**/*

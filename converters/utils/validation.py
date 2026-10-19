@@ -266,6 +266,19 @@ def _common_simulation_prelude(sim_grp: h5py.Group) -> Tuple[h5py.Group, h5py.Gr
         _require(len(pop_grp) > 0,
                  f"Stimuli group '{pop_name}' must contain at least one sub‑stimulus group",
                  pop_grp.name)
+        # Get the stimulus type – this must exist for any layout
+        stim_type_ds = _require_dataset(pop_grp, "StimType")
+        # The dataset is expected to be a scalar (e.g. bytes or str)
+        stim_type = stim_type_ds[()]
+        # Convert possible bytes‑objects to str for a clean comparison
+        if isinstance(stim_type, (bytes, bytearray)):
+            stim_type = stim_type.decode("utf-8")
+
+        # Only continue with the Limits/Values checks when the type is
+        #     piecewise_constant
+        if stim_type != "piecewise_constant":
+            # Nothing else to validate for this population – go to the next one
+            continue
 
         if {"Limits", "Values", "StimType"}.issubset(pop_grp):
             # Flat layout (v1.0)
@@ -393,10 +406,6 @@ def _check_one_simulation_v2(sim_grp: h5py.Group, seen_populations: List[str]) -
             voltage = _require_dataset(neu_grp, "voltage")
             _require(voltage.ndim == 1,
                      "Neuron voltage must be 1‑D", voltage.name)
-
-            # virtual – scalar
-            virtual = _require_dataset(neu_grp, "virtual")
-            _require_scalar(virtual, "Neuron virtual")
 
     # Consistency of population names across simulations (if we already saw
     # some)

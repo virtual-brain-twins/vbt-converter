@@ -25,11 +25,13 @@ import h5py
 from converters.exporters.protocol_exporter import ProtocolExporter
 # Exporter registry – map the sub‑command name → concrete exporter class
 from converters.exporters.rate_exporter import RateExporter
+from converters.exporters.rate_voltage_exporter import RateVoltageExporter
 from converters.utils.common import configure_logging
 from converters.utils.validation import validate_master_bundle
 
 PROTOCOL_EXPORTERS: Dict[str, Type[ProtocolExporter]] = {
     "uva_amu_1": RateExporter,
+    "kth_amu_1": RateVoltageExporter
 }
 
 

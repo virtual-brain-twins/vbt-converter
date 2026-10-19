@@ -133,10 +133,10 @@ class Stimulus(HDF5Serializable):
         lim_u = _decode(grp["Limits"].attrs.get("unit"))
         val_u = _decode(grp["Values"].attrs.get("unit"))
 
-        # Basic validation (unchanged)
+        # Basic validation
         if limits.ndim != 1 or values.ndim != 1:
             raise ValueError("Both 'limits' and 'values' must be one‑dimensional arrays.")
-        if limits.size != values.size + 1:
+        if stim_type == "piecewise_constant" and limits.size != values.size + 1:
             raise ValueError(
                 f"'limits' length ({limits.size}) must be exactly one more than "
                 f"'values' length ({values.size})."

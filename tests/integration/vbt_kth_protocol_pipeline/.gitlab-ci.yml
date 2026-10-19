@@ -103,9 +103,6 @@ test_vbt_convert_hdf5_to_npz:
     - fenix
   image: docker:cli
   needs:
-    - pipeline: $PARENT_PIPELINE_ID
-      job: vbt_setup_job
-      artifacts: true
     - job: test_vbt_convert_parameter_sweep_dir_to_hdf5
       artifacts: true
   before_script:

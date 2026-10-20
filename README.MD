@@ -181,7 +181,7 @@ docs/specification/Virtual%20Brain%20Twin%20Inter%20Protocol%20Data%20Standard%2
 |-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `Parameters`                                                                                                                                                                                  | All scalar simulation parameters – the three scaling factors plus any additional metadata (e.g. `t_sim`, `record_neurons`). | Stored as **attributes** on the group (`SimulationParameters`).                                                                                                                                                                                                                                                                                                                                                  |
 | `Stimuli`                                                                                                                                                                                     | A *single* uniform stimulus (same for every population) – piece‑wise‑constant.                                              | One `StimuliGroup` named `"default"` for each population; each contains a `Stimulus` (datasets `Limits`, `Values`).                                                                                                                                                                                                                                                                                              |
-| `Output`                                                                                                                                                                                      | Spike & voltage trains for all populations extracted from the sweep directory data.                                         | `Map → Population → Neuron → times` (datasets `times`). The optional `indices` dataset is present when the original NPZ included an `indices` array; otherwise a dummy neuron per spike is created during bundle construction.<br/>`Map → Population → Neuron → voltage` (datasets `voltage`). Voltage trace for he neuron. <br/> `Map → Population → Neuron → virtual`. Boolean flag in case of virtual neurons |
+| `Output`                                                                                                                                                                                      | Spike & voltage trains for all populations extracted from the sweep directory data.                                         | `Map → Population → Neuron → times` (datasets `times`). The optional `indices` dataset is present when the original NPZ included an `indices` array; otherwise a dummy neuron per spike is created during bundle construction.<br/>`Map → Population → Neuron → voltage` (datasets `voltage`). Voltage trace for he neuron. |
 | **Optional** `record_neurons` (binary payload) is stored as an attribute inside the `Configuration` group by the factory – later accessed through `Configuration.kv_pairs["record_neurons"]`. |
 
 The **Sample exporter** (`RateExporter`) reads the above sections, discretises spikes with the user‑provided bin size,
@@ -217,8 +217,8 @@ The HDF5 schema used by this project follows a strict versioning policy to ensur
 backward compatibility. Each schema release is documented with its version identifier, release date, and a concise
 description of changes. The version is also referenced in Section 16. “Change Log,” of the specification documentation
 at the following location:
-**[Virtual Brain Twin Inter‑Protocol Data Standard Specification and HDF5 Specification v2.0](
-docs/specification/Virtual%20Brain%20Twin%20Inter%20Protocol%20Data%20Standard%20Specification%20and%20HDF5%20Specification_v2.0.docx)**
+**[Virtual Brain Twin Inter‑Protocol Data Standard Specification and HDF5 Specification v2.1](
+docs/specification/Virtual%20Brain%20Twin%20Inter%20Protocol%20Data%20Standard%20Specification%20and%20HDF5%20Specification_v2.1.docx)**
 
 #### Release History
 
@@ -226,10 +226,11 @@ docs/specification/Virtual%20Brain%20Twin%20Inter%20Protocol%20Data%20Standard%2
 |---------|--------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **1.0** | 2026‑09‑17   | Initial release of the HDF5 schema. This version defines the baseline data structures, naming conventions, and attribute specifications required for all needed data attributes.                                                                          |
 | **2.0** | 2026‑09‑30   | Migrated `SpikeMap` to a generic `Map`, extended the schema (new fields for Neuron abstraction: voltage, virtual, renamed groups, version‑attributes), extended validation for 2.0 and enabled CLI, and updated documentation & tests for the 2.0 format. |
+| **2.1** | 2026‑10‑20   | Made ‘virtual’ dataset optional (deprecated). Updated validation to only require it when present and to validate `StimType` before checking Limits/Values. |
 
 #### Current Schema Version
 
-- **Active version:** `2.0`
+- **Active version:** `2.1`
 
 All data files generated or consumed by the library should conform to this schema version unless explicitly noted
 otherwise in the documentation of a specific tool or workflow.

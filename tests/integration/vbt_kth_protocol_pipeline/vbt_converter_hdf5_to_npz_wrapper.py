@@ -210,9 +210,7 @@ def main() -> None:
     validate_script = ci_root / "tests" / "integration" / "vbt_kth_protocol_pipeline" / "utils" / "validate_and_report.py"
     report_path: Path = args.output_dir / "test_result_report.html"
     ground_truth = (
-            ci_root
-            / "tests"
-            / "test_data"
+            Path(str(os.getenv("VBT_INPUT_PATH")))
             / "ground_truth"
             / "test_convert_output.npz"
     )

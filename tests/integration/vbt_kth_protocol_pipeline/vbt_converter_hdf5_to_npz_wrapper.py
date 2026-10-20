@@ -210,10 +210,18 @@ def main() -> None:
     validate_script = ci_root / "tests" / "integration" / "vbt_kth_protocol_pipeline" / "utils" / "validate_and_report.py"
     report_path: Path = args.output_dir / "test_result_report.html"
     ground_truth = (
-            Path(str(os.getenv("VBT_INPUT_PATH")))
+            ci_root /
+            "tests"
+            / "test_data"
+            / "VBT_KTH_BG_Protocol"
             / "ground_truth"
             / "test_convert_output.npz"
     )
+    if ground_truth.is_file():
+        logger.info("Using ground truth file: %s", ground_truth)
+    else:
+        logger.error("Ground truth file not found: %s", ground_truth)
+        sys.exit(1)
     cmd = [
         sys.executable,
         str(validate_script),

@@ -343,15 +343,9 @@ def build_population_tables(results: Dict[str, Any]) -> str:
 
 def build_artifact_section() -> str:
     """
-    Link to the stored NPZ artifact.  The environment variable
-    ``VBT_ALLURE_LINK_JOB`` is used by the CI system; a fallback is provided
-    for local runs.
+    Link to the stored NPZ artifact.
     """
-    base = os.getenv("VBT_ALLURE_LINK_JOB")
-    if base:
-        url = f"{base.rstrip('/')}/artifacts/file/attachments/converted.npz"
-    else:
-        url = "/artifacts/file/attachments/converted.npz"
+    url = "https://vbt-minio.fz-juelich.de/console/browser/vbt-gitlab-cache/project%2F8681%2Fvbt-kth-bg-protocol-cache-protected"
     return f"""
     <h2>Artifact</h2>
     <p><a href="{html.escape(url)}" target="_blank" rel="noopener noreferrer">

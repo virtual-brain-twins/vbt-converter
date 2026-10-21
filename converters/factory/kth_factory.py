@@ -294,11 +294,11 @@ def _populations_from_output_spikes(h5_path: Path) -> List[Population]:
             gid = int(gid_str)  # the global identifier
 
             # Spike times
-            # KTH stores spikes as a (1, N) array; `squeeze` removes the
+            # KTH stores spikes as a (1, N) array; we remove the
             # leading dimension.  We also force ``float64`` to match the
             # Neuron dataclass contract.
             spikes_raw = ngrp["spikes"][()]
-            times: np.ndarray = spikes_raw.squeeze().astype(np.float64)
+            times: np.ndarray = spikes_raw[0,:].astype(np.float64)
 
             # Optional unit attribute – may be missing → ``None``.
             times_unit = ngrp["spikes"].attrs.get("unit", None)

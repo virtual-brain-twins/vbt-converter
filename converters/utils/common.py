@@ -1,12 +1,19 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
 import sys
+from json import JSONDecodeError
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple, Any
 
 __all__ = ["configure_logging"]
+
+import h5py
+
+from converters.utils.compound_attribute_helper import read_compound_attr
+from converters.utils.units import Unit
 
 
 def _make_log_path(
@@ -109,3 +116,55 @@ def configure_logging(
     # ``WARNING`` by default if the user over‑rode it elsewhere).
     logger.setLevel(level)
     return logger
+
+
+def read_compound_attr_parsed(
+        parent: h5py.Group,
+        name: str,
+) -> Tuple[Any, Optional[Unit]]:
+    """
+    Read a compound attribute and **automatically JSON‑decode** its ``value`` field
+    when the stored data is a valid JSON document.
+
+    Parameters
+    ----------
+    parent:
+        The HDF5 group (or file) that owns the attribute.
+    name:
+        The attribute name.
+
+    Returns
+    -------
+    (value, unit):
+        * ``value`` – either the native scalar stored in the attribute **or** the
+          Python object obtained from ``json.loads`` when the string can be parsed.
+        * ``unit`` – a :class:`~converters.utils.units.Unit` instance or ``None``.
+
+    Notes
+    -----
+    * No exception propagates from the JSON decoder – any problem simply leaves
+      ``value`` untouched.
+    * The function does **not** perform any further type conversion; the caller
+      receives exactly what was stored (or its JSON representation).
+    """
+    # First, use the original implementation to obtain the raw data.
+    raw_value, unit = read_compound_attr(parent, name)
+
+    # Is the value a string‑like object that could contain JSON?
+    if isinstance(raw_value, (str, bytes, bytearray)):
+        # Ensure we are dealing with a Python ``str`` – ``read_compound_attr`` may
+        # already have decoded bytes, but we guard against the unlikely case it
+        # didn't (some h5py versions on Windows can return ``bytes``).
+        if isinstance(raw_value, (bytes, bytearray)):
+            raw_value = raw_value.decode("utf-8")
+
+        # Try to decode JSON – any failure is silently ignored.
+        try:
+            parsed = json.loads(raw_value)
+        except JSONDecodeError:
+            # Not a JSON document → keep the original string.
+            parsed = raw_value
+    else:
+        # The value is already a native scalar (int, float, bool, …) – nothing to do.
+        parsed = raw_value
+    return parsed, unit

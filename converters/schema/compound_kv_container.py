@@ -41,7 +41,8 @@ from typing import Any, Dict, Tuple, Optional, Type, TypeVar, ClassVar, List, It
 import h5py
 
 from .hdf5_serializable import HDF5Serializable
-from ..utils.compound_attribute_helper import write_compound_attr, read_compound_attr
+from ..utils.common import read_compound_attr_parsed
+from ..utils.compound_attribute_helper import write_compound_attr
 from ..utils.units import Unit
 
 # Generic type that represents a subclass of the container itself.
@@ -242,6 +243,6 @@ class KeyValueCompoundContainer(HDF5Serializable):
         """
         loaded: Dict[str, Tuple[Any, Optional[Unit]]] = {}
         for key in grp.attrs:
-            value, unit = read_compound_attr(grp, key)
+            value, unit = read_compound_attr_parsed(grp, key)
             loaded[key] = (value, unit)
         return cls(kv_pairs=loaded)

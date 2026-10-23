@@ -195,7 +195,7 @@ def read_compound_attr(parent: h5py.Group, name: str) -> Tuple[Any, Optional[Uni
         raw_unit = raw_unit.decode("utf-8")
 
     try:
-        unit = None if raw_unit == "" else Unit(raw_unit)  # Enum lookup by value
+        unit = None if raw_unit == "" or raw_unit is None else Unit(raw_unit)  # Enum lookup by value
     except ValueError as exc:
         raise ValueError(
             f"'{raw_unit}' is not a recognised unit. "

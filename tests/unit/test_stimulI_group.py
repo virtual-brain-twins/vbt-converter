@@ -220,7 +220,7 @@ class TestStimuliGroupSerialization:
         #  Mock the low‑level helpers and Stimulus class‑method
         # -------------------------------------------------------------
         mocked_read_attr = self._start_patch(
-            "converters.schema.stimuli_group.read_compound_attr", mock.Mock()
+            "converters.schema.stimuli_group.read_compound_attr_parsed", mock.Mock()
         )
         # Configure read_compound_attr to return (value, unit_placeholder) tuples.
         mocked_read_attr.side_effect = [

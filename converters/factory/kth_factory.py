@@ -106,6 +106,75 @@ def _eval_arith_string(val: Any) -> Any:
 def _parse_cortical_sub_stimulus(
         sub_dict: Dict[str, Any],
 ) -> Tuple[Stimulus, Dict[str, Any]]:
+    """
+    Parse a cortical stimulus description from a dictionary.
+
+    The dictionary must contain three parallel numeric sequences describing
+    *start times*, *end times* and *frequencies* of a piece‑wise‑constant
+    stimulus.  The function validates the input, builds the internal representation
+    expected by :class:`Stimulus`, and extracts any additional key‑value pairs as
+    HDF5‑compatible attributes.
+
+    Parameters
+    ----------
+    sub_dict : dict
+        Mapping that describes a cortical stimulus.  Required keys are:
+
+        - ``"start"``      : sequence of float – start time of the first interval.
+        - ``"end"``        : sequence of float – end time of each interval.
+        - ``"frequency"``  : sequence of float – stimulus value (Hz) for each interval.
+
+        Optional keys:
+
+        - ``"stim_type"``  : string indicating the stimulus type; defaults to
+          ``"piecewise_constant"``.
+        - any other key/value pair will be stored as an attribute of the resulting
+          stimulus after being evaluated by :func:`_eval_arith_string`.
+
+    Returns
+    -------
+    stimulus : Stimulus
+        A :class:`Stimulus` instance constructed from the validated
+        ``start``, ``end`` and ``frequency`` arrays.
+    attrs : dict
+        Dictionary of additional attributes (keys not used for the piecewise
+        definition).  Each value is passed through ``_eval_arith_string`` to
+        allow arithmetic strings (e.g. ``"2*pi"``).
+
+    Raises
+    ------
+    KeyError
+        If any of the required keys ``"start"``, ``"end"``, or ``"frequency"``
+        are missing from ``sub_dict``.
+    ValueError
+        * If the ``start``, ``end`` or ``frequency`` entries cannot be converted
+          to numeric 1‑D arrays.
+        * If any of the three arrays is not one‑dimensional.
+        * If the lengths of ``start``/``end`` and ``frequency`` do not match.
+
+    Notes
+    -----
+    The returned ``Stimulus.limits`` array is constructed as
+    ``[start[0], end[0], end[1], …, end[N‑1]]`` where ``N`` is the number of
+    intervals (i.e. ``len(start)``).  Consequently the number of limits is
+    ``N + 1`` and ``Stimulus.values`` holds exactly ``N`` frequency values.
+
+    Examples
+    --------
+    >>> desc = {
+    ...     "start": [0.0],
+    ...     "end": [0.5, 1.0],
+    ...     "frequency": [10.0, 20.0],
+    ...     "comment": "test stimulus"
+    ... }
+    >>> stim, attrs = _parse_cortical_sub_stimulus(desc)
+    >>> stim.limits
+    array([0. , 0.5, 1. ])
+    >>> stim.values
+    array([10., 20.])
+    >>> attrs
+    {'comment': 'test stimulus'}
+    """
     # Pull the three required lists and turn them into NumPy arrays.
     try:
         start = np.asarray(sub_dict["start"], dtype=np.float64)

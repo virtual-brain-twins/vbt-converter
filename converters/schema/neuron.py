@@ -152,8 +152,14 @@ class Neuron(HDF5Serializable):
         return cls(
             index=idx,
             times=times,
+            # Convert the supplied string to a ``Unit`` enum **only** when a
+            # real value is provided.  If ``times_unit`` is ``None`` (actual
+            # Python ``None``) or the literal string ``"None"``, we keep the
+            # attribute as ``None`` so the object knows that no unit was given.
             times_unit=Unit(times_unit) if times_unit is not None and times_unit != "None" else None,
             voltage=voltage,
+            # Same logic as above: turn a valid unit string into a ``Unit`` enum,
+            # otherwise store ``None`` to indicate the absence of a unit.
             voltage_unit=Unit(voltage_unit) if voltage_unit is not None and voltage_unit != "None" else None,
             virtual=virtual,
         )

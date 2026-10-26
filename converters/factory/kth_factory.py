@@ -230,37 +230,6 @@ def _parse_cortical_sub_stimulus(
 
     return stimulus, attrs
 
-
-def _parse_generic_sub_stimulus(
-        sub_dict: Dict[str, Any]
-) -> Tuple[Stimulus, Dict[str, Any]]:
-    """Parse a sub‑stimulus that does not contain a piece‑wise definition.
-
-    For sources such as ``GPe_FoxP2`` the function creates an *empty*
-    :class:`Stimulus` object (zero‑length ``limits`` and ``values``) and stores
-    the entire ``sub_dict`` as attributes after attempting to evaluate any
-    arithmetic strings.
-
-    Args:
-        sub_dict: Dictionary describing the sub‑stimulus.
-
-    Returns:
-        A tuple ``(stimulus, attrs)`` where ``stimulus`` is an empty
-        :class:`Stimulus` and ``attrs`` is the dictionary of attributes.
-
-    Raises:
-        None.
-    """
-    stimulus = Stimulus(
-        limits=np.empty(0, dtype=np.float64),
-        values=np.empty(0, dtype=np.float64),
-        stim_type="poisson_generator",
-    )
-
-    attrs = {k: _eval_arith_string(v) for k, v in sub_dict.items()}
-    return stimulus, attrs
-
-
 def _parse_input_config(input_config: Path) -> StimuliGroup:
     """Parse a JSON stimulus description and convert it to a :class:`StimulusSet`.
 
@@ -292,10 +261,8 @@ def _parse_input_config(input_config: Path) -> StimuliGroup:
         for stim_name, sub_dict in pop_content.items():
             if "start" in sub_dict and "frequency" in sub_dict:
                 stimulus, attrs = _parse_cortical_sub_stimulus(sub_dict)
-            elif "generator" in sub_dict and "frequency" in sub_dict:
-                stimulus, attrs = _parse_generic_sub_stimulus(sub_dict)
             else:
-                # Presently discarding the virtual stimuli
+                # Presently discarding the virtual stimuli, also the GPe_FoxP2 stimulus, which is not a piecewise definition.
                 warning(
                     f"Sub‑stimulus '{stim_name}' in population '{pop_name}' "
                     "does not contain a recognised definition; creating empty stimulus."

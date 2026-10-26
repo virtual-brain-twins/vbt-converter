@@ -57,7 +57,7 @@ class ValidationError(RuntimeError):
 
 
 # Small convenience wrappers that raise ValidationError as soon as something
-# is missing or malformed.
+#    is missing or malformed.
 def _require(condition: bool, msg: str, location: str | None = None) -> None:
     if not condition:
         raise ValidationError(msg, location)
@@ -104,7 +104,90 @@ def _require_scalar(dataset: h5py.Dataset, name: str) -> None:
              location=dataset.name)
 
 
-#   Helper – version detection (string *or* integer attributes)
+# Compound‑attribute helpers
+def _is_compound_attribute(attr) -> bool:
+    """
+    Return ``True`` iff *attr* looks like the ``(value, unit)`` compound
+    attribute defined by the VBT spec.
+    """
+    if not isinstance(attr, np.void):
+        return False
+    # must be a scalar (zero‑dimensional) structured array with two fields
+    if attr.shape != ():
+        return False
+    if not isinstance(attr.dtype, np.dtype) or not attr.dtype.fields:
+        return False
+    fields = set(attr.dtype.fields)  # type: ignore[arg-type]
+    return {"value", "unit"} <= fields
+
+
+def _require_compound_attribute(obj: h5py.Group | h5py.Dataset, name: str) -> None:
+    """
+    Validate that ``obj.attrs[name]`` is a compound attribute ``(value, unit)``.
+    The function checks:
+
+    * presence,
+    * correct dtype (scalar structured array with fields ``value`` and ``unit``),
+    * the ``unit`` field is a UTF‑8 string (or empty/None),
+    * the ``value`` field is a scalar of a supported native HDF5 type *or* a
+      UTF‑8 string (JSON‑encoded value).
+
+    The check does **not** decode JSON – that is left to the caller.
+    """
+    _require_attr(obj, name)
+    attr = obj.attrs[name]
+
+    _require(_is_compound_attribute(attr),
+             f"Attribute '{name}' must be a compound attribute with fields "
+             "'value' and 'unit'", obj.name)
+
+    # ---- unit field ----------------------------------------------------
+    unit_val = attr["unit"]
+    if isinstance(unit_val, bytes):
+        unit_val = unit_val.decode("utf-8")
+    _require(isinstance(unit_val, (str, bytes)),
+             f"Compound attribute '{name}' field 'unit' must be a UTF‑8 string "
+             f"(got {type(unit_val)!r})", obj.name)
+
+    # ---- value field ---------------------------------------------------
+    value_val = attr["value"]
+    # ``value`` may be a native scalar (int, float, bool) or a UTF‑8 string.
+    if isinstance(value_val, (bytes, str)):
+        # JSON‑encoded strings are allowed – we just verify that we have a string.
+        pass
+    else:
+        # native NumPy scalar types are acceptable.
+        _require(isinstance(value_val, (np.generic, int, float, bool)),
+                 f"Compound attribute '{name}' field 'value' must be a scalar "
+                 f"numeric/boolean or a UTF‑8 string; got {type(value_val)!r}",
+                 obj.name)
+
+
+def _check_all_compound_attributes(group: h5py.Group) -> None:
+    """
+    Iterate over **all** attributes of ``group`` and ensure every attribute
+    conforms to the ``(value, unit)`` compound format required by the spec.
+    """
+    for attr_name in group.attrs:
+        _require_compound_attribute(group, attr_name)
+
+
+def _require_unit_attribute(parent: h5py.Group | h5py.Dataset, name: str) -> None:
+    """
+    Helper that checks the presence of a *unit* attribute on a dataset and
+    guarantees that it is a UTF‑8 string (or empty string).
+
+    The VBT spec stores units as **plain string attributes** (not as part of a
+    compound attribute).  This function is used for the dataset‑level unit
+    attributes (e.g. ``times`` → ``unit``).
+    """
+    _require_attr(parent, name)
+    val = parent.attrs[name]
+    _require(isinstance(val, (str, bytes)),
+             f"Attribute '{name}' must be a UTF‑8 string (unit)", parent.name)
+
+
+# Version detection (string *or* integer attributes)
 def _detect_version(attrs: h5py.AttributeManager) -> str | None:
     """
     Resolve the bundle's version as a dotted string.
@@ -126,7 +209,7 @@ def _detect_version(attrs: h5py.AttributeManager) -> str | None:
         try:
             major_i = int(major)
             minor_i = int(minor)
-        except Exception:          # pragma: no cover – defensive
+        except Exception:  # pragma: no cover – defensive
             return None
 
         patch = attrs.get("format_version_patch")
@@ -142,14 +225,14 @@ def _detect_version(attrs: h5py.AttributeManager) -> str | None:
         if isinstance(legacy, bytes):
             try:
                 legacy = legacy.decode("utf-8")
-            except Exception:      # pragma: no cover
+            except Exception:  # pragma: no cover
                 return None
         return str(legacy)
 
     return None
 
 
-#   COMMON (version‑agnostic) checks
+# COMMON (version‑agnostic) checks
 def _check_root(file: h5py.File) -> None:
     """Root attribute ``format_version`` *or* integer version attributes must exist
     and be supported."""
@@ -171,8 +254,13 @@ def _check_global(file: h5py.File) -> None:
     """``/StandardFormat/Global`` with the two mandatory attributes."""
     std = file["StandardFormat"]
     glob = _require_group(std, "Global")
-    _require_attr(glob, "experiment_info")
-    _require_attr(glob, "parameter_simulation_mapping")
+
+    # --- mandatory compound attributes -------------------------------------------------
+    for mandatory in ("experiment_info", "parameter_simulation_mapping"):
+        _require_compound_attribute(glob, mandatory)
+
+    # The spec also allows *any* user‑defined metadata – they must all be compound.
+    _check_all_compound_attributes(glob)
 
 
 def _check_simulations(file: h5py.File) -> List[h5py.Group]:
@@ -239,7 +327,7 @@ def _common_simulation_prelude(sim_grp: h5py.Group) -> Tuple[h5py.Group, h5py.Gr
     Checks that are identical for *all* versions:
 
     * ``Configuration`` & ``Parameters`` groups exist and contain at least one
-      attribute,
+      **compound** attribute,
     * ``Stimuli`` group exists and contains at least one sub‑stimulus per
       population,
     * each stimulus sub‑group must contain the three mandatory datasets
@@ -252,12 +340,16 @@ def _common_simulation_prelude(sim_grp: h5py.Group) -> Tuple[h5py.Group, h5py.Gr
     params = _require_group(sim_grp, "Parameters")
     stimuli = _require_group(sim_grp, "Stimuli")
 
+    # --- both groups must contain at least one *compound* attribute ------------
     _require(len(config.attrs) > 0,
              "Configuration group must contain at least one attribute",
              config.name)
+    _check_all_compound_attributes(config)
+
     _require(len(params.attrs) > 0,
              "Parameters group must contain at least one attribute",
              params.name)
+    _check_all_compound_attributes(params)
 
     # Stimuli checks (identical for v1.0 and v2.0)
     for pop_name, pop_grp in stimuli.items():
@@ -278,6 +370,10 @@ def _common_simulation_prelude(sim_grp: h5py.Group) -> Tuple[h5py.Group, h5py.Gr
             _require(limits.shape[0] == values.shape[0] + 1,
                      f"len(Limits) ({limits.shape[0]}) must be len(Values)+1 ({values.shape[0] + 1})",
                      pop_grp.name)
+
+            # unit attributes for the two numeric datasets
+            _require_unit_attribute(limits, "unit")
+            _require_unit_attribute(values, "unit")
         else:
             # Nested layout – each sub‑stimulus must have Limits/Values.
             for sub_name, sub_grp in pop_grp.items():
@@ -292,8 +388,22 @@ def _common_simulation_prelude(sim_grp: h5py.Group) -> Tuple[h5py.Group, h5py.Gr
                 _require(limits.shape[0] == values.shape[0] + 1,
                          f"len(Limits) ({limits.shape[0]}) must be len(Values)+1 ({values.shape[0] + 1})",
                          sub_grp.name)
+
+                # unit attributes for the numeric datasets
+                _require_unit_attribute(limits, "unit")
+                _require_unit_attribute(values, "unit")
+
+                # optional extra attributes on the sub‑stimulus must themselves be
+                # compound (the spec allows protocol‑specific metadata here)
+                for extra_attr in sub_grp.attrs:
+                    if extra_attr in ("unit",):  # already handled
+                        continue
+                    _require_compound_attribute(sub_grp, extra_attr)
+
             # In both layouts we also require a ``StimType`` dataset somewhere.
             _require_dataset(pop_grp, "StimType")
+        # end of flat / nested handling
+
     return config, params, stimuli
 
 
@@ -334,6 +444,14 @@ def _check_one_simulation_v1(sim_grp: h5py.Group, seen_populations: List[str]) -
             times = _require_dataset(neu_grp, "times")
             _require(times.ndim == 1,
                      "Neuron times must be 1‑D", times.name)
+
+            # unit attribute on ``times``
+            _require_unit_attribute(times, "unit")
+
+            # monotonicity (strictly increasing)
+            data = times[()]
+            _require(np.all(np.diff(data) > 0),
+                     "Neuron times must be strictly increasing", times.name)
 
     # Consistency of population names across simulations (if we already saw
     # some)
@@ -388,11 +506,18 @@ def _check_one_simulation_v2(sim_grp: h5py.Group, seen_populations: List[str]) -
             times = _require_dataset(neu_grp, "times")
             _require(times.ndim == 1,
                      "Neuron times must be 1‑D", times.name)
+            _require_unit_attribute(times, "unit")
+            # monotonicity (strictly increasing, even if empty)
+            if times.shape[0] > 0:
+                data = times[()]
+                _require(np.all(np.diff(data) > 0),
+                         "Neuron times must be strictly increasing", times.name)
 
             # voltage
             voltage = _require_dataset(neu_grp, "voltage")
             _require(voltage.ndim == 1,
                      "Neuron voltage must be 1‑D", voltage.name)
+            _require_unit_attribute(voltage, "unit")
 
             # virtual – scalar
             virtual = _require_dataset(neu_grp, "virtual")
@@ -408,7 +533,9 @@ def _check_one_simulation_v2(sim_grp: h5py.Group, seen_populations: List[str]) -
     return pop_extracted
 
 
-# Version‑dispatch table – makes it easy to add a new schema version
+# ----------------------------------------------------------------------
+# ── Version‑dispatch table – makes it easy to add a new schema version
+# ----------------------------------------------------------------------
 VERSION_REGISTRY: dict[
     str,
     Callable[[h5py.Group, List[str]], List[str]]
@@ -418,7 +545,9 @@ VERSION_REGISTRY: dict[
 }
 
 
-# Public validation function (used by the CLI and by library callers)
+# ----------------------------------------------------------------------
+# ── Public validation function (used by the CLI and by library callers)
+# ----------------------------------------------------------------------
 def validate_master_bundle(
         bundle_path: Path,
         *,
@@ -466,7 +595,7 @@ def validate_master_bundle(
         #   Run version‑agnostic (common) checks
         for fn in (_check_root, _check_standardformat, _check_global, _check_simulations):
             logger.debug("Running check %s", fn.__name__)
-            result = fn(hf)                          # type: ignore[arg-type]
+            result = fn(hf)  # type: ignore[arg-type]
             if fn is _check_simulations:
                 sim_groups: List[h5py.Group] = result  # type: ignore[assignment]
 
@@ -518,7 +647,7 @@ def validate_master_bundle(
     )
 
 
-#   Command‑line interface
+# Command‑line interface
 def _parse_cli_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     """
     Parse the command‑line arguments for the validator script.
@@ -611,6 +740,6 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    # ``sys.exit`` makes sure the integer return value becomes the process' exit
-    # code – this mirrors the behaviour of typical CLI utilities.
+    # ``sys.exit`` makes sure the integer return value becomes the process'
+    # exit code – this mirrors the behaviour of typical CLI utilities.
     sys.exit(main())

@@ -82,13 +82,11 @@ class Neuron(HDF5Serializable):
 
         # times
         store_dataset(grp, "times", self.times.astype(np.float64), compression=True)
-        if self.times_unit is not None:
-            grp["times"].attrs["unit"] = self.times_unit
+        grp["times"].attrs["unit"] = self.times_unit if self.times_unit is not None else "None"
 
         # voltage
         store_dataset(grp, "voltage", self.voltage.astype(np.float64), compression=True)
-        if self.voltage_unit is not None:
-            grp["voltage"].attrs["unit"] = self.voltage_unit
+        grp["voltage"].attrs["unit"] = self.voltage_unit if self.voltage_unit is not None else "None"
 
         # virtual
         # Store as a scalar boolean dataset.
@@ -154,8 +152,14 @@ class Neuron(HDF5Serializable):
         return cls(
             index=idx,
             times=times,
-            times_unit=Unit(times_unit) if times_unit is not None else None,
+            # Convert the supplied string to a ``Unit`` enum **only** when a
+            # real value is provided.  If ``times_unit`` is ``None`` (actual
+            # Python ``None``) or the literal string ``"None"``, we keep the
+            # attribute as ``None`` so the object knows that no unit was given.
+            times_unit=Unit(times_unit) if times_unit is not None and times_unit != "None" else None,
             voltage=voltage,
-            voltage_unit=Unit(voltage_unit) if voltage_unit is not None else None,
+            # Same logic as above: turn a valid unit string into a ``Unit`` enum,
+            # otherwise store ``None`` to indicate the absence of a unit.
+            voltage_unit=Unit(voltage_unit) if voltage_unit is not None and voltage_unit != "None" else None,
             virtual=virtual,
         )

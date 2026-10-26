@@ -30,10 +30,7 @@ import numpy as np
 from numpy import dtype, ndarray
 
 from .protocol_exporter import ProtocolExporter
-from ..schema.configuration import Configuration
-from ..schema.map import Map
-from ..schema.simulation_parameters import SimulationParameters
-from ..schema.stimuli_group import StimuliGroup
+from ..schema.simulation import Simulation
 from ..utils.helpers import normalize, get_discretized_stimulus, get_firing_rates
 
 
@@ -222,32 +219,33 @@ class RateExporter(ProtocolExporter):
               (order follows :data:`PARAMETERS`).
             * ``"populations"`` – list of population names present in the spike map.
         """
-        # Extract simulation parameters
-        param_section = SimulationParameters.from_hdf5(sim_group["Parameters"])
-        config_section = Configuration.from_hdf5(sim_group["Configuration"])
 
-        # Pull out the three parameters of interest in the order defined by PARAMETERS.
+        try:
+            # The schema classes raise clear exceptions if required groups are
+            # missing; we simply propagate them to the caller.
+            sim_obj: Simulation = Simulation.from_hdf5(sim_group)
+        except Exception as exc:
+            self.log.error("Failed to load simulation %s: %s", sim_id, exc)
+            raise
+
+        # Pull out the parameters of interest in the order defined by PARAMETERS.
         param_vals = np.fromiter(
-            (float(param_section.get_value(p)) for p in param_section.iter_keys()),
+            (float(sim_obj.parameters.get_value(p)) for p in sim_obj.parameters.iter_keys()),
             dtype=float,
         )
 
         # Discretise the stimulus
-        stimuli_group = StimuliGroup.from_hdf5(sim_group["Stimuli"])
-        disc_stim = get_discretized_stimulus(stimuli_group, self.bin_size)
-
-        # Build the spike dictionary expected by ``get_firing_rates``
-        output_map = Map.from_hdf5(sim_group["Output"])
+        disc_stim = get_discretized_stimulus(sim_obj.stimuli, self.bin_size)
 
         # ``spikes`` maps ``population_name → {"times": np.ndarray, "indices": …}``.
         spikes: dict[str, dict[str, Any]] = {}
         # Number of recorded neurons per population (required for firing‑rate scaling).
-        neurons_count: dict[str, int] = config_section.get_value("record_neurons")
+        neurons_count: dict[str, int] = sim_obj.configuration.get_value("record_neurons")
 
         # Keep a list of population names to forward back to the caller.
-        populations = [pop.population_name for pop in output_map.populations]
+        populations = [pop.population_name for pop in sim_obj.output_map.populations]
 
-        for pop in output_map.populations:
+        for pop in sim_obj.output_map.populations:
             # Concatenate spike times of *all* neurons that belong to this population.
             all_times = np.concatenate([n.times for n in pop.neurons]) if pop.neurons else np.empty(0)
 
@@ -257,7 +255,7 @@ class RateExporter(ProtocolExporter):
 
         # Compute firing‑rates
         t0 = 0.0  # start of the simulation (seconds)
-        t_sim_ms = float(config_section.get_value("t_sim"))  # total simulation time (ms)
+        t_sim_ms = float(sim_obj.configuration.get_value("t_sim"))  # total simulation time (ms)
         t1 = t_sim_ms / 1000.0  # convert to seconds
 
         # ``get_firing_rates`` returns a tuple ``(times, rates)`` – we keep only the rates.
@@ -276,12 +274,12 @@ class RateExporter(ProtocolExporter):
             firing_rate.shape,
             disc_stim.shape,
             param_vals,
-            param_section.keys(),
+            sim_obj.parameters.keys(),
         )
         return {
             "firing_rate": firing_rate,
             "stimulus": disc_stim,
-            "params": param_section.keys(),
+            "params": sim_obj.parameters.keys(),
             "param_values": param_vals,
             "populations": populations,
         }

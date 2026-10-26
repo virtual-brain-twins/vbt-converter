@@ -88,12 +88,10 @@ class Stimulus(HDF5Serializable):
             The HDF5 group that will receive the new datasets.
         """
         store_dataset(parent, "Limits", self.limits, compression=False)
-        if self.limits_unit is not None:
-            parent["Limits"].attrs["unit"] = self.limits_unit
+        parent["Limits"].attrs["unit"] = self.limits_unit if self.limits_unit is not None else "None"
 
         store_dataset(parent, "Values", self.values, compression=False)
-        if self.values_unit is not None:
-            parent["Values"].attrs["unit"] = self.values_unit
+        parent["Values"].attrs["unit"] = self.values_unit if self.values_unit is not None else "None"
 
         # StimType is a variable‑length UTF‑8 string dataset
         dt = h5py.string_dtype()
@@ -146,6 +144,6 @@ class Stimulus(HDF5Serializable):
             limits=limits,
             values=values,
             stim_type=stim_type if stim_type is not None else "",
-            limits_unit=Unit(lim_u) if lim_u is not None else None,
-            values_unit=Unit(val_u) if val_u is not None else None,
+            limits_unit=Unit(lim_u) if lim_u is not None and lim_u != "None" else None,
+            values_unit=Unit(val_u) if val_u is not None and val_u != "None" else None,
         )

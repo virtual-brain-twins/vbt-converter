@@ -23,7 +23,8 @@ from typing import Dict, Any, Tuple, Optional
 import h5py
 
 from converters.schema.hdf5_serializable import HDF5Serializable
-from converters.utils.compound_attribute_helper import write_compound_attr, read_compound_attr
+from converters.utils.common import read_compound_attr_parsed
+from converters.utils.compound_attribute_helper import write_compound_attr
 from converters.utils.dataset_helpers import make_group
 from converters.utils.units import Unit
 
@@ -119,11 +120,11 @@ class GlobalSection(HDF5Serializable):
         for attr_name in grp.attrs:
             if attr_name in ("experiment_info", "parameter_simulation_mapping"):
                 continue
-            val, unit = read_compound_attr(grp, attr_name)
+            val, unit = read_compound_attr_parsed(grp, attr_name)
             mapping[attr_name] = (val, unit)
 
-        exp_info, _ = read_compound_attr(grp, "experiment_info")
-        param_map, _ = read_compound_attr(grp, "parameter_simulation_mapping")
+        exp_info, _ = read_compound_attr_parsed(grp, "experiment_info")
+        param_map, _ = read_compound_attr_parsed(grp, "parameter_simulation_mapping")
         return cls(
             metadata_mapping=mapping,
             parameter_simulation_mapping=param_map,

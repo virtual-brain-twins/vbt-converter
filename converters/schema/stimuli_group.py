@@ -16,7 +16,8 @@ from typing import Any, Dict, List, Tuple, Optional
 import h5py
 
 from converters.schema.stimulus import Stimulus
-from converters.utils.compound_attribute_helper import write_compound_attr, read_compound_attr
+from converters.utils.common import read_compound_attr_parsed
+from converters.utils.compound_attribute_helper import write_compound_attr
 from converters.utils.units import Unit
 
 
@@ -103,7 +104,7 @@ class StimuliGroup:
             # read back the *compound* attributes
             attrs: Dict[str, Any] = {}
             for attr_key in sub_grp.attrs:
-                val, _ = read_compound_attr(sub_grp, attr_key)  # unit is ignored for meta‑data
+                val, _ = read_compound_attr_parsed(sub_grp, attr_key)  # unit is ignored for meta‑data
                 attrs[attr_key] = val
             attr_map[sub_name] = attrs
 

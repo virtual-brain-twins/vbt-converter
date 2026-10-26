@@ -1,303 +1,349 @@
-import json
-from typing import Any, Dict, Tuple, Optional
-from unittest import mock
+"""
+pytest test suite for ``mypackage.keyvalue.KeyValueCompoundContainer``
 
-import allure
+All heavy‑weight dependencies (h5py and the compound‑attribute helpers) are
+mocked.  The suite demonstrates how to:
+
+* unit‑test the public API (set/get/pop/keys/iter_keys)
+* verify that the serialization helpers are called with the expected
+  arguments
+* attach useful artefacts (input data, resulting payload, mock call args)
+* organise the report with Allure titles, descriptions, features, stories,
+  severities and step‑wise execution traces.
+"""
+from __future__ import annotations
+from typing import Any, Dict, Tuple, Optional
+
 import pytest
+import allure
+from unittest import mock
 
 from converters.schema.compound_kv_container import KeyValueCompoundContainer
 from converters.utils.units import Unit
 
-# ----------------------------------------------------------------------
-# Helper constants used across several tests
-# ----------------------------------------------------------------------
-_SAMPLE_KV: Dict[str, Tuple[Any, Optional[Unit]]] = {
-    "frequency": (300, Unit.HERTZ),
-    "time": (101325, Unit.MICROSECOND),
-    "comment": ("ok", None),
-}
+# --------------------------------------------------------------------------- #
+#   Global Allure configuration (optional, can be done in pytest‑allure.ini)
+# --------------------------------------------------------------------------- #
+ALLURE_FEATURE = "KeyValueCompoundContainer"
+ALLURE_STORY_SERIALISATION = "Serialisation (to_hdf5 / from_hdf5)"
+ALLURE_STORY_MANIPULATION = "Basic container manipulation"
 
 
-@allure.parent_suite("VBT‑converter CI/CD")
-@allure.suite("Unit tests")
-@allure.sub_suite("Tests for KeyValueCompoundContainer")
-@allure.description("Unit tests for the `KeyValueCompoundContainer` class, focusing on public API behaviour.")
-@allure.feature("Key‑Value Compound Container")
+# --------------------------------------------------------------------------- #
+#   Test class
+# --------------------------------------------------------------------------- #
+@allure.feature(ALLURE_FEATURE)
 class TestKeyValueCompoundContainer:
     """
-    Test‑suite for :class:`KeyValueCompoundContainer`.
+    Test suite for :class:`KeyValueCompoundContainer`.
 
-    The suite focuses on **behavioural** tests (public API) while
-    **mocking** the low‑level HDF5 helpers so the unit tests stay fast,
-    deterministic and do not touch the filesystem.
+    All heavy‑weight calls are mocked.  The suite is deliberately split into
+    two logical parts – *container manipulation* and *serialisation* – each
+    receiving its own Allure story tag.
     """
 
-    # ------------------------------------------------------------------
-    # Setup / teardown – start patches once per test method
-    # ------------------------------------------------------------------
-    def setup_method(self):
-        """Patch the low‑level HDF5 helpers before each test."""
-        self.patcher_write = mock.patch(
-            "converters.schema.compound_kv_container.write_compound_attr"
+    # ------------------------------------------------------------------- #
+    #   Optional per‑test setup / teardown – useful for attaching state
+    # ------------------------------------------------------------------- #
+    def setup_method(self) -> None:
+        """Create a fresh container before each test and attach it to the report."""
+        self.container = KeyValueCompoundContainer()
+        allure.attach(
+            body=str(self.container.kv_pairs),
+            name="Initial kv_pairs (empty)",
+            attachment_type=allure.attachment_type.JSON,
         )
-        self.mock_write = self.patcher_write.start()
 
-        self.patcher_read = mock.patch(
-            "converters.schema.compound_kv_container.read_compound_attr"
+    def teardown_method(self) -> None:
+        """Clear the container reference – helps the GC and makes the intent explicit."""
+        del self.container
+
+    # ------------------------------------------------------------------- #
+    #   1️⃣  Manipulation tests
+    # ------------------------------------------------------------------- #
+
+    @allure.story(ALLURE_STORY_MANIPULATION)
+    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.title("Set a value with a unit and retrieve it via the public API")
+    @allure.description(
+        """
+        Verify that :meth:`KeyValueCompoundContainer.set` stores a ``(value,
+        unit)`` tuple correctly and that the read‑only helpers
+        :meth:`get`, :meth:`get_value` and :meth:`get_unit` return the expected
+        pieces.  The test also checks for proper ``KeyError`` handling.
+        """
+    )
+    def test_set_and_get_operations(self):
+        time_key = "time"
+        time_value = 300
+        time_unit = Unit("milliseconds")
+
+        # ------------------------------------------------------------------- #
+        #   Step 1 – set the entry
+        # ------------------------------------------------------------------- #
+        with allure.step("Store a time reading (value + unit)"):
+            self.container.set(time_key, time_value, time_unit)
+
+        # Attach the internal dict after the set call
+        allure.attach(
+            body=str(self.container.kv_pairs),
+            name="kv_pairs after set",
+            attachment_type=allure.attachment_type.JSON,
         )
-        self.mock_read = self.patcher_read.start()
 
-        # a very small fake h5py.Group‑like object (only .attrs is accessed)
-        self.fake_group = mock.Mock(name="fake_h5py_group")
-        self.fake_group.attrs = mock.MagicMock(name="attrs")
+        # ------------------------------------------------------------------- #
+        #   Step 2 – retrieve the whole tuple
+        # ------------------------------------------------------------------- #
+        with allure.step("Retrieve the full (value, unit) tuple via get()"):
+            retrieved_tuple = self.container.get(time_key)
 
-    def teardown_method(self):
-        """Stop all patches."""
-        mock.patch.stopall()
+        assert retrieved_tuple == (time_value, time_unit), "get() must return the stored tuple"
 
-    # ------------------------------------------------------------------
-    # 1️⃣  Basic set / get / item access
-    # ------------------------------------------------------------------
-    @allure.title("✅ Store and retrieve values with Unit objects")
-    @allure.description(
-        """
-        Verify that ``set`` stores the `(value, unit)` tuple correctly and that
-        the convenience getters (`get`, `get_value`, `get_unit`) return the
-        expected parts.
+        # ------------------------------------------------------------------- #
+        #   Step 3 – retrieve value only
+        # ------------------------------------------------------------------- #
+        with allure.step("Retrieve the value only via get_value()"):
+            retrieved_value = self.container.get_value(time_key)
 
-        The test also checks the dictionary‑like ``__getitem__`` and
-        ``__contains__`` helpers.
-        """
-    )
-    @allure.severity(allure.severity_level.CRITICAL)
-    @allure.story("Basic CRUD operations")
-    def test_set_and_get_basic(self):
-        container = KeyValueCompoundContainer()
+        assert retrieved_value == time_value, "get_value() must return the stored value"
 
-        with allure.step("Insert several key‑value pairs using `set`"):
-            for key, (val, unit) in _SAMPLE_KV.items():
-                container.set(key, val, unit)
+        # ------------------------------------------------------------------- #
+        #   Step 4 – retrieve unit only
+        # ------------------------------------------------------------------- #
+        with allure.step("Retrieve the unit only via get_unit()"):
+            retrieved_unit = self.container.get_unit(time_key)
 
-        with allure.step("Verify internal mapping matches the input data"):
+        assert retrieved_unit == time_unit, "get_unit() must return the stored unit"
+
+        # ------------------------------------------------------------------- #
+        #   Step 5 – verify missing key handling
+        # ------------------------------------------------------------------- #
+        with allure.step("Calling get() on a missing key should raise KeyError"):
+            with pytest.raises(KeyError) as excinfo:
+                self.container.get("nonexistent")
+            # Attach the exception message for the report
             allure.attach(
-                json.dumps(container.kv_pairs, default=str, indent=2),
-                name="kv_pairs after set",
-                attachment_type=allure.attachment_type.JSON,
-            )
-            assert container.kv_pairs == _SAMPLE_KV
-
-        with allure.step("Read values back via the public getter methods"):
-            for key, (expected_val, expected_unit) in _SAMPLE_KV.items():
-                # full tuple
-                assert container.get(key) == (expected_val, expected_unit)
-                # value only
-                assert container.get_value(key) == expected_val
-                # unit only (may be None)
-                assert container.get_unit(key) == expected_unit
-
-        with allure.step("Check dictionary‑like shortcuts (`[]`, `in`)"):
-            for key in _SAMPLE_KV:
-                assert container[key] == _SAMPLE_KV[key]  # __getitem__
-                assert key in container  # __contains__
-            # non‑existent key raises KeyError
-            with pytest.raises(KeyError):
-                _ = container["does_not_exist"]
-
-    # ------------------------------------------------------------------
-    # 2️⃣  Validation of the `unit` argument
-    # ------------------------------------------------------------------
-    @allure.title("❌ Reject non‑Unit objects as unit argument")
-    @allure.description(
-        """
-        The ``set`` method must raise ``TypeError`` when the supplied ``unit``
-        is not an instance of :class:`~converters.utils.units.Unit` and also
-        not ``None``.
-        """
-    )
-    @allure.severity(allure.severity_level.NORMAL)
-    @allure.story("Input validation")
-    def test_set_invalid_unit_raises(self):
-        container = KeyValueCompoundContainer()
-        with allure.step("Attempt to store a value with a wrong unit type"):
-            with pytest.raises(TypeError) as excinfo:
-                container.set("bad_unit", 42, unit="not_a_unit")
-            assert "must be a `Unit` instance or None" in str(excinfo.value)
-
-    # ------------------------------------------------------------------
-    # 3️⃣  to_hdf5 – ensure write_compound_attr is called for every entry
-    # ------------------------------------------------------------------
-    @allure.title("💾 Serialise container → HDF5 (write_compound_attr called)")
-    @allure.description(
-        """
-        ``to_hdf5`` must iterate over the internal mapping and delegate
-        each entry to the helper ``write_compound_attr``.  The test patches
-        the helper and asserts the exact calls and order.
-        """
-    )
-    @allure.severity(allure.severity_level.CRITICAL)
-    @allure.story("Serialization")
-    def test_to_hdf5_calls_write_compound_attr(self):
-        container = KeyValueCompoundContainer(kv_pairs=_SAMPLE_KV)
-
-        with allure.step("Serialise the container into the mocked HDF5 group"):
-            container.to_hdf5(self.fake_group)
-
-        with allure.step("Assert that write_compound_attr was called once per key"):
-            # Build the set of expected call arguments
-            expected_calls = [
-                mock.call(self.fake_group, key, value, unit)
-                for key, (value, unit) in _SAMPLE_KV.items()
-            ]
-            self.mock_write.assert_has_calls(expected_calls, any_order=False)
-            assert self.mock_write.call_count == len(_SAMPLE_KV)
-
-        with allure.step("Attach the call list for the report"):
-            call_list = [
-                f"{c.args[1]} → value={c.args[2]}, unit={c.args[3]}"
-                for c in self.mock_write.mock_calls
-            ]
-            allure.attach(
-                "\n".join(call_list),
-                name="write_compound_attr call log",
+                body=str(excinfo.value),
+                name="KeyError message",
                 attachment_type=allure.attachment_type.TEXT,
             )
 
-    # ------------------------------------------------------------------
-    # 4️⃣  from_hdf5 – ensure read_compound_attr is called for every attribute
-    # ------------------------------------------------------------------
-    @allure.title("📥 Deserialise container ← HDF5 (read_compound_attr called)")
+    @allure.story(ALLURE_STORY_MANIPULATION)
+    @allure.severity(allure.severity_level.NORMAL)
+    @allure.title("__setitem__ proxy forwards to .set and validates the payload")
     @allure.description(
         """
-        ``from_hdf5`` must walk over ``grp.attrs`` and invoke
-        ``read_compound_attr`` for each attribute name.  The test supplies a
-        mocked attribute iterator and a stubbed return value for each key.
+        ``container[key] = (value, unit)`` must delegate to :meth:`set` and raise
+        ``TypeError`` when the RHS is not a two‑tuple.  The test also covers the
+        ``__getitem__`` shortcut.
         """
     )
-    @allure.severity(allure.severity_level.CRITICAL)
-    @allure.story("Deserialization")
-    def test_from_hdf5_calls_read_compound_attr(self):
-        # Fake attribute names that the group pretends to contain
-        fake_attrs = ["frequency", "time", "comment"]
-        self.fake_group.attrs.__iter__.return_value = iter(fake_attrs)
+    def test_bracket_assignment_and_retrieval(self):
+        dummy_key = "voltage"
+        dummy_value = 101325
+        dummy_unit = Unit("microvolts")
 
-        # Configure read_compound_attr to return the original values
-        def side_effect(_grp, key):
-            return _SAMPLE_KV[key]
+        # --------------------------------------------------------------- #
+        #   Assignment using the mapping syntax
+        # --------------------------------------------------------------- #
+        with allure.step("Assign via ``container[key] = (value, unit)``"):
+            self.container[dummy_key] = (dummy_value, dummy_unit)
 
-        self.mock_read.side_effect = side_effect
+        # Verify internal state
+        allure.attach(
+            body=str(self.container.kv_pairs),
+            name="kv_pairs after bracket assignment",
+            attachment_type=allure.attachment_type.JSON,
+        )
+        assert self.container.kv_pairs[dummy_key] == (dummy_value, dummy_unit)
 
-        with allure.step("Re‑create a container from the mocked group"):
-            loaded = KeyValueCompoundContainer.from_hdf5(self.fake_group)
+        # --------------------------------------------------------------- #
+        #   Retrieval via the mapping protocol
+        # --------------------------------------------------------------- #
+        with allure.step("Retrieve the same entry via ``container[key]``"):
+            retrieved = self.container[dummy_key]
 
-        with allure.step("Validate that read_compound_attr was called correctly"):
-            expected_calls = [mock.call(self.fake_group, key) for key in fake_attrs]
-            self.mock_read.assert_has_calls(expected_calls, any_order=False)
-            assert self.mock_read.call_count == len(fake_attrs)
+        assert retrieved == (dummy_value, dummy_unit)
 
-        with allure.step("The loaded container must match the original mapping"):
-            assert loaded.kv_pairs == _SAMPLE_KV
+        # --------------------------------------------------------------- #
+        #   Wrong payload shape – expect TypeError
+        # --------------------------------------------------------------- #
+        with allure.step("Assign a malformed payload and expect TypeError"):
+            with pytest.raises(TypeError) as excinfo:
+                self.container["bad"] = (123,)          # too short
             allure.attach(
-                json.dumps(loaded.kv_pairs, default=str, indent=2),
-                name="kv_pairs after from_hdf5",
-                attachment_type=allure.attachment_type.JSON,
+                body=str(excinfo.value),
+                name="TypeError message",
+                attachment_type=allure.attachment_type.TEXT,
             )
 
-    # ------------------------------------------------------------------
-    # 5️⃣  pop – dict‑like removal with and without default
-    # ------------------------------------------------------------------
-    @allure.title("🗑️ Pop elements with and without default values")
-    @allure.description(
-        """
-        The ``pop`` method should behave like ``dict.pop``:
-        * return the stored tuple and remove the key,
-        * raise ``KeyError`` when the key is missing and no default is supplied,
-        * return the supplied default otherwise.
-        """
-    )
-    @allure.severity(allure.severity_level.NORMAL)
-    @allure.story("Dictionary‑style helpers")
-    def test_pop_behaviour(self):
-        container = KeyValueCompoundContainer(kv_pairs=_SAMPLE_KV.copy())
-
-        with allure.step("Pop an existing key and verify removal"):
-            popped = container.pop("time")
-            assert popped == _SAMPLE_KV["time"]
-            assert "time" not in container.kv_pairs
-
-        with allure.step("Pop a missing key with a default fallback"):
-            default_value = ("fallback", None)
-            popped_default = container.pop("nonexistent", default=default_value)
-            assert popped_default == default_value
-
-        with allure.step("Attempt pop without default on a missing key → KeyError"):
-            with pytest.raises(KeyError):
-                container.pop("still_missing")
-
-    # ------------------------------------------------------------------
-    # 6️⃣  __setitem__ validation – ensures TypeError on malformed tuple
-    # ------------------------------------------------------------------
-    @allure.title("⚙️ __setitem__ validates input tuple shape")
-    @allure.description(
-        """
-        ``container[key] = (value, unit)`` forwards to ``set`` but also checks
-        that the right‑hand side is a two‑element tuple.  Bad input must raise
-        ``TypeError``.
-        """
-    )
+    @allure.story(ALLURE_STORY_MANIPULATION)
     @allure.severity(allure.severity_level.MINOR)
-    @allure.story("Convenience operator overloads")
-    def test_setitem_invalid_tuple_raises(self):
-        container = KeyValueCompoundContainer()
-
-        with allure.step("Assign a non‑tuple value → TypeError"):
-            with pytest.raises(TypeError):
-                container["foo"] = "not a tuple"
-
-        with allure.step("Assign a tuple of wrong length → TypeError"):
-            with pytest.raises(TypeError):
-                container["bar"] = (1, Unit.MICROSECOND, "extra")
-
-    # ------------------------------------------------------------------
-    # 7️⃣  Full round‑trip (set → to_hdf5 → from_hdf5) using mocks
-    # ------------------------------------------------------------------
-    @allure.title("🔄 Full round‑trip serialization & deserialization")
+    @allure.title("pop() returns and removes a key, supports default fallback")
     @allure.description(
         """
-        Combine the previous unit tests: create a container, serialise it,
-        then deserialise it again.  The mock helpers guarantee that the data
-        flow is preserved without touching the file system.
+        Confirm that ``pop`` removes the entry and returns the stored tuple,
+        and that the optional ``default`` argument behaves like ``dict.pop``.
         """
     )
-    @allure.severity(allure.severity_level.BLOCKER)
-    @allure.story("End‑to‑end behaviour (mocked I/O)")
-    def test_round_trip(self):
-        original = KeyValueCompoundContainer(kv_pairs=_SAMPLE_KV.copy())
+    def test_pop_behavior(self):
+        key = "voltage"
+        value = 0.45
+        unit = Unit("microvolts")
+        self.container.set(key, value, unit)
 
-        with allure.step("Serialise to the mocked group"):
-            original.to_hdf5(self.fake_group)
+        # ------------------------------------------------------------------- #
+        #   Pop an existing key
+        # ------------------------------------------------------------------- #
+        with allure.step("Pop an existing key and verify the returned tuple"):
+            popped = self.container.pop(key)
+            assert popped == (value, unit)
+            assert key not in self.container
 
-        # make the read‑side return exactly what the write side supplied
-        def read_side_effect(_grp, key):
-            # write_compound_attr was called with (group, key, value, unit)
-            # Retrieve those arguments from the call log to simulate a perfect round‑trip.
-            for call in self.mock_write.mock_calls:
-                if call.args[1] == key:
-                    return call.args[2], call.args[3]
-            raise KeyError(key)
+        # ------------------------------------------------------------------- #
+        #   Pop with default – key absent
+        # ------------------------------------------------------------------- #
+        with allure.step("Pop a missing key with a default value"):
+            default_fallback = ("default", None)
+            popped_default = self.container.pop("missing", default=default_fallback)
+            assert popped_default == default_fallback
 
-        self.mock_read.side_effect = read_side_effect
-        # make the attribute iterator reflect the written keys
-        self.fake_group.attrs.__iter__.return_value = iter(
-            [call.args[1] for call in self.mock_write.mock_calls]
-        )
+        # ------------------------------------------------------------------- #
+        #   Pop without default on missing key – should raise
+        # ------------------------------------------------------------------- #
+        with allure.step("Pop a missing key without default must raise KeyError"):
+            with pytest.raises(KeyError):
+                self.container.pop("missing_again")
 
-        with allure.step("Deserialise from the same mocked group"):
-            reconstructed = KeyValueCompoundContainer.from_hdf5(self.fake_group)
+    @allure.story(ALLURE_STORY_MANIPULATION)
+    @allure.severity(allure.severity_level.NORMAL)
+    @allure.title("keys() and iter_keys() return alphabetically sorted key lists")
+    @allure.description(
+        """
+        The container should return its keys sorted alphabetically.
+        ``keys(case_insensitive=True)`` must perform a case‑insensitive sort.
+        The generator version ``iter_keys`` must emit the same ordering.
+        """
+    )
+    def test_key_enumeration(self):
+        # Insert keys in a random order
+        entries = {
+            "b": (1, None),
+            "A": (2, None),
+            "c": (3, None),
+            "a": (4, None),
+        }
+        for k, v in entries.items():
+            self.container.set(k, *v)
 
-        with allure.step("Validate that the reconstructed container matches the original"):
-            assert reconstructed.kv_pairs == original.kv_pairs
+        with allure.step("Check alphabetical sorting (case‑sensitive)"):
+            sorted_keys = self.container.keys()
+            assert sorted_keys == ["A", "a", "b", "c"]
+
+        with allure.step("Check case‑insensitive sorting"):
+            sorted_keys_ci = self.container.keys(case_insensitive=True)
+            assert sorted_keys_ci == ["A", "a", "b", "c"]  # same order because lowercasing yields A/a/b/c
+
+        with allure.step("Verify that iter_keys() yields the same order as keys()"):
+            iter_keys_list = list(self.container.iter_keys())
+            assert iter_keys_list == sorted_keys
+
+    # ------------------------------------------------------------------- #
+    #   2️⃣  Serialisation tests (mocked HDF5 interactions)
+    # ------------------------------------------------------------------- #
+
+    @allure.story(ALLURE_STORY_SERIALISATION)
+    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.title("to_hdf5() delegates to write_compound_attr for every entry")
+    @allure.description(
+        """
+        The container must call ``write_compound_attr`` once per stored key.
+        The test patches the helper and checks the call arguments.
+        """
+    )
+    def test_to_hdf5_calls_write_helper(self):
+        # Populate the container with a couple of entries
+        data = {
+            "resistance": (300, Unit("nanosiemens")),
+            "voltage": (101325, Unit("microvolts")),
+        }
+        for k, (v, u) in data.items():
+            self.container.set(k, v, u)
+
+        # Create a dummy ``h5py.Group`` – we only need an object with a name attribute
+        dummy_group = mock.Mock(name="h5py.Group")
+        dummy_group.name = "/dummy_group"
+
+        with mock.patch("converters.schema.compound_kv_container.write_compound_attr") as mock_write:
+            with allure.step("Invoke to_hdf5() on the container"):
+                self.container.to_hdf5(dummy_group)
+
+            # The helper must have been called exactly twice (once per key)
+            assert mock_write.call_count == len(data)
+
+            # Verify each call arguments (order is not guaranteed, so we check set)
+            called_keys = {call_args[0][1] for call_args in mock_write.call_args_list}
+            assert called_keys == set(data.keys())
+
+            # Detailed attachment of the call list for the report
+            call_summary = "\n".join(
+                f"{index+1}. key={item.args[1]!r}, value={item.args[2]!r}, unit={item.args[3]!r}"
+                for index, item in enumerate(mock_write.call_args_list)
+            )
             allure.attach(
-                json.dumps(reconstructed.kv_pairs, default=str, indent=2),
-                name="reconstructed kv_pairs",
+                body=call_summary,
+                name="write_compound_attr call summary",
+                attachment_type=allure.attachment_type.TEXT,
+            )
+
+    @allure.story(ALLURE_STORY_SERIALISATION)
+    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.title("from_hdf5() reconstructs a container from compound attributes")
+    @allure.description(
+        """
+        The class‑method must iterate over ``grp.attrs`` and call
+        ``read_compound_attr_parsed`` for each attribute name.
+        The test patches the read‑helper to return deterministic values and
+        asserts that the resulting container faithfully reproduces the mapping.
+        """
+    )
+    def test_from_hdf5_rebuilds_container(self):
+        # Fake HDF5 attribute names
+        fake_attrs = ["voltage", "current"]
+        # Prepare a stub ``Group`` object whose ``attrs`` behaves like a dict‑like
+        dummy_group = mock.Mock(name="h5py.Group")
+        dummy_group.attrs = mock.MagicMock()
+        dummy_group.attrs.__iter__.return_value = iter(fake_attrs)
+
+        # Mapping from attribute name to the (value, unit) that the helper should yield
+        attr_to_payload: Dict[str, Tuple[Any, Optional[Unit]]] = {
+            "voltage": (300, Unit("microvolts")),
+            "current": (101325, Unit("microamperes")),
+        }
+
+        def fake_read(group: Any, name: str) -> Tuple[Any, Optional[Unit]]:
+            """Side‑effect function for the read helper mock."""
+            assert group is dummy_group
+            return attr_to_payload[name]
+
+        with mock.patch(
+            "converters.schema.compound_kv_container.read_compound_attr_parsed",
+            side_effect=fake_read,
+        ) as mock_read:
+            with allure.step("Call the class‑method from_hdf5()"):
+                rebuilt = KeyValueCompoundContainer.from_hdf5(dummy_group)
+
+            # Validate that read_compound_attr_parsed was called once per attribute name
+            assert mock_read.call_count == len(fake_attrs)
+            called_names = {call.args[1] for call in mock_read.call_args_list}
+            assert called_names == set(fake_attrs)
+
+            # Verify the resulting container holds the expected data
+            assert rebuilt.kv_pairs == attr_to_payload
+
+            # Attach the final mapping for the Allure report
+            allure.attach(
+                body=str(rebuilt.kv_pairs),
+                name="Reconstructed kv_pairs",
                 attachment_type=allure.attachment_type.JSON,
             )

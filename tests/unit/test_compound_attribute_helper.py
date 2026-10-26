@@ -1,403 +1,450 @@
+"""
+Pytest‑style test suite for ``converters.utils.h5compound`` (the module that
+contains ``_dtype_for_value``, ``write_compound_attr`` and ``read_compound_attr``).
+
+All tests are heavily **mocked** – we never touch a real HDF5 file – and they are
+fully instrumented with **Allure** annotations so that the generated report
+contains a clear hierarchy, step‑by‑step execution trace and useful artefacts
+(inputs, intermediate values and expected calls).
+
+Run the suite with the Allure plugin, e.g.:
+
+    pytest -q --alluredir=./allure-results
+    allure serve ./allure-results
+"""
+
+from __future__ import annotations
+
 import json
-from unittest import mock
-from unittest.mock import MagicMock
+import sys
+from typing import Any, Union
+from unittest.mock import MagicMock, call, patch
 
 import allure
+import h5py
+import numpy as np
 import pytest
 
-from converters.utils.compound_attribute_helper import write_compound_attr, read_compound_attr
-from converters.utils.units import Unit
+from converters.utils.compound_attribute_helper import _dtype_for_value, write_compound_attr, read_compound_attr
 
 
-# ----------------------------------------------------------------------
-# Helper – a tiny “pretty” wrapper around a structured‑array‑like dict.
-# ----------------------------------------------------------------------
-def _make_fake_compound(type_name: str, serialized: str, unit_str: str = ""):
-    """
-    Produce a fake compound attribute that mimics the ``np.empty((), dtype=_COMPOUND_DTYPE)``
-    object returned by H5PY.  The object behaves like a NumPy structured array
-    when accessed by the ``[]`` operator.
-    """
-    return {
-        "type": type_name,
-        "value": serialized,
-        "unit": unit_str,
-    }
+@allure.feature("HDF5 compound attribute utilities")
+@allure.story("Low‑level dtype mapping")
+class TestDtypeMapping:
+    """Tests for the private ``_dtype_for_value`` helper."""
 
-
-# ----------------------------------------------------------------------
-# The actual test class
-# ----------------------------------------------------------------------
-@allure.parent_suite("VBT‑converter CI/CD")
-@allure.suite("Unit tests")
-@allure.sub_suite("Tests for HDF5 Compound Attribute Utilities")
-@allure.description("Unit tests for the `write_compound_attr` and `read_compound_attr` helpers.")
-@allure.feature("HDF5 Compound Attribute Utilities")
-class TestCompoundAttributeUtils:
-    """
-    A pytest‑style test class that validates the public helpers
-    :func:`write_compound_attr` and :func:`read_compound_attr`.
-
-    The tests **mock** the internal encoder/decoder functions as well
-    as the H5PY ``attrs`` mapping so that we can:
-
-    * verify proper delegation,
-    * assert the exact payload that is written,
-    * and guarantee that the decoder receives the expected arguments.
-    """
-
-    # ------------------------------------------------------------------
-    # Optional fixture‑style set‑up / tear‑down – creates fresh mocks for
-    # every test method.
-    # ------------------------------------------------------------------
-    def setup_method(self):
-        """Create fresh MagicMock objects for each test case."""
-        self.parent_group = MagicMock(name="h5py.Group")
-        # ``attrs`` is itself a mapping‑like object on an H5PY group.
-        self.parent_group.attrs = MagicMock(name="attrs")
-
-    def teardown_method(self):
-        """Release references – not strictly required but helps CPython GC."""
-        self.parent_group = None
-
-    # ------------------------------------------------------------------
-    # WRITE TESTS
-    # ------------------------------------------------------------------
-    @allure.title("Write a compound attribute – normal flow")
+    @allure.title("Supported Python scalars are mapped to correct NumPy dtypes")
     @allure.description(
         """
-        Verify that **write_compound_attr**:
-
-        1. Calls the internal ``_encode_value`` with the original Python value.
-        2. Builds a compound NumPy‑structured object with the correct fields.
-        3. Calls ``parent.attrs.create`` with the attribute name and the compound
-           payload.
-
-        The test uses a ``MagicMock`` for the parent group, therefore no real
-        HDF5 file is touched.
-        """
-    )
-    @allure.severity(allure.severity_level.BLOCKER)
-    @allure.story("Create a new attribute on a group")
-    @mock.patch("converters.utils.compound_attribute_helper._encode_value")
-    def test_write_compound_attribute_calls_encoder_and_attrs_create(
-            self,
-            mock_encode,
-    ):
-        # ------------------------------------------------------------------
-        # Arrange – test data & mock behaviours
-        # ------------------------------------------------------------------
-        test_value = {"temperature": 23.5, "unit": "C"}  # any JSON‑serialisable object
-        expected_type = "json"
-        expected_serial = json.dumps(test_value)
-
-        # ``_encode_value`` should return the type‑identifier and serialised string.
-        mock_encode.return_value = (expected_type, expected_serial)
-
-        attr_name = "sensor_data"
-
-        # ------------------------------------------------------------------
-        # Act – call the function under test
-        # ------------------------------------------------------------------
-        with allure.step("Calling write_compound_attr"):
-            write_compound_attr(
-                parent=self.parent_group,
-                name=attr_name,
-                value=test_value,
-                unit=None,  # no unit for this case
-            )
-
-        # ------------------------------------------------------------------
-        # Assert – encoder called exactly once with the original value
-        # ------------------------------------------------------------------
-        with allure.step("Asserting _encode_value was invoked correctly"):
-            mock_encode.assert_called_once_with(test_value)
-
-        # ------------------------------------------------------------------
-        # Assert – attrs.create called with the expected name and payload
-        # ------------------------------------------------------------------
-        with allure.step("Asserting attrs.create received the right payload"):
-            # Capture the numpy‑structured array that was handed to `create`.
-            # It is a zero‑dimensional numpy array – we can convert it to a dict
-            # for easier inspection.
-            assert self.parent_group.attrs.create.called, "attrs.create was never called"
-            call_args, call_kwargs = self.parent_group.attrs.create.call_args
-
-            # Arguments: (name, compound)
-            created_name, compound_array = call_args
-            assert created_name == attr_name, "Attribute name mismatch"
-
-            # Convert the structured array into a normal dict for readability.
-            compound_dict = {
-                "type": compound_array["type"].item(),
-                "value": compound_array["value"].item(),
-                "unit": compound_array["unit"].item(),
-            }
-
-            # Attach the captured payload to the Allure report for visibility.
-            allure.attach(
-                json.dumps(compound_dict, indent=2),
-                name="compound_payload_written",
-                attachment_type=allure.attachment_type.JSON,
-            )
-
-            # Verify each field.
-            assert compound_dict["type"] == expected_type, "Stored type identifier mismatch"
-            assert compound_dict["value"] == expected_serial, "Stored serialized value mismatch"
-            assert compound_dict["unit"] == "", "Unit field should be empty when None is passed"
-
-    @allure.title("Write a compound attribute – with a Unit")
-    @allure.description(
-        """
-        The same flow as the previous test, this time passing a
-        ``converters.utils.units.Unit`` enum value.  The unit string must be
-        stored in the ``unit`` field of the compound attribute.
-        """
-    )
-    @allure.severity(allure.severity_level.CRITICAL)
-    @allure.story("Create a new attribute on a group – with unit")
-    @mock.patch("converters.utils.compound_attribute_helper._encode_value")
-    def test_write_attribute_includes_unit(
-            self,
-            mock_encode,
-    ):
-        # ------------------------------------------------------------------
-        # Arrange
-        # ------------------------------------------------------------------
-        from converters.utils.units import Unit  # real enum – lightweight import
-
-        test_value = 42
-        mock_encode.return_value = ("int", json.dumps(test_value))
-
-        attr_name = "answer"
-        unit = Unit.MICROMETER
-
-        # ------------------------------------------------------------------
-        # Act
-        # ------------------------------------------------------------------
-        with allure.step("Calling write_compound_attr with a Unit"):
-            write_compound_attr(
-                parent=self.parent_group,
-                name=attr_name,
-                value=test_value,
-                unit=unit,
-            )
-
-        # ------------------------------------------------------------------
-        # Assert
-        # ------------------------------------------------------------------
-        mock_encode.assert_called_once_with(test_value)
-
-        # Capture the created payload.
-        created_name, compound_array = self.parent_group.attrs.create.call_args[0]
-
-        compound_dict = {
-            "type": compound_array["type"].item(),
-            "value": compound_array["value"].item(),
-            "unit": compound_array["unit"].item(),
-        }
-
-        allure.attach(
-            json.dumps(compound_dict, indent=2),
-            name="compound_payload_with_unit",
-            attachment_type=allure.attachment_type.JSON,
-        )
-
-        assert created_name == attr_name
-        assert compound_dict["unit"] == unit.value
-
-    # ------------------------------------------------------------------
-    # READ TESTS
-    # ------------------------------------------------------------------
-    @allure.title("Read a compound attribute – normal flow")
-    @allure.description(
-        """
-        Verify that **read_compound_attr**:
-
-        1. Retrieves the raw compound attribute from ``parent.attrs``.
-        2. Decodes the ``type`` and ``value`` fields using the internal
-           ``_decode_value`` helper.
-        3. Constructs a ``Unit`` enum when a non‑empty unit string is present.
-
-        All external interactions (attrs access and the decoder) are mocked.
+        The function must recognise the four scalar types that can be stored
+        directly in HDF5 (``bool``, ``int``, ``float`` and ``str``) and return a
+        NumPy ``dtype`` that matches the HDF5 representation.
         """
     )
     @allure.severity(allure.severity_level.NORMAL)
-    @allure.story("Read back a previously written attribute")
-    @mock.patch("converters.utils.compound_attribute_helper._decode_value")
-    @mock.patch("converters.utils.compound_attribute_helper.Unit")
-    def test_read_compound_attribute_calls_decoder_and_unit_lookup(
-            self,
-            mock_unit_enum,
-            mock_decode,
-    ):
-        # ------------------------------------------------------------------
-        # Arrange – fake stored compound attribute
-        # ------------------------------------------------------------------
-        stored_type = "int"
-        stored_serial = json.dumps(123)
-        stored_unit = Unit.MICROMETER.value
-
-        fake_compound = _make_fake_compound(
-            type_name=stored_type,
-            serialized=stored_serial,
-            unit_str=stored_unit,
-        )
-
-        # ``attrs.__getitem__`` is what the implementation uses.
-        self.parent_group.attrs.__getitem__.return_value = fake_compound
-
-        # Mock the decoder to simply return the original integer.
-        mock_decode.return_value = 123
-
-        # Mock the Unit enum – we want it to return a sentinel object.
-        unit_instance = MagicMock(name="UnitInstance")
-        mock_unit_enum.return_value = unit_instance
-
-        attr_name = "mass"
-
-        # ------------------------------------------------------------------
-        # Act
-        # ------------------------------------------------------------------
-        with allure.step("Calling read_compound_attr"):
-            value, unit = read_compound_attr(parent=self.parent_group, name=attr_name)
-
-        # ------------------------------------------------------------------
-        # Assert – attrs.__getitem__ called with the correct name
-        # ------------------------------------------------------------------
-        with allure.step("Asserting attrs.__getitem__ was invoked"):
-            self.parent_group.attrs.__getitem__.assert_called_once_with(attr_name)
-
-        # ------------------------------------------------------------------
-        # Assert – decoder called with the stored type/value strings
-        # ------------------------------------------------------------------
-        with allure.step("Asserting _decode_value received the right arguments"):
-            mock_decode.assert_called_once_with(stored_type, stored_serial)
-            assert value == 123, "Returned value does not match decoder output"
-
-        # ------------------------------------------------------------------
-        # Assert – Unit enum lookup performed correctly
-        # ------------------------------------------------------------------
-        with allure.step("Asserting Unit enum lookup"):
-            mock_unit_enum.assert_called_once_with(stored_unit)
-            assert unit is unit_instance, "Returned unit is not the enum instance"
-
-        # ------------------------------------------------------------------
-        # Attach the decoded result for the report
-        # ------------------------------------------------------------------
-        allure.attach(
-            json.dumps({"value": value, "unit": stored_unit}, indent=2),
-            name="decoded_result",
-            attachment_type=allure.attachment_type.JSON,
-        )
-
-    @allure.title("Read a compound attribute – missing unit")
-    @allure.description(
-        """
-        When the stored ``unit`` field is empty the function should return
-        ``unit=None``.  This test ensures the empty‑string branch works.
-        """
+    @pytest.mark.parametrize(
+        "python_value, expected_dtype",
+        [
+            (True, np.dtype(np.bool_)),
+            (42, np.dtype(np.int64)),
+            (3.14, np.dtype(np.float64)),
+            ("Ω", h5py.string_dtype()),
+        ],
     )
-    @allure.severity(allure.severity_level.MINOR)
-    @allure.story("Read back an attribute without a unit")
-    @mock.patch("converters.utils.compound_attribute_helper._decode_value")
-    @mock.patch("converters.utils.units.Unit")
-    def test_read_attribute_without_unit_returns_none(
-            self,
-            mock_unit_enum,
-            mock_decode,
-    ):
-        # ------------------------------------------------------------------
-        # Arrange – compound with an empty unit string
-        # ------------------------------------------------------------------
-        stored_type = "str"
-        stored_serial = "hello world"
-        fake_compound = _make_fake_compound(
-            type_name=stored_type,
-            serialized=stored_serial,
-            unit_str="",  # empty -> no unit
-        )
-        self.parent_group.attrs.__getitem__.return_value = fake_compound
+    def test_supported_scalars(self, python_value: Any, expected_dtype: np.dtype):
+        """Direct call – no mocking required."""
+        with allure.step("Call the private helper"):
+            result_dtype = _dtype_for_value(python_value)
 
-        mock_decode.return_value = stored_serial  # decoder just returns the string
+        with allure.step("Verify the returned dtype"):
+            assert result_dtype == expected_dtype
 
-        attr_name = "greeting"
-
-        # ------------------------------------------------------------------
-        # Act
-        # ------------------------------------------------------------------
-        with allure.step("Calling read_compound_attr for a unit‑less attribute"):
-            value, unit = read_compound_attr(parent=self.parent_group, name=attr_name)
-
-        # ------------------------------------------------------------------
-        # Assert
-        # ------------------------------------------------------------------
-        self.parent_group.attrs.__getitem__.assert_called_once_with(attr_name)
-        mock_decode.assert_called_once_with(stored_type, stored_serial)
-        mock_unit_enum.assert_not_called()  # Unit enum should never be touched
-        assert unit is None, "Expected unit to be None when stored string is empty"
-        assert value == stored_serial
-
-        allure.attach(
-            f"value: {value!r}\nunit: {unit}",
-            name="read_without_unit",
-            attachment_type=allure.attachment_type.TEXT,
-        )
-
-    @allure.title("Read a compound attribute – unknown unit raises")
+    @allure.title("Unsupported values raise ``TypeError``")
     @allure.description(
         """
-        The decoder should raise a ``ValueError`` when the stored unit string
-        cannot be resolved to a member of the ``Unit`` enum.
+        Anything that is not one of the supported scalar types must raise a
+        ``TypeError`` so that the caller can fall back to JSON encoding.
         """
     )
     @allure.severity(allure.severity_level.CRITICAL)
-    @allure.story("Error handling – unknown unit")
-    @mock.patch("converters.utils.compound_attribute_helper._decode_value")
-    @mock.patch("converters.utils.units.Unit")
-    def test_read_attribute_unknown_unit_raises_value_error(
-            self,
-            mock_unit_enum,
-            mock_decode,
-    ):
-        # ------------------------------------------------------------------
-        # Arrange – simulate a bad unit string
-        # ------------------------------------------------------------------
-        stored_type = "float"
-        stored_serial = json.dumps(3.14)
-        bad_unit_str = "lightyears"
+    @pytest.mark.parametrize("bad_value", [[], {}, object(), (1, 2)])
+    def test_unsupported_values_raise(self, bad_value: Any):
+        with allure.step("Calling the helper with an unsupported type"):
+            with pytest.raises(TypeError) as exc:
+                _dtype_for_value(bad_value)
 
-        fake_compound = _make_fake_compound(
-            type_name=stored_type,
-            serialized=stored_serial,
-            unit_str=bad_unit_str,
-        )
-        self.parent_group.attrs.__getitem__.return_value = fake_compound
-
-        # decoder works fine
-        mock_decode.return_value = 3.14
-
-        # make the enum raise ValueError on lookup
-        mock_unit_enum.side_effect = ValueError("invalid enum value")
-
-        attr_name = "distance"
-
-        # ------------------------------------------------------------------
-        # Act / Assert – the function must re‑raise a ValueError with a helpful message
-        # ------------------------------------------------------------------
-        with allure.step("Calling read_compound_attr and expecting a ValueError"):
-            with pytest.raises(ValueError) as excinfo:
-                read_compound_attr(parent=self.parent_group, name=attr_name)
-
-        # Verify that the original exception was wrapped (the test only cares that
-        # a ValueError bubbles up, not the exact message).
-        assert "not a recognised unit" in str(excinfo.value)
-
-        # ------------------------------------------------------------------
-        # Attach the error message for the Allure report
-        # ------------------------------------------------------------------
+        # Attach the error message for the report
         allure.attach(
-            str(excinfo.value),
-            name="error_message",
+            str(exc.value),
+            name="Exception message",
             attachment_type=allure.attachment_type.TEXT,
         )
+
+
+@allure.feature("HDF5 compound attribute utilities")
+@allure.story("Writing a compound attribute")
+class TestWriteCompoundAttr:
+    """All tests mock the internal helpers and the HDF5 ``attrs`` API."""
+
+    @allure.title("Native scalar value is written without JSON fallback")
+    @allure.description(
+        """
+        When the value can be represented by a native HDF5 datatype, the function
+        must:
+        * call ``_dtype_for_value`` → receive the correct dtype,
+        * **not** call ``json.dumps``,
+        * build a compound dtype with ``value`` and ``unit`` fields,
+        * invoke ``parent.attrs.create`` with a correctly populated scalar
+          structured array.
+        """
+    )
+    @allure.severity(allure.severity_level.BLOCKER)
+    def test_write_native_scalar(self):
+        # -------------------------------------------------------------------
+        # Arrange – a fake HDF5 group and the mocks for the inner calls
+        # -------------------------------------------------------------------
+        parent = MagicMock(name="h5group")
+        parent.attrs = MagicMock(name="attrs")
+
+        test_name = "temperature"
+        test_value = 300  # int → native
+        test_unit = "K"
+
+        # Mock the private dtype helper to return a predictable dtype
+        with patch(
+                "converters.utils.compound_attribute_helper._dtype_for_value",
+                return_value=np.dtype(np.int64),
+        ) as mock_dtype, patch(
+            "converters.utils.compound_attribute_helper.json.dumps"
+        ) as mock_json_dump:
+            # ----------------------------------------------------------------
+            # Act
+            # ----------------------------------------------------------------
+            with allure.step("Execute ``write_compound_attr``"):
+                write_compound_attr(parent, test_name, test_value, test_unit)
+
+            # ----------------------------------------------------------------
+            # Assert – internal calls
+            # ----------------------------------------------------------------
+            with allure.step("Assert ``_dtype_for_value`` was called once"):
+                mock_dtype.assert_called_once_with(test_value)
+
+            with allure.step("Assert ``json.dumps`` was **not** called"):
+                mock_json_dump.assert_not_called()
+
+            with allure.step("Capture the created compound array"):
+                # ``attrs.create`` receives (name, data).  Grab the data argument.
+                create_call: call = parent.attrs.create.call_args
+                assert create_call is not None, "attrs.create was never called"
+                created_name, created_data = create_call.args
+
+                # Attach the raw numpy void for visual inspection.
+                allure.attach(
+                    str(created_data),
+                    name="Created compound (numpy.void)",
+                    attachment_type=allure.attachment_type.TEXT,
+                )
+
+                # Verify the name argument
+                assert created_name == test_name
+
+                # Verify dtype fields
+                expected_dtype = np.dtype(
+                    [("value", np.dtype(np.int64)), ("unit", h5py.string_dtype())]
+                )
+                assert created_data.dtype == expected_dtype
+
+                # Verify stored values
+                assert created_data["value"] == test_value
+                assert created_data["unit"] == test_unit
+
+    @allure.title("Non‑native value triggers JSON encoding")
+    @allure.description(
+        """
+        If ``_dtype_for_value`` raises ``TypeError`` the function must:
+        * encode the value with ``json.dumps``,
+        * use a string dtype for the ``value`` field,
+        * create the compound attribute with the JSON string and the unit.
+        """
+    )
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_write_falls_back_to_json(self):
+        # -------------------------------------------------------------------
+        # Arrange
+        # -------------------------------------------------------------------
+        parent = MagicMock(name="h5group")
+        parent.attrs = MagicMock(name="attrs")
+
+        test_name = "metadata"
+        complex_value = {"a": 1, "b": [2, 3]}  # not natively storable
+        test_unit = "unitless"
+
+        # Force the dtype helper to raise TypeError
+        with patch(
+                "converters.utils.compound_attribute_helper._dtype_for_value",
+                side_effect=TypeError("unsupported type"),
+        ) as mock_dtype, patch(
+            "converters.utils.compound_attribute_helper.json.dumps",
+            return_value=json.dumps(complex_value, ensure_ascii=False),
+        ) as mock_json:
+            # ----------------------------------------------------------------
+            # Act
+            # ----------------------------------------------------------------
+            with allure.step("Execute ``write_compound_attr`` with a complex dict"):
+                write_compound_attr(parent, test_name, complex_value, test_unit)
+
+            # ----------------------------------------------------------------
+            # Assert – internal workflow
+            # ----------------------------------------------------------------
+            with allure.step("``_dtype_for_value`` must raise → JSON path taken"):
+                mock_dtype.assert_called_once_with(complex_value)
+
+            with allure.step("``json.dumps`` must be called once"):
+                mock_json.assert_called_once_with(
+                    complex_value, ensure_ascii=False
+                )
+                json_payload = mock_json.return_value
+                allure.attach(
+                    json_payload,
+                    name="JSON payload sent to HDF5",
+                    attachment_type=allure.attachment_type.JSON,
+                )
+
+            with allure.step("Validate the created compound data"):
+                create_args = parent.attrs.create.call_args
+                assert create_args is not None
+                created_name, created_data = create_args.args
+                assert created_name == test_name
+
+                # The dtype for ``value`` must now be a variable‑length string
+                expected_dtype = np.dtype(
+                    [
+                        ("value", h5py.string_dtype()),
+                        ("unit", h5py.string_dtype()),
+                    ]
+                )
+                assert created_data.dtype == expected_dtype
+                assert created_data["value"] == json_payload
+                assert created_data["unit"] == test_unit
+
+    @allure.title("Unit argument can be a ``Unit`` enum or plain string")
+    @allure.description(
+        """
+        The helper must transparently accept both a ``Unit`` enum instance and a
+        plain string.  The test verifies that the string stored in the compound
+        attribute is always the *value* attribute of the enum.
+        """
+    )
+    @allure.severity(allure.severity_level.NORMAL)
+    def test_write_accepts_enum_and_string_units(self):
+        from converters.utils.units import Unit  # Imported locally to avoid circular imports
+
+        parent = MagicMock(name="h5group")
+        parent.attrs = MagicMock(name="attrs")
+
+        test_name = "voltage"
+        test_value = 101325
+        enum_unit = Unit("microvolts")  # pretend Enum with .value == "Pa"
+        plain_unit = "microvolts"
+
+        # Helper that runs the write for a given ``unit`` and returns the stored unit
+        def _run_write(unit: Union[str, Unit]) -> str:
+            with patch(
+                    "converters.utils.compound_attribute_helper._dtype_for_value",
+                    return_value=np.dtype(np.int64),
+            ):
+                write_compound_attr(parent, test_name, test_value, unit)
+
+            created_name, created_data = parent.attrs.create.call_args.args
+            assert created_name == test_name
+            return created_data["unit"]
+
+        with allure.step("Write using a ``Unit`` enum"):
+            stored_from_enum = _run_write(enum_unit)
+
+        with allure.step("Write using a plain string"):
+            stored_from_str = _run_write(plain_unit)
+
+        with allure.step("Both approaches must store the same textual unit"):
+            assert stored_from_enum == plain_unit
+            assert stored_from_str == plain_unit
+
+
+@allure.feature("HDF5 compound attribute utilities")
+@allure.story("Reading a compound attribute")
+class TestReadCompoundAttr:
+    """All reads are mocked – we never hit the filesystem."""
+
+    @allure.title("Read regular compound attribute and decode unit")
+    @allure.description(
+        """
+        The attribute is stored as a structured scalar with ``value`` and
+        ``unit`` fields.  The test checks that:
+        * the ``_maybe_item`` helper is invoked for each field,
+        * byte strings are decoded,
+        * the unit string is converted to a ``Unit`` enum.
+        """
+    )
+    @allure.severity(allure.severity_level.NORMAL)
+    def test_read_compound_with_valid_unit(self):
+        from converters.utils.units import Unit  # local import
+
+        # -------------------------------------------------------------------
+        # Arrange – construct a fake compound attribute
+        # -------------------------------------------------------------------
+        raw_value = 9.81
+        raw_unit = "microamperes"
+
+        compound_dtype = np.dtype(
+            [("value", np.dtype(np.float64)), ("unit", h5py.string_dtype())]
+        )
+        compound = np.empty((), dtype=compound_dtype)
+        compound["value"] = raw_value
+        compound["unit"] = raw_unit
+
+        parent = MagicMock(name="h5group")
+        parent.attrs = MagicMock(name="attrs")
+        parent.attrs.__getitem__.return_value = compound
+
+        # Patch ``_maybe_item`` so we can assert that it was called for each field
+        with patch(
+                "converters.utils.compound_attribute_helper._maybe_item",
+                side_effect=lambda x: x.item() if hasattr(x, "item") else x,
+        ) as mock_maybe_item:
+            with allure.step("Execute ``read_compound_attr``"):
+                with patch(
+                        "converters.utils.compound_attribute_helper.isinstance",
+                        side_effect=lambda obj, cls, _builtin=isinstance: True if cls is np.void else _builtin(obj, cls)
+                ):
+                    value, unit = read_compound_attr(parent, "gravity")
+
+            # ----------------------------------------------------------------
+            # Assert – helper usage
+            # ----------------------------------------------------------------
+            with allure.step("``_maybe_item`` must be called twice (value, unit)"):
+                assert mock_maybe_item.call_count == 2
+                mock_maybe_item.assert_has_calls(
+                    [call(compound["value"]), call(compound["unit"])]
+                )
+
+            with allure.step("Returned value must be the original float"):
+                assert value == raw_value
+
+            with allure.step("Returned unit must be a ``Unit`` enum instance"):
+                assert isinstance(unit, Unit)
+                assert unit.value == raw_unit
+
+            # ----------------------------------------------------------------
+            # Attach the extracted data for the report
+            # ----------------------------------------------------------------
+            allure.attach(
+                json.dumps({"value": value, "unit": unit.value}),
+                name="Extracted payload",
+                attachment_type=allure.attachment_type.JSON,
+            )
+
+    @allure.title("Read attribute where unit is missing (empty string)")
+    @allure.severity(allure.severity_level.MINOR)
+    def test_read_compound_without_unit(self):
+        # -------------------------------------------------------------------
+        # Arrange – a compound where ``unit`` is an empty string
+        # -------------------------------------------------------------------
+        raw_value = "some text"
+        raw_unit = ""  # denotes “no unit”
+
+        compound_dtype = np.dtype(
+            [("value", h5py.string_dtype()), ("unit", h5py.string_dtype())]
+        )
+        compound = np.empty((), dtype=compound_dtype)
+        compound["value"] = raw_value
+        compound["unit"] = raw_unit
+
+        parent = MagicMock(name="h5group")
+        parent.attrs = MagicMock(name="attrs")
+        parent.attrs.__getitem__.return_value = compound
+
+        # -------------------------------------------------------------------
+        # Act
+        # -------------------------------------------------------------------
+        with allure.step("Call ``read_compound_attr``"):
+            with patch(
+                    "converters.utils.compound_attribute_helper.isinstance",
+                    side_effect=lambda obj, cls, _builtin=isinstance: True if cls is np.void else _builtin(obj, cls)
+            ):
+                value, unit = read_compound_attr(parent, "note")
+
+        # -------------------------------------------------------------------
+        # Assert
+        # -------------------------------------------------------------------
+        with allure.step("Value is returned unchanged"):
+            assert value == raw_value
+
+        with allure.step("Unit must be ``None`` when the stored string is empty"):
+            assert unit is None
+
+        allure.attach(
+            f"value: {value!r}\nunit: {unit}",
+            name="Result of read",
+            attachment_type=allure.attachment_type.TEXT,
+        )
+
+    @allure.title("Invalid unit string raises ``ValueError``")
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_read_invalid_unit_raises(self):
+        from converters.utils.units import Unit  # noqa: F401  (just to ensure import works)
+
+        raw_value = 1
+        raw_unit = "not-a-real-unit"
+
+        compound_dtype = np.dtype(
+            [("value", np.dtype(np.int64)), ("unit", h5py.string_dtype())]
+        )
+        compound = np.empty((), dtype=compound_dtype)
+        compound["value"] = raw_value
+        compound["unit"] = raw_unit
+
+        parent = MagicMock(name="h5group")
+        parent.attrs = MagicMock(name="attrs")
+        parent.attrs.__getitem__.return_value = compound
+
+        with allure.step("Attempt to read the attribute with a bogus unit"):
+            with patch(
+                    "converters.utils.compound_attribute_helper.isinstance",
+                    side_effect=lambda obj, cls, _builtin=isinstance: True if cls is np.void else _builtin(obj, cls)
+            ):
+                with pytest.raises(ValueError) as exc_info:
+                    read_compound_attr(parent, "broken")
+
+        # Attach the error for the report
+        allure.attach(
+            str(exc_info.value),
+            name="Caught exception",
+            attachment_type=allure.attachment_type.TEXT,
+        )
+
+        with allure.step("The message must mention the list of allowed units"):
+            assert "Allowed units are" in str(exc_info.value)
+
+
+# ---------------------------------------------------------------------------
+# Optional fixtures – they demonstrate the setup/teardown pattern requested.
+# ---------------------------------------------------------------------------
+@pytest.fixture(autouse=True)
+def _reset_allure_environment():
+    """
+    Reset Allure (attach a short environment description) before each test.
+    This also shows how ``setup_method`` / ``teardown_method`` can be replaced
+    by a fixture when using pytest.
+    """
+    allure.attach(
+        "Python {} | pytest {} | numpy {} | h5py {}".format(
+            ".".join(map(str, sys.version_info[:3])),
+            pytest.__version__,
+            np.__version__,
+            h5py.__version__,
+        ),
+        name="Test environment",
+        attachment_type=allure.attachment_type.TEXT,
+    )
+    yield  # test runs here
+    # No explicit teardown needed – placeholder for future cleanup logic.

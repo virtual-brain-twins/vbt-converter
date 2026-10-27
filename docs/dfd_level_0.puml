@@ -28,7 +28,7 @@ CONV_IN --> PROTOINFO: reads protocol PDF (optional)
 CONV_IN --> RAWZIP   : creates zipped raw bundle (optional)
 
 ' New output hierarchy inside the master bundle:
-'   /StandardFormat/Output/Map  (contains populations → neurons → times/voltage/virtual)
+'   /StandardFormat/Output/Map  (contains populations → neurons → times/voltage)
 CONV_IN --> MASTER   : writes MasterBundle (incl. Output/Map, version attrs)
 
 User --> CONV_OUT  : invoke CLI\n(-i, -o, protocol sub‑command …)

@@ -33,7 +33,7 @@ note right of validator
   * Per‑simulation checks depend on version:
     – v1.0 : expects OutputSpikes/SpikeMap
     – v2.0 : expects Output/Map with datasets
-      times (1‑D), voltage (1‑D), virtual (scalar bool)
+      times (1‑D), voltage (1‑D)
 end note
 
 ' 3️⃣  Open the HDF5 file ----------------------------------------------------
@@ -71,7 +71,6 @@ loop for each simulation group
       Uses new neuron fields:
         times, times_unit
         voltage, voltage_unit
-        virtual
     end note
 
     ' 8️⃣  Write numpy‑compressed output ------------------------------------

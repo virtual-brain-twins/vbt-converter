@@ -40,8 +40,6 @@ class Neuron(HDF5Serializable):
     voltage_unit : Optional[Unit]
         Physical unit associated with ``voltage``.  ``None`` indicates that no
         unit metadata is stored.
-    virtual : bool
-        Flag indicating whether the neuron is a virtual (synthetic) entry.
     """
 
     index: int
@@ -49,7 +47,6 @@ class Neuron(HDF5Serializable):
     times_unit: Optional[Unit] = None
     voltage: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=np.float64))
     voltage_unit: Optional[Unit] = None
-    virtual: bool = False
 
     # Serialisation
     def to_hdf5(self, parent: h5py.Group) -> None:
@@ -87,12 +84,6 @@ class Neuron(HDF5Serializable):
         # voltage
         store_dataset(grp, "voltage", self.voltage.astype(np.float64), compression=True)
         grp["voltage"].attrs["unit"] = self.voltage_unit if self.voltage_unit is not None else "None"
-
-        # virtual
-        # Store as a scalar boolean dataset.
-        store_dataset(
-            grp, "virtual", np.array(self.virtual, dtype=np.bool_), compression=False
-        )
 
     # Deserialisation
     @classmethod
@@ -137,18 +128,6 @@ class Neuron(HDF5Serializable):
             voltage = np.empty(0, dtype=float)
             voltage_unit = None
 
-        # backward compatibility: some legacy files may not have the ``virtual`` dataset
-        if "virtual" in grp:
-            # ``bool(np.array(...))`` works for scalar datasets (e.g. stored
-            # as a uint8, int8, or bool).  For safety we also accept the common
-            # string representation “True/False”.
-            raw_virtual = grp["virtual"][()]
-            # HDF5 may return a NumPy scalar, a plain Python scalar, or a
-            # zero‑dimensional array – ``bool()`` normalises all of them.
-            virtual = bool(raw_virtual)
-        else:
-            virtual = False
-
         return cls(
             index=idx,
             times=times,
@@ -160,6 +139,5 @@ class Neuron(HDF5Serializable):
             voltage=voltage,
             # Same logic as above: turn a valid unit string into a ``Unit`` enum,
             # otherwise store ``None`` to indicate the absence of a unit.
-            voltage_unit=Unit(voltage_unit) if voltage_unit is not None and voltage_unit != "None" else None,
-            virtual=virtual,
+            voltage_unit=Unit(voltage_unit) if voltage_unit is not None and voltage_unit != "None" else None
         )

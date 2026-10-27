@@ -25,6 +25,7 @@ import os
 import re
 import uuid
 from datetime import datetime, timezone
+from logging import warning
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -60,6 +61,7 @@ _ARITHMETIC_RE = re.compile(
 )
 
 DEFAULT_KTH_PARAMETERS = ["network_state", "duration", "da_level", "input_conductance", "input_scale_factor"]
+
 
 def _eval_arith_string(val: Any) -> Any:
     """Convert a string that looks like a simple arithmetic expression to a number.
@@ -104,46 +106,120 @@ def _eval_arith_string(val: Any) -> Any:
 def _parse_cortical_sub_stimulus(
         sub_dict: Dict[str, Any],
 ) -> Tuple[Stimulus, Dict[str, Any]]:
-    """Parse a *cortical* sub‑stimulus description.
-
-    A cortical block contains a piece‑wise definition of a stimulus (start times
-    and frequencies).  The function builds a :class:`Stimulus` instance from the
-    ``start`` and ``frequency`` entries and returns the remaining scalar values
-    as HDF5 attributes.
-
-    Args:
-        sub_dict: The dictionary extracted from the JSON configuration that
-            describes a single cortical sub‑stimulus.
-
-    Returns:
-        A tuple ``(stimulus, attrs)`` where ``stimulus`` is a fully populated
-        :class:`Stimulus` object and ``attrs`` is a mapping of any additional
-        fields that should be stored as HDF5 attributes.
-
-    Raises:
-        KeyError: If required keys (``"start"`` or ``"frequency"``) are missing.
-        ValueError: If ``sub_dict`` contains non‑numeric data that cannot be
-            converted to ``float``.
     """
-    # Convert the piece‑wise description.
-    limits = np.asarray(sub_dict.get("start", []), dtype=np.float64)
-    values = np.asarray(sub_dict.get("frequency", []), dtype=np.float64)
+    Parse a cortical stimulus description from a dictionary.
 
+    The dictionary must contain three parallel numeric sequences describing
+    *start times*, *end times* and *frequencies* of a piece‑wise‑constant
+    stimulus.  The function validates the input, builds the internal representation
+    expected by :class:`Stimulus`, and extracts any additional key‑value pairs as
+    HDF5‑compatible attributes.
+
+    Parameters
+    ----------
+    sub_dict : dict
+        Mapping that describes a cortical stimulus.  Required keys are:
+
+        - ``"start"``      : sequence of float – start time of the first interval.
+        - ``"end"``        : sequence of float – end time of each interval.
+        - ``"frequency"``  : sequence of float – stimulus value (Hz) for each interval.
+
+        Optional keys:
+
+        - ``"stim_type"``  : string indicating the stimulus type; defaults to
+          ``"piecewise_constant"``.
+        - any other key/value pair will be stored as an attribute of the resulting
+          stimulus after being evaluated by :func:`_eval_arith_string`.
+
+    Returns
+    -------
+    stimulus : Stimulus
+        A :class:`Stimulus` instance constructed from the validated
+        ``start``, ``end`` and ``frequency`` arrays.
+    attrs : dict
+        Dictionary of additional attributes (keys not used for the piecewise
+        definition).  Each value is passed through ``_eval_arith_string`` to
+        allow arithmetic strings (e.g. ``"2*pi"``).
+
+    Raises
+    ------
+    KeyError
+        If any of the required keys ``"start"``, ``"end"``, or ``"frequency"``
+        are missing from ``sub_dict``.
+    ValueError
+        * If the ``start``, ``end`` or ``frequency`` entries cannot be converted
+          to numeric 1‑D arrays.
+        * If any of the three arrays is not one‑dimensional.
+        * If the lengths of ``start``/``end`` and ``frequency`` do not match.
+
+    Notes
+    -----
+    The returned ``Stimulus.limits`` array is constructed as
+    ``[start[0], end[0], end[1], …, end[N‑1]]`` where ``N`` is the number of
+    intervals (i.e. ``len(start)``).  Consequently the number of limits is
+    ``N + 1`` and ``Stimulus.values`` holds exactly ``N`` frequency values.
+
+    Examples
+    --------
+    >>> desc = {
+    ...     "start": [0.0],
+    ...     "end": [0.5, 1.0],
+    ...     "frequency": [10.0, 20.0],
+    ...     "comment": "test stimulus"
+    ... }
+    >>> stim, attrs = _parse_cortical_sub_stimulus(desc)
+    >>> stim.limits
+    array([0. , 0.5, 1. ])
+    >>> stim.values
+    array([10., 20.])
+    >>> attrs
+    {'comment': 'test stimulus'}
+    """
+    # Pull the three required lists and turn them into NumPy arrays.
+    try:
+        start = np.asarray(sub_dict["start"], dtype=np.float64)
+        end = np.asarray(sub_dict["end"], dtype=np.float64)
+        freq = np.asarray(sub_dict["frequency"], dtype=np.float64)
+    except KeyError as exc:
+        raise KeyError(
+            f"Missing required key for cortical stimulus: {exc.args[0]!r}"
+        ) from None
+    except (TypeError, ValueError) as exc:  # non‑numeric entries
+        raise ValueError(
+            "The 'start', 'end' and 'frequency' entries must be numeric sequences."
+        ) from exc
+
+    # Basic shape checks.
+    if start.ndim != 1 or end.ndim != 1 or freq.ndim != 1:
+        raise ValueError("'start', 'end' and 'frequency' must be one‑dimensional arrays.")
+
+    if start.size != freq.size:
+        raise ValueError(
+            f"Length mismatch: 'start' ({start.size}) and 'frequency' ({freq.size}) "
+            "must have the same number of entries."
+        )
+    if end.size != freq.size:
+        raise ValueError(
+            f"Length mismatch: 'end' ({end.size}) and 'frequency' ({freq.size}) "
+            "must have the same number of entries."
+        )
+    # At this point we know we have N intervals → N+1 limits.
+
+    # Build the limits array: [start[0], end[0], end[1], …, end[N‑1]]
+    limits = np.empty(start.size + 1, dtype=np.float64)
+    limits[0] = start[0]  # first boundary
+    limits[1:] = end  # all the remaining boundaries
+
+    # Create the Stimulus instance.
     stimulus = Stimulus(
         limits=limits,
-        values=values,
+        values=freq,
         stim_type=sub_dict.get("stim_type", "piecewise_constant"),
     )
 
-    # Keys that belong to the Stimulus itself and must not become attributes.
+    # Anything that is *not* part of the piece‑wise definition becomes an HDF5 attribute.
     stim_keys = {
-        "start",
-        "end",
-        "frequency",
-        "stim_type",
-        "limits",
-        "values",
-        "max_value",
+        "start", "end", "frequency", "stim_type", "limits", "values", "max_value"
     }
 
     attrs: Dict[str, Any] = {}
@@ -153,39 +229,6 @@ def _parse_cortical_sub_stimulus(
         attrs[k] = _eval_arith_string(v)
 
     return stimulus, attrs
-
-
-def _parse_generic_sub_stimulus(
-        sub_name: str, sub_dict: Dict[str, Any]
-) -> Tuple[Stimulus, Dict[str, Any]]:
-    """Parse a sub‑stimulus that does not contain a piece‑wise definition.
-
-    For sources such as ``virtual_neuron`` the function creates an *empty*
-    :class:`Stimulus` object (zero‑length ``limits`` and ``values``) and stores
-    the entire ``sub_dict`` as attributes after attempting to evaluate any
-    arithmetic strings.
-
-    Args:
-        sub_name: Name of the sub‑stimulus (currently unused but kept for API
-            compatibility).
-        sub_dict: Dictionary describing the sub‑stimulus.
-
-    Returns:
-        A tuple ``(stimulus, attrs)`` where ``stimulus`` is an empty
-        :class:`Stimulus` and ``attrs`` is the dictionary of attributes.
-
-    Raises:
-        None.
-    """
-    stimulus = Stimulus(
-        limits=np.empty(0, dtype=np.float64),
-        values=np.empty(0, dtype=np.float64),
-        stim_type="piecewise_constant",
-    )
-
-    attrs = {k: _eval_arith_string(v) for k, v in sub_dict.items()}
-    return stimulus, attrs
-
 
 def _parse_input_config(input_config: Path) -> StimuliGroup:
     """Parse a JSON stimulus description and convert it to a :class:`StimulusSet`.
@@ -219,7 +262,12 @@ def _parse_input_config(input_config: Path) -> StimuliGroup:
             if "start" in sub_dict and "frequency" in sub_dict:
                 stimulus, attrs = _parse_cortical_sub_stimulus(sub_dict)
             else:
-                stimulus, attrs = _parse_generic_sub_stimulus(stim_name, sub_dict)
+                # Presently discarding the virtual stimuli, also the GPe_FoxP2 stimulus, which is not a piecewise definition.
+                warning(
+                    f"Sub‑stimulus '{stim_name}' in population '{pop_name}' "
+                    "does not contain a recognised definition; creating empty stimulus."
+                )
+                continue  # skip this sub‑stimulus e.g. virtual neurons
 
             sub_stimuli[f"{pop_name}_{stim_name}"] = stimulus
             sub_attrs[f"{pop_name}_{stim_name}"] = attrs
@@ -250,9 +298,7 @@ def _populations_from_output_spikes(h5_path: Path) -> List[Population]:
     * ``voltage``             – the voltage trace (float64)
     * ``voltage_unit``        – the ``unit`` attribute attached to the ``voltage`` dataset,
                                if it exists.
-    * ``virtual``             – taken from the ``virtual_neuron`` array in ``meta_data``.
-
-    Afterwards the neurons are grouped by the population name stored in
+    Afterward the neurons are grouped by the population name stored in
     ``meta_data/name`` and a list of :class:`Population` objects is returned.
 
     Parameters
@@ -280,9 +326,6 @@ def _populations_from_output_spikes(h5_path: Path) -> List[Population]:
         # `name` is stored as a 1‑D array of bytes; we keep it as‑is and decode
         # lazily when we need the string for a particular gid.
         population_name: np.ndarray = f["meta_data"]["name"][()]  # shape (N_neurons,)
-        # ``virtual_neuron`` is a 1‑D boolean array that lines‑up with the order
-        # of the groups under /neurons (i.e. with the gid value).
-        virtual_flags: np.ndarray = f["meta_data"]["virtual_neuron"][()].astype(bool)
 
         # The per‑neuron group container
         neuron_grp = f["neurons"]
@@ -298,7 +341,11 @@ def _populations_from_output_spikes(h5_path: Path) -> List[Population]:
             # leading dimension.  We also force ``float64`` to match the
             # Neuron dataclass contract.
             spikes_raw = ngrp["spikes"][()]
-            times: np.ndarray = spikes_raw.squeeze().astype(np.float64)
+            # Convert to a NumPy ndarray of the correct dtype once.
+            spikes_arr = np.asarray(spikes_raw, dtype=np.float64)
+            times: np.ndarray = np.atleast_1d(np.squeeze(spikes_arr))
+            if times.ndim != 1:
+                raise RuntimeError(f"Unexpected shape after processing spikes: {times.shape}")
 
             # Optional unit attribute – may be missing → ``None``.
             times_unit = ngrp["spikes"].attrs.get("unit", None)
@@ -320,28 +367,13 @@ def _populations_from_output_spikes(h5_path: Path) -> List[Population]:
                 voltage = np.empty(0, dtype=np.float64)
                 voltage_unit = None
 
-            # Virtual flag – taken from the pre‑loaded ``virtual_flags`` array.
-            # Guard against out‑of‑range indices (mal‑formed files); we treat
-            # missing entries as *non‑virtual* but raise a warning so the caller
-            # can investigate.
-            try:
-                is_virtual = bool(virtual_flags[gid])
-            except IndexError:
-                import warnings
-                warnings.warn(
-                    f"virtual_neuron flag missing for gid={gid}; assuming False",
-                    RuntimeWarning,
-                )
-                is_virtual = False
-
             # Build the Neuron instance
             neuron = Neuron(
                 index=gid,
                 times=times,
                 times_unit=Unit(times_unit) if times_unit is not None else None,
                 voltage=voltage,
-                voltage_unit=Unit(voltage_unit) if voltage_unit is not None else None,
-                virtual=is_virtual,
+                voltage_unit=Unit(voltage_unit) if voltage_unit is not None else None
             )
 
             # Associate the neuron with its population
@@ -353,7 +385,6 @@ def _populations_from_output_spikes(h5_path: Path) -> List[Population]:
             else:
                 # Unexpected datatype – fall back to ``str`` conversion.
                 pop_name = str(pop_name_bytes)
-
             populations.setdefault(pop_name, []).append(neuron)
 
         # Convert the temporary dict into the final list of Population
@@ -458,7 +489,6 @@ def build_kth_master_bundle(
         # `full_cfg` now contains everything except the default parameters above.
         sim_parameters = SimulationParameters(kv_pairs=sim_params)
         config = Configuration(kv_pairs=full_cfg)  # ← all other config items
-
 
         # Load spikes.
         spikes_h5 = Path(row["output_file"])

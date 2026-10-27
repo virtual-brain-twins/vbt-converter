@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>VBT Converter HDF5‑to‑NPZ Wrapper – Overview</title>
+  <style>
+    body {font-family:Arial,Helvetica,sans-serif; line-height:1.5; margin:2rem;}
+    h1 {color:#2c3e50;}
+    h2 {color:#34495e; margin-top:1.5rem;}
+    pre, code {background:#f8f8f8; padding:0.2rem 0.4rem; border-radius:4px;}
+    ul {margin-left:1.2rem;}
+    .env, .cli, .artefacts {font-family:monospace;}
+  </style>
+</head>
+<body>
+
+<h1>VBT Converter HDF5‑to‑NPZ Wrapper – Overview</h1>
+
+<h2>Purpose</h2>
+<p>
+The wrapper orchestrates the <code>rate_voltage_exporter.py</code> utility which
+converts a <strong>Master HDF5</strong> file (produced by the VBT simulation
+pipeline) into a compressed <code>.npz</code> archive containing per‑population
+firing‑rate and membrane‑voltage traces.  The wrapper follows the same
+convention as the other VBT conversion jobs: it moves the attached HDF5 into the
+expected layout, runs the exporter, stores the resulting <code>.npz</code> at a
+location defined by the CI job, and produces a tiny HTML link page for the
+original HDF5.</p>
+
+<h2>Required environment variables</h2>
+<ul class="env">
+  <li><strong>VBT_JOB_LOGS</strong> – directory where the wrapper should write its
+    log file (<code>vbt_converter_hdf5_to_npz_wrapper.log</code>).</li>
+  <li><strong>CI_PROJECT_DIR</strong> – absolute path to the repository root (the
+    wrapper uses it to locate the attached HDF5 and the exporter script).</li>
+  <li><strong>OUTPUT_NPZ_PATH</strong> – full path where the final <code>.npz</code>
+    must be copied so that the CI job can publish it as an artefact.</li>
+  <li><strong>INPUT_HDF5_PATH</strong> – destination path for the original Master
+    HDF5 file that will be attached to the CI job for later inspection.</li>
+</ul>
+
+<h2>Command‑line interface</h2>
+<ul class="cli">
+  <li><code>--input-dir &lt;Path&gt;</code> (default: <code>input</code>) – folder
+    that must contain the file <code>attachments/master.h5</code> (the file is
+    placed there by the previous CI step).</li>
+  <li><code>--output-dir &lt;Path&gt;</code> (default: <code>output</code>) –
+    directory where the wrapper writes the small HTML link page.</li>
+  <li><code>--num-time-bins &lt;int&gt;</code> (default: <code>10000</code>) –
+    passed straight through to <code>rate_voltage_exporter.py</code> (argument
+    <code>-b/--num-time-bins</code>).</li>
+  <li><code>--smoothing-window &lt;int&gt;</code> (default: <code>10</code>) –
+    passed to the exporter (<code>-w/--smoothing-window</code>).</li>
+  <li><code>--output-name &lt;str&gt;</code> (default: <code>rates_voltages.npz</code>)
+    – name of the <code>.npz</code> file produced by the exporter
+    (<code>-o/--output-name</code>).</li>
+</ul>
+
+<h2>High‑level workflow</h2>
+<ol>
+  <li>Initialise a standard <code>logging</code> configuration writing to
+    <code>${VBT_JOB_LOGS}/vbt_converter_hdf5_to_npz_wrapper.log</code>.</li>
+  <li>Resolve <code>CI_PROJECT_DIR</code> → <code>ci_root</code>.</li>
+  <li>Move the attached Master HDF5
+    <pre>${ci_root}/attachments/master.h5</pre>
+    into the location expected by the exporter:
+    <pre>{input‑dir}/attachments/master.h5</pre>
+    (first try <code>Path.replace</code>, fall back to <code>shutil.move</code>).</li>
+  <li>Discover the exporter script:
+    <pre>${ci_root}/converters/rate_voltage_exporter.py</pre></li>
+  <li>Create a temporary working directory; the exporter will write the
+    <code>.npz</code> file there as
+    <pre>{tmp_dir}/{output‑name}</pre>.</li>
+  <li>Invoke the exporter with the arguments supplied to the wrapper:
+    <pre>
+python rate_voltage_exporter.py \
+  --master-file {input‑dir}/attachments/master.h5 \
+  --out-dir {tmp_dir} \
+  -b {num_time_bins} -w {smoothing_window} -o {output_name}
+    </pre>
+    (the script internally builds an <code>argparse.ArgumentParser</code> and
+    calls <code>RateVoltageExporter.run()</code>).</li>
+  <li>Copy the produced <code>.npz</code> archive to the path defined by
+    <code>${OUTPUT_NPZ_PATH}</code> so that the CI job can publish it.</li>
+  <li>Move the original Master HDF5 to the location required by the CI job:
+    <pre>${INPUT_HDF5_PATH}</pre></li>
+  <li>Generate a tiny HTML link page (<code>input_hdf5_link.html</code>) that
+    provides a download link for the HDF5 file.  The file is written into
+    <code>{output‑dir}</code> so that it can be attached to the CI job as an
+    artefact.</li>
+</ol>
+
+<h2>Produced artefacts (in <code>--output-dir</code>)</h2>
+<ul class="artefacts">
+  <li><code>input_hdf5_link.html</code> – simple HTML page with a hyperlink to the
+    Master HDF5 that was converted.  Enables downstream jobs or reviewers to
+    fetch the raw data.</li>
+</ul>
+
+<h2>Reference – Exporter CLI</h2>
+<pre><code>
+# rate_voltage_exporter.py (excerpt)
+
+parser = argparse.ArgumentParser()
+RateVoltageExporter.configure_parser(parser)
+parser.add_argument(
+    "--master-file",
+    type=str,
+    required=True,
+    help="Path to the Master HDF5 file that contains the simulation results."
+)
+parser.add_argument(
+    "--out-dir",
+    type=str,
+    required=True,
+    help="Directory where the .npz file will be written."
+)
+args = parser.parse_args()
+
+with h5py.File(args.master_file, "r") as master_h5:
+    exporter = RateVoltageExporter(
+        master_h5,
+        Path(args.out_dir),
+        num_time_bins=args.num_time_bins,
+        smoothing_win=args.smoothing_window,
+        out_name=args.output_name,
+    )
+    exporter.run()
+</code></pre>
+
+</body>
+</html>

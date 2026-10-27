@@ -68,7 +68,6 @@
             index : int
             times : ndarray
             times_unit : Optional[Unit]
-            virtual : bool
             voltage : ndarray
             voltage_unit : Optional[Unit]
             from_hdf5(grp: h5py.Group) 'Neuron'
@@ -107,6 +106,15 @@
             configure_parser(parser: argparse.ArgumentParser) None
             export_one_simulation(sim_id: str, sim_group: h5py.Group)* None
             extract_one_simulation(sim_id: str, sim_group: h5py.Group) dict[str, ndarray[tuple[Any, ...], dtype[Any]] | list[str]]
+            run() None
+          }
+          class RateVoltageExporter {
+            num_time_bins : int
+            out_name : str
+            smoothing_win : int
+            configure_parser(parser: argparse.ArgumentParser) None
+            export_one_simulation(sim_id: str, sim_group: h5py.Group)* None
+            extract_one_simulation(sim_id: str, sim_group: h5py.Group) dict[str, Any]
             run() None
           }
           class RawBundleGroup {
@@ -166,6 +174,7 @@
             message : str
           }
           RateExporter --|> ProtocolExporter
+          RateVoltageExporter --|> ProtocolExporter
           KTHBuilder --|> ProtocolBuilder
           UVABuilder --|> ProtocolBuilder
           KeyValueCompoundContainer --|> HDF5Serializable

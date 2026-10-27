@@ -79,7 +79,7 @@ def _population_from_npz(name: str, npz_path: Path) -> Population:
         # Build a dummy “one neuron per spike” representation – the
         # original tools used this only for *input* spikes, not for the
         # output SpikeMap.  For the output we *must* have per‑neuron
-        # grouping, therefore we build a virtual neuron per spike.
+        # grouping, therefore we build a neuron per spike.
         neurons = [Neuron(index=int(i), times=np.array([t])) for i, t in enumerate(times)]
     else:
         # Build a neuron → spike‑time mapping.

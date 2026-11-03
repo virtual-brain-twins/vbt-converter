@@ -1,3 +1,8 @@
+# -*- coding: utf-8 -*-
+#
+# SPDX-FileCopyrightText: 2026 Forschungszentrum Jülich GmbH
+# SPDX-License-Identifier: Apache-2.0
+#
 """rate_exporter.py – Export rate data from a master HDF5 file.
 
 The :class:`RateExporter` class iterates over all simulation groups in a

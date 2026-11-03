@@ -1,3 +1,8 @@
+# -*- coding: utf-8 -*-
+#
+# SPDX-FileCopyrightText: 2026 Forschungszentrum Jülich GmbH
+# SPDX-License-Identifier: Apache-2.0
+#
 """
 Utilities for serialising and deserialising collections of :class:`~converters.schema.stimulus.Stimulus`
 objects together with per‑stimulus metadata and optional population‑list information to/from

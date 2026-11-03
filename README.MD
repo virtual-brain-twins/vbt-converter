@@ -1,5 +1,7 @@
 # vbt‑converter
 
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+
 **Virtual‑Brain‑Twin (VBT) data‑conversion utilities** – This is a framework that reads the raw protocol results,
 potential consisting out of multiple individual simulations, and converts it into a standardized format. As standard
 that can then be processed by downstream analysis pipelines.
@@ -491,7 +493,12 @@ After that, any future release is just:
 
 ### 9. License & contributing
 
-*The license is still to be decided.*
+The code in this repository is released under the **Apache License 2.0**. See the full text in the [`LICENSE`](LICENSE) file and the accompanying [`NOTICE`](NOTICE) file for attribution details.
+
+This software has been developed within the scope of the **Virtual Brain Twin** project. The Virtual Brain Twin Project has received funding from the European Union's Research and Innovation Programme **Horizon Europe** under grant agreement [No 101137289](https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/how-to-participate/org-details/896706219/project/101137289/program/43108390/details).
+
+To apply the license header to all source files, run the script `apply_license_header.sh` with the path to the header file as the first argument and an optional root directory as the second argument. If no root directory is provided, the current working directory is used.
+`sh apply_license_header.sh COPYRIGHT_HEADER.txt`
 
 **Contributions are welcome**
 

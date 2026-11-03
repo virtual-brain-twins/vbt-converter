@@ -1,0 +1,7 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: insert-license
+        files: \.py$
+        args: [--license-file, COPYRIGHT_HEADER.txt, --comment-style, '#', --detect-license-in-content, '--allow-missing-license']

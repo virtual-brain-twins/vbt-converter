@@ -1,3 +1,8 @@
+# -*- coding: utf-8 -*-
+#
+# SPDX-FileCopyrightText: 2026 Forschungszentrum Jülich GmbH
+# SPDX-License-Identifier: Apache-2.0
+#
 """
 This module defines the :class:`SimulationParameters` data class, which is a
 light‑weight container for simulation configuration values.  It inherits from

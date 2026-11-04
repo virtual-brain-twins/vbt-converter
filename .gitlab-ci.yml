@@ -29,6 +29,10 @@ include:
 pre_commit:
   stage: lint
   image: python:3.12-slim
+  tags:
+    - docker
+    - jsc-cloud
+    - fenix
   before_script:
     - pip install --no-cache-dir pre-commit==4.3.0
   script:

@@ -43,7 +43,6 @@ pre_commit:
     - pip install --no-cache-dir pre-commit==4.3.0
   script:
     - pre-commit run --all-files
-    - mv /root/.cache/pre-commit/pre-commit.log pre-commit.log
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH'

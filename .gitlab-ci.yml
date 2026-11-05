@@ -51,6 +51,9 @@ pre_commit:
 vbt_setup_job:
   extends: .VBT_SETUP                     # provided by the template
   stage: setup_environment
+  needs:
+    - job: pre_commit
+      artifacts: false
   image: docker:cli
   tags:
     - docker

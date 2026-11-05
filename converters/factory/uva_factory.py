@@ -1,8 +1,7 @@
-# # -*- coding: utf-8 -*-
-# #
-# # SPDX-FileCopyrightText: 2026 Forschungszentrum Jülich GmbH
-# # SPDX-License-Identifier: Apache-2.0
-# #
+# -*- coding: utf-8 -*-
+#
+# SPDX-FileCopyrightText: 2026 Forschungszentrum Jülich GmbH
+# SPDX-License-Identifier: Apache-2.0
 
 """Utilities for constructing a :class:`~converters.schema.master_bundle.MasterBundle`
 from the directory layout produced by the UVA (Universiteit van Amsterdam) simulation pipeline, See repository: https://gitlab.jsc.fz-juelich.de/virtualbraintwin/vbt_t4-3_amu_protocol4.

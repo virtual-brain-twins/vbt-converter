@@ -1,8 +1,7 @@
-# # -*- coding: utf-8 -*-
-# #
-# # SPDX-FileCopyrightText: 2026 Forschungszentrum Jülich GmbH
-# # SPDX-License-Identifier: Apache-2.0
-# #
+# -*- coding: utf-8 -*-
+#
+# SPDX-FileCopyrightText: 2026 Forschungszentrum Jülich GmbH
+# SPDX-License-Identifier: Apache-2.0
 
 """Utilities for representing a population of neurons and serializing them to/from HDF5.
 

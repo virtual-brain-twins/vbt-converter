@@ -1,15 +1,9 @@
 #!/bin/sh
 # -*- coding: utf-8 -*-
-# # -*- coding: utf-8 -*-
-# #
-# # SPDX-FileCopyrightText: 2026 Forschungszentrum Jülich GmbH
-# # SPDX-License-Identifier: Apache-2.0
-# #
-
 #
 # SPDX-FileCopyrightText: 2026 Forschungszentrum Jülich GmbH
 # SPDX-License-Identifier: Apache-2.0
-#
+
 # download_child_artifacts.sh - Script to fetch GitLab child pipeline artifacts
 
 # LOGGING SETUP

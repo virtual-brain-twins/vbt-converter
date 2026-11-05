@@ -1,8 +1,9 @@
-# -*- coding: utf-8 -*-
-#
-# SPDX-FileCopyrightText: 2026 Forschungszentrum Jülich GmbH
-# SPDX-License-Identifier: Apache-2.0
-#
+# # -*- coding: utf-8 -*-
+# #
+# # SPDX-FileCopyrightText: 2026 Forschungszentrum Jülich GmbH
+# # SPDX-License-Identifier: Apache-2.0
+# #
+
 """converters.schema.protocol_group
 
 This module provides the :class:`ProtocolGroup` data class, which implements the

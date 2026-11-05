@@ -1,8 +1,9 @@
-# -*- coding: utf-8 -*-
-#
-# SPDX-FileCopyrightText: 2026 Forschungszentrum Jülich GmbH
-# SPDX-License-Identifier: Apache-2.0
-#
+# # -*- coding: utf-8 -*-
+# #
+# # SPDX-FileCopyrightText: 2026 Forschungszentrum Jülich GmbH
+# # SPDX-License-Identifier: Apache-2.0
+# #
+
 """Utility for creating ZIP archives of directory trees.
 
 This module selects an appropriate compression method at import time:

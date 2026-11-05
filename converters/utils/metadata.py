@@ -1,8 +1,9 @@
-# -*- coding: utf-8 -*-
-#
-# SPDX-FileCopyrightText: 2026 Forschungszentrum Jülich GmbH
-# SPDX-License-Identifier: Apache-2.0
-#
+# # -*- coding: utf-8 -*-
+# #
+# # SPDX-FileCopyrightText: 2026 Forschungszentrum Jülich GmbH
+# # SPDX-License-Identifier: Apache-2.0
+# #
+
 """
 Utility for building a ``meta_data_map`` that is guaranteed to contain only
 the standardised attribute keys defined by the consortium.

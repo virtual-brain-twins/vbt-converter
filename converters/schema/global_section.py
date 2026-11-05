@@ -1,8 +1,9 @@
-# -*- coding: utf-8 -*-
-#
-# SPDX-FileCopyrightText: 2026 Forschungszentrum Jülich GmbH
-# SPDX-License-Identifier: Apache-2.0
-#
+# # -*- coding: utf-8 -*-
+# #
+# # SPDX-FileCopyrightText: 2026 Forschungszentrum Jülich GmbH
+# # SPDX-License-Identifier: Apache-2.0
+# #
+
 """
 This module defines :class:`GlobalSection`, a concrete implementation of the
 :class:`~converters.schema.hdf5_serializable.HDF5Serializable` protocol that

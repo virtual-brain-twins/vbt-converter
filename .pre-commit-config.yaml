@@ -9,5 +9,5 @@ repos:
           - COPYRIGHT_HEADER.txt
           - --comment-style
           - '#'
-          - --detect-license-in-content
-          - --allow-missing-license
+          - --detect-license-in-X-top-lines
+          - '20'

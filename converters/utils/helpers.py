@@ -1,8 +1,9 @@
-# -*- coding: utf-8 -*-
-#
-# SPDX-FileCopyrightText: 2026 Forschungszentrum Jülich GmbH
-# SPDX-License-Identifier: Apache-2.0
-#
+# # -*- coding: utf-8 -*-
+# #
+# # SPDX-FileCopyrightText: 2026 Forschungszentrum Jülich GmbH
+# # SPDX-License-Identifier: Apache-2.0
+# #
+
 """Utility functions for handling AMU‐style stimulus and spike data.
 
 This module provides a small collection of helper routines used throughout the

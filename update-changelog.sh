@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 # -*- coding: utf-8 -*-
+# # -*- coding: utf-8 -*-
+# #
+# # SPDX-FileCopyrightText: 2026 Forschungszentrum Jülich GmbH
+# # SPDX-License-Identifier: Apache-2.0
+# #
+
 #
 # SPDX-FileCopyrightText: 2026 Forschungszentrum Jülich GmbH
 # SPDX-License-Identifier: Apache-2.0

@@ -1,8 +1,9 @@
-# -*- coding: utf-8 -*-
-#
-# SPDX-FileCopyrightText: 2026 Forschungszentrum Jülich GmbH
-# SPDX-License-Identifier: Apache-2.0
-#
+# # -*- coding: utf-8 -*-
+# #
+# # SPDX-FileCopyrightText: 2026 Forschungszentrum Jülich GmbH
+# # SPDX-License-Identifier: Apache-2.0
+# #
+
 """Provides a small registry of protocol‑specific ``ProtocolBuilder`` objects that
 construct :class:`~converters.schema.master_bundle.MasterBundle` instances from
 raw input data.  Each concrete builder delegates the heavy lifting to a factory

@@ -497,8 +497,20 @@ The code in this repository is released under the **Apache License 2.0**. See th
 
 This software has been developed within the scope of the **Virtual Brain Twin** project. The Virtual Brain Twin Project has received funding from the European Union's Research and Innovation Programme **Horizon Europe** under grant agreement [No 101137289](https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/how-to-participate/org-details/896706219/project/101137289/program/43108390/details).
 
-To apply the license header to all source files, run the script `apply_license_header.sh` with the path to the header file as the first argument and an optional root directory as the second argument. If no root directory is provided, the current working directory is used.
-`sh apply_license_header.sh COPYRIGHT_HEADER.txt`
+To apply the license header to all source files, run the following commands from the root of the repository:
+
+```bash
+# prepare a virtual environment and install the pre-commit hooks
+python -m venv venv
+source venv/bin/activate
+pip install --no-cache-dir pre-commit==4.3.0
+
+# Run the pre-commit hooks to check for any issues and apply the license header
+pre-commit clean
+pre-commit validate-config
+pre-commit run insert-license --all-files
+```
+
 
 **Contributions are welcome**
 

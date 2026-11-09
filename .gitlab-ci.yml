@@ -29,6 +29,8 @@ include:
 pre_commit:
   stage: lint
   image: python:3.12-slim
+  rules:
+    - when: always
   variables:
     # Always fetch the whole history – required for pre‑commit to see tags/heads.
     GIT_STRATEGY: clone

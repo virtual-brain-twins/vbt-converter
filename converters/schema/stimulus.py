@@ -1,3 +1,8 @@
+# -*- coding: utf-8 -*-
+#
+# SPDX-FileCopyrightText: 2026 Forschungszentrum Jülich GmbH
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Data model for a piece‑wise constant stimulus and utilities for serialising it
 to and from HDF5 files.

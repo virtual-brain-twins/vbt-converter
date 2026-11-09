@@ -1,3 +1,8 @@
+# -*- coding: utf-8 -*-
+#
+# SPDX-FileCopyrightText: 2026 Forschungszentrum Jülich GmbH
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Pytest‑style test suite for ``converters.utils.h5compound`` (the module that
 contains ``_dtype_for_value``, ``write_compound_attr`` and ``read_compound_attr``).

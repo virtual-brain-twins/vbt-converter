@@ -1,0 +1,44 @@
+cff-version: 1.2.0
+title: "VBT‑Converter"
+authors:
+  - family-names: "Klijn"
+    given-names: "Wouter"
+    email: "w.klijn@fz-juelich.de"
+    affiliation: "Forschungszentrum Jülich"
+    role: "Project PI / Development head"
+  - family-names: "Murugan"
+    given-names: "Jithu"
+    email: "jmurugan@fz-juelich.de"
+    affiliation: "Forschungszentrum Jülich"
+    role: "Lead developer"
+  - family-names: "Domide"
+    given-names: "Lia"
+    email: "lia.domide@codemart.ro"
+    affiliation: "Codemart SRL"
+    role: "Stakeholder"
+  - family-names: "Sip"
+    given-names: "Viktor"
+    email: "viktor.sip@univ-amu.fr"
+    affiliation: "Aix Marseille Université - amU"
+    role: "Stakeholder"
+  - family-names: "Hjorth"
+    given-names: "Johannes"
+    email: "hjorth@kth.se"
+    affiliation: "Kungliga Tekniska högskolan"
+    role: "Stakeholder"
+  - family-names: "Breyton"
+    given-names: "Martin"
+    email: "martin.BREYTON@univ-amu.fr"
+    affiliation: "Aix Marseille Université - amU"
+    role: "Stakeholder"
+date-released: 2026-09-30
+version: "2.0.0"
+license: Apache-2.0
+abstract: |
+  Generic converters for Virtual Brain Twin simulation data.
+keywords:
+  - neuroscience
+  - simulation
+  - data conversion
+  - Apache-2.0
+# doi: 10.5281/zenodo.XXXXX   # <-- add a DOI here once one is assigned

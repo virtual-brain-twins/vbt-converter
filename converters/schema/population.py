@@ -1,3 +1,8 @@
+# -*- coding: utf-8 -*-
+#
+# SPDX-FileCopyrightText: 2026 Forschungszentrum Jülich GmbH
+# SPDX-License-Identifier: Apache-2.0
+
 """Utilities for representing a population of neurons and serializing them to/from HDF5.
 
 This module defines the :class:`Population` dataclass, which groups a collection

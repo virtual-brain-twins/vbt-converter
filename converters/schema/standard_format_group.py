@@ -1,3 +1,8 @@
+# -*- coding: utf-8 -*-
+#
+# SPDX-FileCopyrightText: 2026 Forschungszentrum Jülich GmbH
+# SPDX-License-Identifier: Apache-2.0
+
 """Utility module for handling the *StandardFormat* HDF5 schema.
 
 The :class:`StandardFormatGroup` class represents the root of the new schema

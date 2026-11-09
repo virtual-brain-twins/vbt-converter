@@ -1,0 +1,13 @@
+repos:
+  - repo: https://github.com/Lucas-C/pre-commit-hooks
+    rev: v1.5.6
+    hooks:
+      - id: insert-license
+        files: \.(py|sh|bash)$
+        args:
+          - --license-filepath
+          - COPYRIGHT_HEADER.txt
+          - --comment-style
+          - '#'
+          - --detect-license-in-X-top-lines
+          - '20'

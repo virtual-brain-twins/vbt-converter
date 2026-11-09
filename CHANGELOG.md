@@ -1,6 +1,96 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [2.1.0](https://gitlab.jsc.fz-juelich.de/virtualbraintwin/vbt-converter/compare/v2.0.0...v2.1.0) (2026-11-09)
+## v2.1.0 – Core Refactor & New Exporter (extended & CI‑ready)
+
+### License & Encoding
+- Added SPDX‑Apache‑2.0 headers to **every** source file, script, test and documentation artifact.  
+
+### Project‑metadata files
+- New files introduced: `AUTHORS.md`, `CITATION.cff`, `LICENSE`, `NOTICE`, `COPYRIGHT_HEADER.txt`.  
+- All files now carry the proper SPDX header.
+
+### Pre‑commit & Lint stage
+- Added **pre‑commit** configuration (`.pre-commit-config.yaml`) to enforce:
+  - License headers  
+  - Code‑style conventions  
+- Integrated a new **lint** stage (`pre_commit` job) into `.gitlab-ci.yml`:
+  - Runs before the `vbt_setup_job` environment‑setup job.  
+  - Fails the pipeline on any lint error.
+
+### CI pipeline updates
+- Defined a new `lint` stage and linked it: `pre_commit → vbt_setup_job`.  
+- Added CI variables (`PARENT_PIPELINE_ID`) and rules to trigger the lint job on merge‑requests and branch pushes.  
+- Adjusted artifact handling for downstream integration jobs.
+
+### README & version bump
+- Added an **Apache 2.0** license badge at the top.  
+- Updated specification reference to **v2.1** and set the *Active version* flag to `2.1`.  
+- Extended the changelog with a concise entry for the v2.1 release (virtual‑neuron flag optional, stricter validation, compound‑attribute checks).
+
+### Documentation refresh
+- Updated all links, tables and diagrams to point to the new spec file **Virtual Brain Twin … v2.1.docx**.
+
+### Test suite
+- New test modules now carry SPDX headers.  
+- Existing tests unchanged but are now executed **after** the lint stage.
+
+### Schema Consolidation
+- Introduced a unified `Simulation` class.  
+- `RateExporter` now loads all simulation data through this class (replaces the previous `SimulationParameters`, `Configuration`, `Map`, `StimuliGroup` usage).
+
+### Virtual Neuron Flag removed
+- Dropped the `Neuron.virtual` field.  
+- Cleaned up all related HDF5 handling.
+
+### New Exporter
+- Added `RateVoltageExporter` (registry entry `kth_amu_1`):
+  - Produces per‑population firing‑rate **and** averaged voltage `.npz` files.  
+  - Supports optional smoothing.
+
+### Compound Attribute Handling
+- `write_compound_attr` now stores a `(value, unit)` pair as a two‑field compound attribute; non‑scalar values are JSON‑encoded automatically.  
+- New helper `read_compound_attr_parsed` returns JSON‑decoded values when possible.  
+- Validation enforces the `(value, unit)` format for **all** attributes and checks unit strings.
+
+### Validation enhancements
+- Strict checks added for:
+  - Compound attributes  
+  - Unit attributes  
+  - Monotonic spike‑time arrays  
+  - Consistent population names  
+- Updated version‑agnostic checks to cover the new schema constraints.
+
+### Factory & Stimulus parsing
+- Refactored cortical stimulus parsing with thorough validation and a clearer API.  
+- Generic/sub‑stimulus handling now logs warnings and skips unknown definitions.
+
+### CLI & Exporter registry
+- Updated `convert_hdf5_to_format.py` to expose the new `RateVoltageExporter`.
+
+---
+
+These changes complete the licensing overhaul, enforce coding standards early in CI, provide full project attribution, and keep the documentation and CI pipeline in sync with the **v2.1** schema evolution.
+
+### New Features
+
+* add RateVoltageExporter for firing‑rate & voltage extraction and deprecate virtual neuron field ([e6e539e](https://gitlab.jsc.fz-juelich.de/virtualbraintwin/vbt-converter/commit/e6e539e65831fbd97a4c8196c3ddb5324613dd65))
+* add RateVoltageExporter for firing‑rate & voltage extraction and deprecate virtual neuron field ([ce6320e](https://gitlab.jsc.fz-juelich.de/virtualbraintwin/vbt-converter/commit/ce6320e39359a35e22791acb8f0c613d1634fc7d))
+* **docs:** add 2.0 release entry to README release history ([7e4f7a2](https://gitlab.jsc.fz-juelich.de/virtualbraintwin/vbt-converter/commit/7e4f7a2161aa38d23778a517cda5c88479c4ebf2))
+* **docs:** add 2.0 release entry to README release history ([71b46af](https://gitlab.jsc.fz-juelich.de/virtualbraintwin/vbt-converter/commit/71b46af67180811c1add487d3c0e82c8aaa91f10))
+
+### Code Refactoring
+
+* **converters:** align HDF5 attribute handling with VBT specification ([d18f2f2](https://gitlab.jsc.fz-juelich.de/virtualbraintwin/vbt-converter/commit/d18f2f22514458c2e210675549005fe014ec3108))
+* **converters:** align HDF5 attribute handling with VBT specification ([367c9d6](https://gitlab.jsc.fz-juelich.de/virtualbraintwin/vbt-converter/commit/367c9d6c22681fc8a00035c12a4d9426c921b758))
+
+### Chores
+
+* **licensing:** add Apache‑2.0 licensing, attribution files, and pre‑commit linting ([eb3d45f](https://gitlab.jsc.fz-juelich.de/virtualbraintwin/vbt-converter/commit/eb3d45ffb2dc8ef50b4a7cf8830ff92fd9ce0333))
+* **licensing:** add Apache‑2.0 licensing, attribution files, and pre‑commit linting ([26b2922](https://gitlab.jsc.fz-juelich.de/virtualbraintwin/vbt-converter/commit/26b2922f14d7b30b83950a141044ac8d71876f41))
+* make release.sh executable ([59556b6](https://gitlab.jsc.fz-juelich.de/virtualbraintwin/vbt-converter/commit/59556b635f2bffbd81c3abcd2738cf75160acfc4))
+
 ## [2.0.0](https://gitlab.jsc.fz-juelich.de/virtualbraintwin/vbt-converter/compare/v1.1.0...v2.0.0) (2026-09-30)
 ### Release Summary
 **v2.0 – Release Summary (Schema 2.0, Generic Map, Validation CLI, Metadata & CLI Enhancements)**  

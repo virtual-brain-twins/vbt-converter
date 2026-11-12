@@ -162,9 +162,9 @@ class TestMasterBundle:
 
         with allure.step("✅ Verify that the ``format_version`` attribute was set"):
             expected_calls = [
-                call("format_version", "2.0"),
+                call("format_version", "2.1"),
                 call("format_version_major", 2),
-                call("format_version_minor", 0),
+                call("format_version_minor", 1),
             ]
 
             # Check order **and** count

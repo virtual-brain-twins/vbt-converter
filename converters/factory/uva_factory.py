@@ -218,7 +218,7 @@ def build_uva_master_bundle(
         out_map = Map(populations=populations)
 
         # stimulus (piecewise‑constant)
-        stimuli_group = _parse_stimulus_group(full_cfg, run_dir, [pop.population_name for pop in out_map.populations])
+        stimuli_group = _parse_stimulus_group(full_cfg, run_dir)
 
         sim = Simulation(
             simulation_id=run_dir.name,
@@ -240,7 +240,7 @@ def build_uva_master_bundle(
     return MasterBundle(standard=std_fmt, raw=raw_bundle, protocol=proto)
 
 
-def _parse_stimulus_group(cfg: dict[Any, Any] | Any, run_dir: Path, populations: List[str]) -> StimuliGroup:
+def _parse_stimulus_group(cfg: dict[Any, Any] | Any, run_dir: Path) -> StimuliGroup:
     """Parse piecewise‑constant stimulus files and build a :class:`StimuliGroup`.
 
     The function looks for files matching the pattern ``random_input_<N>ms.npz``
@@ -254,11 +254,9 @@ def _parse_stimulus_group(cfg: dict[Any, Any] | Any, run_dir: Path, populations:
             empty dictionary if the file is missing).  Only the key ``'t_sim'``
             is consulted.
         run_dir: Path to the directory that holds the current simulation run.
-        populations: A list of population names for which to create stimulus data.
     Returns:
         A :class:`~converters.schema.stimuli_group.StimuliGroup` containing a
-        :class:`~converters.schema.population_stimulus.PopulationStimulus` for
-        each population listed in :data:`populations`.
+        :class:`~converters.schema.population_stimulus.PopulationStimulus`.
 
     Raises:
         FileNotFoundError: If a matching ``*.npz`` stimulus file is expected but
@@ -284,7 +282,7 @@ def _parse_stimulus_group(cfg: dict[Any, Any] | Any, run_dir: Path, populations:
     # serving as the default sub-stimulus for each population.
     return StimuliGroup(
         stimuli_map={
-            f"{population}_default": Stimulus(limits=limits_arr, values=values_arr) for population in populations
+            f"default": Stimulus(limits=limits_arr, values=values_arr)
         },
         attr_map={},
     )

@@ -1,0 +1,27 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="convert_any_to_hdf5_uva" type="PythonConfigurationType" factoryName="Python">
+    <module name="vbt-converter" />
+    <option name="ENV_FILES" value="" />
+    <option name="INTERPRETER_OPTIONS" value="" />
+    <option name="PARENT_ENVS" value="true" />
+    <envs>
+      <env name="PYTHONUNBUFFERED" value="1" />
+    </envs>
+    <option name="SDK_HOME" value="" />
+    <option name="SDK_NAME" value="Python 3.12 (vbt-converter) (4)" />
+    <option name="WORKING_DIRECTORY" value="" />
+    <option name="IS_MODULE_SDK" value="false" />
+    <option name="ADD_CONTENT_ROOTS" value="true" />
+    <option name="ADD_SOURCE_ROOTS" value="true" />
+    <option name="DEBUG_JUST_MY_CODE" value="false" />
+    <option name="RUN_TOOL" value="" />
+    <option name="SCRIPT_NAME" value="$ProjectFileDir$/converters/generic_converter/convert_any_to_hdf5.py" />
+    <option name="PARAMETERS" value="-i $PROJECT_DIR$/tests/test_data/parametersweep_8s_3d_orientation_selective_12012026 -o $ProjectFileDir$/test_output/amu/test.h5 --protocol uva --protocol-version 1.0.0 --parameters scale_num_neurons scale_syn_strength scale_nmda_efficacy --meta-author &quot;John Doe&quot; --meta-creation-date 2026-07-31T12:00:00Z --meta-software &quot;UVA Software&quot; --meta-software-version 1.0.0 --meta-run-id e3b0c442-98fc-1c14-9af6-3b33d8fbc123" />
+    <option name="SHOW_COMMAND_LINE" value="false" />
+    <option name="EMULATE_TERMINAL" value="false" />
+    <option name="MODULE_MODE" value="false" />
+    <option name="REDIRECT_INPUT" value="false" />
+    <option name="INPUT_FILE" value="" />
+    <method v="2" />
+  </configuration>
+</component>

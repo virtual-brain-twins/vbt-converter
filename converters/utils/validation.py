@@ -36,7 +36,7 @@ import numpy as np
 from converters.utils.common import configure_logging
 
 # Constants & public‑API items
-SUPPORTED_VERSIONS = {"1.0", "2.0"}  # add future versions here
+SUPPORTED_VERSIONS = {"1.0", "2.0", "2.1"}  # add future versions here
 DEFAULT_VERSION = None  # if None we use the file’s version
 
 

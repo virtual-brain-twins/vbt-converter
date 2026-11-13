@@ -556,6 +556,7 @@ VERSION_REGISTRY: dict[
 ] = {
     "1.0": _check_one_simulation_v1,
     "2.0": _check_one_simulation_v2,
+    "2.1": _check_one_simulation_v2
 }
 
 

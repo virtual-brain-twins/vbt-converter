@@ -26,7 +26,7 @@ vendored as a Git sub‑module.
     3. [Typical workflow (full pipeline)](#full-workflow)
     4. [Adding a new converter (new protocol)](#adding-new-converter)
     5. [Design documentation](#design-doc)
-    6. [MinIO cache handling](#minio-cache)
+    6. [S3 cache handling](#s3-cache)
     7. [Running the test‑suite](#testing)
     8. [How to create a new release](#release)
     9. [License & contributing](#license)
@@ -380,23 +380,23 @@ the architecture, data flow and execution sequences. See [docs/Readme.md](docs/R
 The detailed specification of the HDF5 schema is
 in [docs/specification/Virtual Brain Twin Inter Protocol Data Standard Specification and HDF5 Specification_v2.0.docx](docs/specification/Virtual%20Brain%20Twin%20Inter%20Protocol%20Data%20Standard%20Specification%20and%20HDF5%20Specification_v2.0.docx).
 
-<a name="minio-cache"></a>
+<a name="s3-cache"></a>
 
-### 6. Creation or update of MinIO cache entries
+### 6. Creation or update of S3 cache entries
 
 If you need to create a new cache entry **or** update an existing one that is used by the integration tests,
 run the job **`update_or_create_new_cache_job`** manually in a pipeline.
 
 Set the following CI variables when you trigger the job:
 
-| Variable         | Description                                                                 | Example value                                                                           |
-|------------------|-----------------------------------------------------------------------------|-----------------------------------------------------------------------------------------|
-| `CI_CACHE_KEY`   | The cache key that GitLab uses for the MinIO bucket.                        | `vbt-converter-test-cache` (UVA cache key) / `vbt-kth-bg-protocol-cache` (BG cache key) |
-| `CI_CACHE_DIR`   | Directory inside the job where the cache will be written.                   | `${CI_PROJECT_DIR}/tests/test_data/`                                                    |
-| `MINIO_SRC_PATH` | Path (relative to the bucket *ci‑temp‑cache*) of the new ground‑truth file. | `VBT_UVA_Protocol/ground_truth/master_v1.h5`                                            |
-| `LOCAL_DEST_DIR` | Full destination path inside the job where the file will be copied to.      | `${CI_PROJECT_DIR}/tests/test_data/ground_truth/test_convert_output.h5`                 |
+| Variable           | Description                                                                 | Example value                                                                           |
+|--------------------|-----------------------------------------------------------------------------|-----------------------------------------------------------------------------------------|
+| `CI_CACHE_KEY`     | The cache key that GitLab uses for the S3 bucket.                           | `vbt-converter-test-cache` (UVA cache key) / `vbt-kth-bg-protocol-cache` (BG cache key) |
+| `CI_CACHE_DIR`     | Directory inside the job where the cache will be written.                   | `${CI_PROJECT_DIR}/tests/test_data/`                                                    |
+| `S3PROXY_SRC_PATH` | Path (relative to the bucket *ci‑temp‑cache*) of the new ground‑truth file. | `VBT_UVA_Protocol/ground_truth/master_v1.h5`                                            |
+| `LOCAL_DEST_DIR`   | Full destination path inside the job where the file will be copied to.      | `${CI_PROJECT_DIR}/tests/test_data/ground_truth/test_convert_output.h5`                 |
 
-The job copies the object from MinIO to the local cache location; after it finishes, the updated
+The job copies the object from S3 proxy to the local cache location; after it finishes, the updated
 ground‑truth file is used in subsequent integration tests.
 
 <a name="testing"></a>
@@ -493,9 +493,12 @@ After that, any future release is just:
 
 ### 9. License & contributing
 
-The code in this repository is released under the **Apache License 2.0**. See the full text in the [`LICENSE`](LICENSE) file and the accompanying [`NOTICE`](NOTICE) file for attribution details.
+The code in this repository is released under the **Apache License 2.0**. See the full text in the [`LICENSE`](LICENSE)
+file and the accompanying [`NOTICE`](NOTICE) file for attribution details.
 
-This software has been developed within the scope of the **Virtual Brain Twin** project. The Virtual Brain Twin Project has received funding from the European Union's Research and Innovation Programme **Horizon Europe** under grant agreement [No 101137289](https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/how-to-participate/org-details/896706219/project/101137289/program/43108390/details).
+This software has been developed within the scope of the **Virtual Brain Twin** project. The Virtual Brain Twin Project
+has received funding from the European Union's Research and Innovation Programme **Horizon Europe** under grant
+agreement [No 101137289](https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/how-to-participate/org-details/896706219/project/101137289/program/43108390/details).
 
 To apply the license header to all source files, run the following commands from the root of the repository:
 
@@ -510,7 +513,6 @@ pre-commit clean
 pre-commit validate-config
 pre-commit run insert-license --all-files
 ```
-
 
 **Contributions are welcome**
 

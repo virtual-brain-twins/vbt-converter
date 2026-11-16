@@ -274,7 +274,13 @@ vbt_cleanup_job:
       SRC="${S3PROXY_REMOTE_NAME}:${S3PROXY_BUCKET}/${S3PROXY_SOURCE_PATH}"
       DST="${LOCAL_DEST_PATH}"
       # Ensure the destination directory exists (already done above)
-      rclone copy "${SRC}" "${DST}" --progress --verbose
+      if rclone lsf "${SRC}" >/dev/null 2>&1; then
+        echo "Source is a directory/prefix"
+        rclone copy "${SRC}" "${DST}" --progress --verbose
+      else
+        echo "Source is a single file"
+        rclone copyto "${SRC}" "${DST}" --progress --verbose
+      fi
 
   # Cache handling – key & path are still driven by the caller
   cache:

@@ -293,7 +293,7 @@ vbt_cleanup_job:
 
 # Concrete job(s) that *use* the template
 update_or_create_new_cache_job:
-  extends: .fetch_minio_cache_template
+  extends: .fetch_s3proxy_cache_template
   # You can override the default variables in CI or give the below defaults via the new job variables section. Just make sure to set them correctly according to your needs:
   # "$CI_CACHE_KEY": If you use the existing key, then the cache will be updated with the new content, otherwise a new cache entry will be created (but note that the old cache will still exist and can be used by other jobs that reference the same key until it is pruned by GitLab).
   # "$CI_CACHE_DIR": This is the default cache path provided by GitLab, which is typically something like "${CI_PROJECT_DIR}/tests/test_data/". You can change it if you want, but using the default one is usually fine as long as it matches the path used in the cache definition above.

@@ -273,9 +273,15 @@ vbt_cleanup_job:
       echo "▶ Copying from S3‑proxy …"
       SRC="${S3PROXY_REMOTE_NAME}:${S3PROXY_BUCKET}/${S3PROXY_SOURCE_PATH}"
       DST="${LOCAL_DEST_PATH}"
-      # Ensure the destination directory exists (already done above)
-      if rclone lsf "${SRC}" >/dev/null 2>&1; then
+      # Get source metadata
+      SOURCE_INFO=$(rclone lsjson --stat "${SRC}") || {
+        echo "ERROR: Cannot access S3 source: ${SRC}"
+        exit 1
+      }
+    
+      if echo "${SOURCE_INFO}" | grep -q '"IsDir": *true'; then
         echo "Source is a directory/prefix"
+        mkdir -p "${DST}"
         rclone copy "${SRC}" "${DST}" --progress --verbose
       else
         echo "Source is a single file"

@@ -347,7 +347,7 @@ def build_artifact_section() -> str:
     """
     Link to the stored NPZ artifact.
     """
-    url = "https://vbt-minio.fz-juelich.de/console/browser/vbt-gitlab-cache/project%2F8681%2Fvbt-kth-bg-protocol-cache-protected"
+    url = "http://192.168.0.89:90/vbt-gitlab-cache/project%2F8681%2Fvbt-kth-bg-protocol-cache-protected"
     return f"""
     <h2>Artifact</h2>
     <p><a href="{html.escape(url)}" target="_blank" rel="noopener noreferrer">

@@ -223,17 +223,17 @@ vbt_cleanup_job:
       CONFIG_DIR="${HOME}/.config/rclone"
       mkdir -p "${CONFIG_DIR}"
       cat > "${CONFIG_DIR}/rclone.conf" <<EOF
-        [${S3PROXY_REMOTE_NAME}]
-        type = s3
-        provider = Other
-        env_auth = false
-        access_key_id = ${S3PROXY_ACCESS_KEY}
-        secret_access_key = ${S3PROXY_SECRET_KEY}
-        endpoint = ${S3PROXY_ENDPOINT}
-        EOF
+      [${S3PROXY_REMOTE_NAME}]
+      type = s3
+      provider = Other
+      env_auth = false
+      access_key_id = ${S3PROXY_ACCESS_KEY}
+      secret_access_key = ${S3PROXY_SECRET_KEY}
+      endpoint = ${S3PROXY_ENDPOINT}
+      EOF
       
       # sanity‑check the config
-      cat "${CONFIG_DIR}/rclone.conf"
+      ls -l "${CONFIG_DIR}/rclone.conf"
 
     # Print the resolved variables
     - |

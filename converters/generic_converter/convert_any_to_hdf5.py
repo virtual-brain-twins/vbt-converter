@@ -113,6 +113,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+import uuid
 from pathlib import Path
 
 from converters.factory.protocol_registry import PROTOCOL_BUILDERS
@@ -219,7 +220,7 @@ def main() -> None:
     input_dir = input_path if input_path.is_dir() else input_path.parent
     out_path = Path(args.output).expanduser().resolve()
     out_dir = out_path if out_path.is_dir() else out_path.parent
-    raw_zip = out_dir / f"raw_data.zip"
+    raw_zip = out_dir / f"raw_data_{uuid.uuid4().hex}.zip"
     proto_path = (
         args.protocol_info_path.replace("{{input}}", str(input_dir), 1)
         if args.protocol_info_path.startswith("{{input}}")

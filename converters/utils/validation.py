@@ -36,7 +36,7 @@ import numpy as np
 from converters.utils.common import configure_logging
 
 # Constants & public‑API items
-SUPPORTED_VERSIONS = {"1.0", "2.0"}  # add future versions here
+SUPPORTED_VERSIONS = {"1.0", "2.0", "2.1"}  # add future versions here
 DEFAULT_VERSION = None  # if None we use the file’s version
 
 
@@ -556,6 +556,7 @@ VERSION_REGISTRY: dict[
 ] = {
     "1.0": _check_one_simulation_v1,
     "2.0": _check_one_simulation_v2,
+    "2.1": _check_one_simulation_v2
 }
 
 

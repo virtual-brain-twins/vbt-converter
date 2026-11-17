@@ -267,7 +267,7 @@ def main() -> None:
         output_file=args.output_dir / "converted_hdf5_link.html",
         logger=logger,
         links=[
-            ("https://vbt-minio.fz-juelich.de/console/browser/vbt-gitlab-cache/project%2F8681%2Fvbt-kth-bg-protocol-cache-bundle-protected",
+            ("http://192.168.0.89:90/vbt-gitlab-cache/project%2F8681%2Fvbt-kth-bg-protocol-cache-bundle-protected",
              "Converted output bundle including the master HDF5", True, True)
         ]
     )
@@ -283,7 +283,7 @@ def main() -> None:
         output_file=src_sweep / "input_sweep_dir_link.html",
         logger=logger,
         links=[
-            ("https://vbt-minio.fz-juelich.de/console/browser/vbt-gitlab-cache/project%2F8681%2Fvbt-kth-bg-protocol-cache-protected",
+            ("http://192.168.0.89:90/vbt-gitlab-cache/project%2F8681%2Fvbt-kth-bg-protocol-cache-protected",
              "Input Parameter Sweep Directory", False, True)
         ]
     )

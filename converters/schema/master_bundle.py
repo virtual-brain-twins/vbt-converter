@@ -96,7 +96,7 @@ class MasterBundle(HDF5Serializable):
 
     Attributes:
         format_version_major: Major version component (default ``2``).
-        format_version_minor: Minor version component (default ``0``).
+        format_version_minor: Minor version component (default ``1``).
         format_version_patch: Patch version component (default ``0``).
         standard: Instance of :class:`StandardFormatGroup`.
         protocol: Optional :class:`ProtocolGroup` instance.
@@ -105,7 +105,7 @@ class MasterBundle(HDF5Serializable):
 
     # New integer version fields
     format_version_major: int = 2
-    format_version_minor: int = 0
+    format_version_minor: int = 1
     format_version_patch: int = 0
 
     # Back‑compatibility string version (legacy)

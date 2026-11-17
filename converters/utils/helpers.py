@@ -70,7 +70,7 @@ def interpolate_constant(
 def get_discretized_stimulus(stim_group: StimuliGroup, dt: float) -> np.ndarray:
     """Return a discretized, piecewise‑constant stimulus trace.
 
-    The function looks for a stimulus named ``"L1VIP_default"`` inside the
+    The function looks for a stimulus named ``"default"`` inside the
     provided ``stim_group`` and checks that it is of type
     ``"piecewise_constant"``. It then samples the stimulus at a uniform time
     step ``dt`` (seconds) and returns the values evaluated at the centre of
@@ -80,7 +80,7 @@ def get_discretized_stimulus(stim_group: StimuliGroup, dt: float) -> np.ndarray:
     ----------
     stim_group : StimuliGroup
         Container holding a mapping from stimulus identifiers to their
-        definitions. The mapping must contain a key ``"L1VIP_default"``.
+        definitions. The mapping must contain a key ``"default"``.
     dt : float
         Desired time step for the discretized output, expressed in seconds.
         The number of bins is computed as ``round((t1 - t0) / dt)`` where
@@ -95,14 +95,14 @@ def get_discretized_stimulus(stim_group: StimuliGroup, dt: float) -> np.ndarray:
     Raises
     ------
     ValueError
-        If the expected sub‑stimulus ``"L1VIP_default"`` is not present in the
+        If the expected sub‑stimulus ``"default"`` is not present in the
         ``stimuli_map``.
     NotImplementedError
         If the found stimulus has a ``stim_type`` other than
         ``"piecewise_constant"``.
     """
     # Obtain the stimulus applicable to any population, as it is identical for all.
-    sub_stimulus = stim_group.stimuli_map.get("L1VIP_default", None)
+    sub_stimulus = stim_group.stimuli_map.get("default", None)
     if sub_stimulus is None:
         raise ValueError("No sub stimulus section found")
     if sub_stimulus.stim_type != "piecewise_constant":

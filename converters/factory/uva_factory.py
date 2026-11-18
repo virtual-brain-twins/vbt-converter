@@ -236,7 +236,9 @@ def build_uva_master_bundle(
     raw_bundle = RawBundleGroup() if embed_raw else None
     if raw_bundle:
         raw_bundle.zip_path = embed_raw_path
-    proto = ProtocolGroup(version=protocol_version, content_path=protocol_info_path)
+    proto = (
+        ProtocolGroup(version=protocol_version, content_path=protocol_info_path)
+        if protocol_info_path.is_file() else None)
     return MasterBundle(standard=std_fmt, raw=raw_bundle, protocol=proto)
 
 
@@ -256,7 +258,7 @@ def _parse_stimulus_group(cfg: dict[Any, Any] | Any, run_dir: Path) -> StimuliGr
         run_dir: Path to the directory that holds the current simulation run.
     Returns:
         A :class:`~converters.schema.stimuli_group.StimuliGroup` containing a
-        :class:`~converters.schema.population_stimulus.PopulationStimulus`.
+        :class:`~converters.schema.stimulus`.
 
     Raises:
         FileNotFoundError: If a matching ``*.npz`` stimulus file is expected but

@@ -227,6 +227,12 @@ def main() -> None:
         else args.protocol_info_path
     )
     protocol_info_path = Path(proto_path).expanduser().resolve()
+    # Early sanity‑check for the protocol file (optional feature)
+    if not protocol_info_path.is_file():
+        logger.warning(
+            "Protocol file %s not found – the Protocol group will be omitted.",
+            protocol_info_path,
+        )
     if not args.no_raw_bundle:
         zip_directory(src_root=input_dir, dst_zip=raw_zip)
     try:

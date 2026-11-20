@@ -2,22 +2,23 @@
 #
 # SPDX-FileCopyrightText: 2026 Forschungszentrum Jülich GmbH
 # SPDX-License-Identifier: Apache-2.0
-
 """
-Performance regression test.
+Performance regression test – averaged version.
 
 The original implementation of the KTH/UVA factories used a
 ``ProcessPoolExecutor`` to process many simulations in parallel.
 The current implementation processes the rows sequentially.  This test
 re‑creates the former parallel path (by using a local helper that mimics
-the per‑simulation work) and checks that the parallel version is at
-least **1.5×** faster than the sequential baseline when the number of
-simulations is six or more.
+the per‑simulation work) and checks that the **average** parallel
+execution time is at least **1.5×** faster than the sequential baseline
+when the number of simulations is six or more.
 
 The test is deliberately lightweight – it creates a temporary directory
 with a few tiny simulation inputs (one HDF5 spike file and one stimulus
 JSON file per run) and measures how long it takes to build the list of
-``Simulation`` objects both sequentially and in parallel.
+``Simulation`` objects both sequentially and in parallel.  Each path is
+run several times and the mean runtime is used for the speed‑up
+calculation.
 """
 
 from __future__ import annotations
@@ -27,7 +28,8 @@ import logging
 import time
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
-from typing import List, Dict, Any
+from statistics import mean
+from typing import Any, Dict, List
 
 import h5py
 import numpy as np
@@ -43,9 +45,9 @@ from converters.factory.kth_factory import (
     DEFAULT_KTH_PARAMETERS,
 )
 from converters.schema.configuration import Configuration
-from converters.schema.simulation_parameters import SimulationParameters
 from converters.schema.map import Map
 from converters.schema.simulation import Simulation
+from converters.schema.simulation_parameters import SimulationParameters
 
 
 def _process_kth_row(row: Dict[str, Any], parameters: List[str] | None = None) -> Simulation:
@@ -53,7 +55,7 @@ def _process_kth_row(row: Dict[str, Any], parameters: List[str] | None = None) -
     Minimal copy of the logic previously hidden inside
     ``converters.factory.kth_factory._process_row``.  It reads the spike
     HDF5 file, parses the stimulus JSON and creates a ``Simulation`` object.
-    A small CPU‑bound workload (a million‑iteration sum) is added so that
+    A tiny CPU‑bound workload (a million‑iteration sum) is added so that
     the parallel version can show a measurable speed‑up on typical CI
     hardware.
     """
@@ -75,8 +77,8 @@ def _process_kth_row(row: Dict[str, Any], parameters: List[str] | None = None) -
     # 4. extract a short simulation identifier
     sim_id: str = Path(row["sim_info_file"]).stem.rsplit("-", 1)[-1]
 
-    # 5. add a tiny CPU‑bound workload to make the parallel version
-    #    noticeably faster on the CI runners.
+    # 5. tiny CPU‑bound workload – makes the parallel version measurably
+    #    faster on CI runners.
     sum(range(1_000_000))
 
     return Simulation(
@@ -94,9 +96,9 @@ def kth_test_data(tmp_path: Path) -> List[Dict[str, Any]]:
     """
     Create a temporary directory that contains:
 
-    * six tiny HDF5 spike files (one neuron, a few spikes)
-    * six tiny stimulus JSON files (piece‑wise constant)
-    * a CSV file (tab‑separated) that references the above files.
+    * 1 000 tiny HDF5 spike files (one neuron, a few spikes)
+    * 1 000 tiny stimulus JSON files (piece‑wise constant)
+    * a CSV‑like list (tab‑separated) that references the above files.
 
     The function returns the list of row dictionaries as they would be
     produced by ``stream_csv_as_dicts`` – this list is used directly by the
@@ -114,7 +116,9 @@ def kth_test_data(tmp_path: Path) -> List[Dict[str, Any]]:
             neurons = f.create_group("neurons")
             g0 = neurons.create_group("0")
             # a tiny spike train (seconds)
-            g0.create_dataset("spikes", data=np.array([[0.001, 0.002, 0.003]], dtype=np.float64))
+            g0.create_dataset(
+                "spikes", data=np.array([[0.001, 0.002, 0.003]], dtype=np.float64)
+            )
 
     # Helper to write a minimal stimulus JSON file
     def _write_stim_json(path: Path) -> None:
@@ -129,15 +133,15 @@ def kth_test_data(tmp_path: Path) -> List[Dict[str, Any]]:
         }
         path.write_text(json.dumps(stim), encoding="utf-8")
 
+    # Create 1 000 rows – the original test used “six or more”, we keep a
+    # reasonably sized set that still runs fast on CI.
     for i in range(1000):
         run_id = f"run-{i}"
-        # files for this run
         spike_file = tmp_path / f"{run_id}_spikes.h5"
         stim_file = tmp_path / f"{run_id}_stim.json"
         _write_spike_h5(spike_file)
         _write_stim_json(stim_file)
 
-        # a CSV row – the original code expects tab separated values
         row = {
             "output_file": str(spike_file),
             "input_config": str(stim_file),
@@ -154,42 +158,72 @@ def kth_test_data(tmp_path: Path) -> List[Dict[str, Any]]:
     return rows
 
 
-# The actual performance test
-def test_performance_kth_sequential_vs_parallel(kth_test_data: List[Dict[str, Any]]) -> None:
+# The actual performance test – averaged over several repetitions.
+def test_performance_kth_sequential_vs_parallel(
+        kth_test_data: List[Dict[str, Any]],
+        repetitions: int = 5,
+) -> None:
     """
-    Build the six ``Simulation`` objects sequentially and then in parallel.
-    The parallel version must be at least 1.5× faster; otherwise the test
-    fails, signalling a regression in the (now removed) parallel path.
+    Build the ``Simulation`` objects sequentially and then in parallel
+    *repetitions* times.  The mean runtimes are compared and the parallel
+    execution must be at least **1.5×** faster than the sequential
+    baseline.  Using an average makes the measurement far less sensitive
+    to occasional system jitter on CI workers.
     """
-    # Sequential baseline (the current implementation in the library)
-    sequential_start = time.perf_counter()
-    sequential_sims: List[Simulation] = []
-    for row in kth_test_data:
-        sequential_sims.append(_process_kth_row(row, parameters=None))
-    sequential_elapsed = time.perf_counter() - sequential_start
+    if repetitions < 1:
+        raise ValueError("repetitions must be a positive integer")
 
-    # Parallel version – mimics the old ProcessPoolExecutor behavior
-    parallel_start = time.perf_counter()
-    with ProcessPoolExecutor() as executor:
-        parallel_sims = list(
-            executor.map(_process_kth_row, kth_test_data, [None] * len(kth_test_data))
+    sequential_times: List[float] = []
+    parallel_times: List[float] = []
+
+    # Sequential runs
+    for rep in range(repetitions):
+        start = time.perf_counter()
+        sequential_sims: List[Simulation] = []
+        for row in kth_test_data:
+            sequential_sims.append(_process_kth_row(row, parameters=None))
+        elapsed = time.perf_counter() - start
+        sequential_times.append(elapsed)
+
+        # sanity check – we really built the expected number of objects
+        assert len(sequential_sims) == len(kth_test_data) == 1000, (
+            f"Unexpected number of simulations on iteration {rep}"
         )
-    parallel_elapsed = time.perf_counter() - parallel_start
 
-    # Sanity – both code paths must have produced the same amount of objects
-    assert len(sequential_sims) == len(parallel_sims) == 1000
+    # Parallel runs – fresh ProcessPoolExecutor for each repetition
+    for rep in range(repetitions):
+        start = time.perf_counter()
+        with ProcessPoolExecutor() as executor:
+            # ``executor.map`` receives the extra argument ``None`` for each
+            # row (the ``parameters`` argument of ``_process_kth_row``).
+            parallel_sims = list(
+                executor.map(_process_kth_row, kth_test_data, [None] * len(kth_test_data))
+            )
+        elapsed = time.perf_counter() - start
+        parallel_times.append(elapsed)
+
+        # sanity check – same amount of objects as the sequential path
+        assert len(parallel_sims) == len(kth_test_data) == 1000, (
+            f"Unexpected number of simulations on iteration {rep}"
+        )
+
+    # Compute averages and evaluate the speed‑up requirement
+    avg_seq = mean(sequential_times)
+    avg_par = mean(parallel_times)
+    speedup = avg_seq / avg_par if avg_par > 0 else float("inf")
+
+    log.info(
+        "Average timings over %d repetitions – Sequential: %.3fs, Parallel: %.3fs, "
+        "Speed‑up: %.2f×",
+        repetitions,
+        avg_seq,
+        avg_par,
+        speedup,
+    )
 
     # The requirement: parallel must be at least 1.5× faster than sequential.
-    # ``parallel_elapsed * 1.5 < sequential_elapsed`` expresses that.
-    speedup = sequential_elapsed / parallel_elapsed if parallel_elapsed > 0 else float("inf")
     assert speedup >= 1.5, (
-        f"Parallel processing was not fast enough: "
-        f"sequential={sequential_elapsed:.3f}s, parallel={parallel_elapsed:.3f}s "
+        f"Parallel processing was not fast enough on average: "
+        f"sequential={avg_seq:.3f}s, parallel={avg_par:.3f}s "
         f"(speed‑up={speedup:.2f}×, required ≥1.5×)"
-    )
-    log.info(
-        "Sequential: %.3fs, Parallel: %.3fs, Speed‑up: %.2f×",
-        sequential_elapsed,
-        parallel_elapsed,
-        speedup,
     )

@@ -26,6 +26,7 @@ from __future__ import annotations
 import logging
 import re
 import uuid
+from concurrent import futures
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Any, Tuple, Optional
@@ -35,6 +36,7 @@ import yaml
 
 from converters.schema.configuration import Configuration
 from converters.schema.global_section import GlobalSection
+from converters.schema.map import Map
 from converters.schema.master_bundle import MasterBundle
 from converters.schema.neuron import Neuron
 from converters.schema.population import Population
@@ -42,7 +44,6 @@ from converters.schema.protocol_group import ProtocolGroup
 from converters.schema.raw_bundle_group import RawBundleGroup
 from converters.schema.simulation import Simulation
 from converters.schema.simulation_parameters import SimulationParameters
-from converters.schema.map import Map
 from converters.schema.standard_format_group import StandardFormatGroup
 from converters.schema.stimuli_group import StimuliGroup
 from converters.schema.stimulus import Stimulus
@@ -99,6 +100,71 @@ def _population_from_npz(name: str, npz_path: Path) -> Population:
         ]
 
     return Population(population_name=name, neurons=neurons)
+
+
+def _process_run(run_dir: Path, parameters: List[str] | None = None) -> Simulation:
+    """Process a single run directory and return a :class:`Simulation` object.
+
+    The function reads configuration, optional recording information,
+    spike‑time files, and stimulus definitions for a single simulation run.
+
+    Args:
+        run_dir (Path): Directory that contains a single simulation run.
+        parameters (List[str] | None, optional): List of parameter names to extract
+            from the configuration. If ``None``, the default set
+            ``DEFAULT_UVA_PARAMETERS`` is used.
+
+    Returns:
+        Simulation: An object describing the processed simulation run.
+
+    Raises:
+        FileNotFoundError: If required files such as ``config.yaml`` are missing.
+        yaml.YAMLError: If ``config.yaml`` cannot be parsed.
+        ValueError: If spike files are malformed or missing required arrays.
+        OSError: For any I/O‑related errors while reading files.
+    """
+    # Load the full configuration (raw key → value)
+    cfg_path = run_dir / "config.yaml"
+    # Read config and convert to key → (value, unit=None)
+    full_cfg: Dict[str, Tuple[Any, Optional[Unit]]] = {
+        k: (v, None)
+        for k, v in (yaml.safe_load(cfg_path.read_text()) if cfg_path.exists() else {}).items()
+    }
+    # Add the record‑neurons mapping
+    rec_path = run_dir / "record_info" / "record_neurons.data"
+    if rec_path.is_file():
+        rec_raw = np.load(rec_path, allow_pickle=True)
+        # keep the original mapping (str → int) in the configuration
+        full_cfg["record_neurons"] = ({str(k): int(v) for k, v in rec_raw.items()}, None)
+
+    # Extract the selected dynamic parameters, rename them, and wrap values as (value, None)
+    # Unit is not provided inside the parent sweep directory, hence kept None
+    param_names = parameters if parameters is not None else DEFAULT_UVA_PARAMETERS
+    sim_params = {p: full_cfg.pop(p) for p in param_names if p in full_cfg}
+
+    # Remaining entries belong to the generic configuration object
+    # `full_cfg` now contains everything except the three parameters above.
+    param = SimulationParameters(kv_pairs=sim_params)
+    config = Configuration(kv_pairs=full_cfg)
+
+    # spike trains (NPZ per layer)
+    spike_dir = run_dir / "spike_times"
+    populations: List[Population] = []
+    for npz_file in sorted(spike_dir.glob("*.npz")):
+        pop_name = npz_file.stem
+        populations.append(_population_from_npz(pop_name, npz_file))
+
+    out_map = Map(populations=populations)
+    # stimulus (piecewise‑constant)
+    stimuli_group = _parse_stimulus_group(full_cfg, run_dir)
+
+    return Simulation(
+        simulation_id=run_dir.name,
+        configuration=config,
+        parameters=param,
+        stimuli=stimuli_group,
+        output_map=out_map,
+    )
 
 
 def build_uva_master_bundle(
@@ -181,53 +247,18 @@ def build_uva_master_bundle(
     )
 
     # Walk every sub‑directory → one Simulation entry
+    # Use parallel processing for speed when many simulations are present.
+    run_dirs = [d for d in sorted(sim_dir.iterdir()) if d.is_dir()]
     sims: List[Simulation] = []
-    for run_dir in sorted(sim_dir.iterdir()):
-        if not run_dir.is_dir():
-            continue
 
-        # Load the full configuration (raw key → value)
-        cfg_path = run_dir / "config.yaml"
-        # Read config and convert to key → (value, unit=None)
-        full_cfg: Dict[str, Tuple[Any, Optional[Unit]]] = {
-            k: (v, None) for k, v in (yaml.safe_load(cfg_path.read_text()) if cfg_path.exists() else {}).items()
-        }
-        # Add the record‑neurons mapping
-        rec_path = run_dir / "record_info" / "record_neurons.data"
-        if rec_path.is_file():
-            rec_raw = np.load(rec_path, allow_pickle=True)
-            # keep the original mapping (str → int) in the configuration
-            full_cfg["record_neurons"] = ({str(k): int(v) for k, v in rec_raw.items()}, None)
-
-        # Extract the selected dynamic parameters, rename them, and wrap values as (value, None)
-        # Unit is not provided inside the parent sweep directory, hence kept None
-        param_names = parameters if parameters is not None else DEFAULT_UVA_PARAMETERS
-        sim_params = {p: full_cfg.pop(p) for p in param_names if p in full_cfg}
-
-        # Remaining entries belong to the generic configuration object
-        # `full_cfg` now contains everything except the three parameters above.
-        param = SimulationParameters(kv_pairs=sim_params)
-        config = Configuration(kv_pairs=full_cfg)  # ← all other config items
-
-        # spike trains (NPZ per layer)
-        spike_dir = run_dir / "spike_times"
-        populations: List[Population] = []
-        for npz_file in sorted(spike_dir.glob("*.npz")):
-            pop_name = npz_file.stem
-            populations.append(_population_from_npz(pop_name, npz_file))
-        out_map = Map(populations=populations)
-
-        # stimulus (piecewise‑constant)
-        stimuli_group = _parse_stimulus_group(full_cfg, run_dir)
-
-        sim = Simulation(
-            simulation_id=run_dir.name,
-            configuration=config,
-            parameters=param,
-            stimuli=stimuli_group,
-            output_map=out_map,
-        )
-        sims.append(sim)
+    # Parallel execution if many runs
+    if len(run_dirs) > 4:
+        with futures.ProcessPoolExecutor() as executor:
+            for sim in executor.map(_process_run, run_dirs, [parameters] * len(run_dirs)):
+                sims.append(sim)
+    else:
+        for rd in run_dirs:
+            sims.append(_process_run(rd, parameters=parameters))
 
     # Assemble the master bundle
     std_fmt = StandardFormatGroup(global_section=global_section, runs=sims)
@@ -256,7 +287,7 @@ def _parse_stimulus_group(cfg: dict[Any, Any] | Any, run_dir: Path) -> StimuliGr
         run_dir: Path to the directory that holds the current simulation run.
     Returns:
         A :class:`~converters.schema.stimuli_group.StimuliGroup` containing a
-        :class:`~converters.schema.population_stimulus.PopulationStimulus`.
+        :class:`~converters.schema.stimulus.Stimulus`.
 
     Raises:
         FileNotFoundError: If a matching ``*.npz`` stimulus file is expected but

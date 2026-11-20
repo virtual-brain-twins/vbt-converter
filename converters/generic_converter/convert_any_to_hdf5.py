@@ -114,6 +114,7 @@ import argparse
 import logging
 import sys
 import uuid
+import zipfile
 from pathlib import Path
 
 from converters.factory.protocol_registry import PROTOCOL_BUILDERS
@@ -228,7 +229,8 @@ def main() -> None:
     )
     protocol_info_path = Path(proto_path).expanduser().resolve()
     if not args.no_raw_bundle:
-        zip_directory(src_root=input_dir, dst_zip=raw_zip)
+        # Use fast compression level for speed (level 1) and DEFLATE method
+        zip_directory(src_root=input_dir, dst_zip=raw_zip, compress_level=1, compression=zipfile.ZIP_DEFLATED)
     try:
         builder = PROTOCOL_BUILDERS[args.protocol]  # KeyError → unknown protocol (should never happen)
     except KeyError:

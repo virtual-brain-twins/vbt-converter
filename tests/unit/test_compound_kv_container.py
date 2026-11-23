@@ -37,7 +37,12 @@ ALLURE_STORY_MANIPULATION = "Basic container manipulation"
 # --------------------------------------------------------------------------- #
 #   Test class
 # --------------------------------------------------------------------------- #
+@allure.parent_suite("VBT‑converter CI/CD")
+@allure.suite("Unit tests")
+@allure.sub_suite("Tests for KeyValueCompoundContainer")
+@allure.description("Unit tests for the `KeyValueCompoundContainer` class, mocking all I/O and verifying the public API.")
 @allure.feature(ALLURE_FEATURE)
+@allure.story(ALLURE_STORY_SERIALISATION)
 class TestKeyValueCompoundContainer:
     """
     Test suite for :class:`KeyValueCompoundContainer`.
@@ -63,11 +68,7 @@ class TestKeyValueCompoundContainer:
         """Clear the container reference – helps the GC and makes the intent explicit."""
         del self.container
 
-    # ------------------------------------------------------------------- #
     #   1️⃣  Manipulation tests
-    # ------------------------------------------------------------------- #
-
-    @allure.story(ALLURE_STORY_MANIPULATION)
     @allure.severity(allure.severity_level.CRITICAL)
     @allure.title("Set a value with a unit and retrieve it via the public API")
     @allure.description(

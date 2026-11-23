@@ -32,7 +32,8 @@ import pytest
 
 from converters.utils.compound_attribute_helper import _dtype_for_value, write_compound_attr, read_compound_attr
 
-
+@allure.parent_suite("VBT‑converter CI/CD")
+@allure.suite("Unit tests")
 @allure.feature("HDF5 compound attribute utilities")
 @allure.story("Low‑level dtype mapping")
 class TestDtypeMapping:

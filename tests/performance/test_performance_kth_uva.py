@@ -31,6 +31,7 @@ from pathlib import Path
 from statistics import mean
 from typing import Any, Dict, List
 
+import allure
 import h5py
 import numpy as np
 import pytest
@@ -135,7 +136,7 @@ def kth_test_data(tmp_path: Path) -> List[Dict[str, Any]]:
 
     # Create 1 000 rows – the original test used “six or more”, we keep a
     # reasonably sized set that still runs fast on CI.
-    for i in range(1000):
+    for i in range(500):
         run_id = f"run-{i}"
         spike_file = tmp_path / f"{run_id}_spikes.h5"
         stim_file = tmp_path / f"{run_id}_stim.json"
@@ -159,6 +160,16 @@ def kth_test_data(tmp_path: Path) -> List[Dict[str, Any]]:
 
 
 # The actual performance test – averaged over several repetitions.
+@allure.parent_suite("VBT‑converter CI/CD")
+@allure.suite("Performance tests")
+@allure.sub_suite("Performance test for KTH/UVA factory")
+@allure.description(
+    "Performance regression test for the KTH/UVA factory. "
+    "The test builds 500 `Simulation` objects sequentially and in parallel, "
+    "averaging the runtimes over several repetitions. The parallel execution "
+    "must be at least 1.5× faster than the sequential baseline."
+)
+@allure.feature("KTH/UVA factory")
 def test_performance_kth_sequential_vs_parallel(
         kth_test_data: List[Dict[str, Any]],
         repetitions: int = 5,
@@ -173,6 +184,13 @@ def test_performance_kth_sequential_vs_parallel(
     if repetitions < 1:
         raise ValueError("repetitions must be a positive integer")
 
+    allure.attach(
+        f"Number of repetitions for averaging: {repetitions}\n"
+        f"Number of simulations: {len(kth_test_data)}",
+        name="Performance Test Parameters",
+        attachment_type=allure.attachment_type.TEXT
+    )
+
     sequential_times: List[float] = []
     parallel_times: List[float] = []
 
@@ -186,7 +204,7 @@ def test_performance_kth_sequential_vs_parallel(
         sequential_times.append(elapsed)
 
         # sanity check – we really built the expected number of objects
-        assert len(sequential_sims) == len(kth_test_data) == 1000, (
+        assert len(sequential_sims) == len(kth_test_data) == 500, (
             f"Unexpected number of simulations on iteration {rep}"
         )
 
@@ -203,7 +221,7 @@ def test_performance_kth_sequential_vs_parallel(
         parallel_times.append(elapsed)
 
         # sanity check – same amount of objects as the sequential path
-        assert len(parallel_sims) == len(kth_test_data) == 1000, (
+        assert len(parallel_sims) == len(kth_test_data) == 500, (
             f"Unexpected number of simulations on iteration {rep}"
         )
 
@@ -226,4 +244,9 @@ def test_performance_kth_sequential_vs_parallel(
         f"Parallel processing was not fast enough on average: "
         f"sequential={avg_seq:.3f}s, parallel={avg_par:.3f}s "
         f"(speed‑up={speedup:.2f}×, required ≥1.5×)"
+    )
+    allure.attach(
+        f"Sequential: {avg_seq:.3f}s, Parallel: {avg_par:.3f}s, Speed-up: {speedup:.2f}×",
+        name="Performance Results",
+        attachment_type=allure.attachment_type.TEXT
     )

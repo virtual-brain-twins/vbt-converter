@@ -524,7 +524,7 @@ pre-commit run insert-license --all-files
 
 ----
 
-<a name="performance-profiling"></a>
+<a name="profiling"></a>
 
 ### 10. Performance profiling  the converter
 

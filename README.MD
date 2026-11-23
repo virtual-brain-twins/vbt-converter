@@ -30,6 +30,7 @@ vendored as a Git sub‑module.
     7. [Running the test‑suite](#testing)
     8. [How to create a new release](#release)
     9. [License & contributing](#license)
+    10. [Performance profiling the converter](#profiling)
 
 ---  
 
@@ -521,3 +522,98 @@ pre-commit run insert-license --all-files
 3. Ensure the test suite passes (`pytest`).
 4. Open a merge request against the `main` branch.
 
+----
+
+<a name="performance-profiling"></a>
+
+### 10. Performance profiling  the converter
+
+To evaluate the runtime characteristics of **`convert_any_to_hdf5.py`** we use the standard library’s `cProfile` module
+together with two visualisation tools:
+
+* **`gprof2dot`** – converts a `cProfile` (or `pstats`) dump into a GraphViz dot graph.
+* **`snakeviz`** – an interactive, web‑based viewer for the same dump.
+
+Below is a step‑by‑step recipe that works inside the project's virtual environment.
+
+---
+
+#### 10.1  Install the visualisation helpers
+
+```bash
+# Activate the repo's virtual environment (if not already active)
+source .venv/bin/activate
+
+# Install the two packages – they are pure‑Python, no extra system deps required
+pip install gprof2dot snakeviz
+```
+
+> **Tip:** `gprof2dot` needs the `dot` executable from GraphViz. Install GraphViz on your platform if you don’t have it
+> already:
+> * Ubuntu/Debian: `sudo apt-get install graphviz`
+> * macOS (homebrew): `brew install graphviz`
+> * Windows: download the installer from https://graphviz.org/download/
+
+---
+
+#### 10.2  Run the script under `cProfile`
+
+```bash
+python -m cProfile -o output_kt.prof \
+    converters/generic_converter/convert_any_to_hdf5.py \
+    -i tests/test_data/KTH_Dardel_run_networks_reduced/run_list.csv \
+    -o test_output/bg/test.h5 \
+    --protocol kth \
+    --parameters network_state duration da_level input_conductance input_scale_factor \
+    --meta-author "John Doe" \
+    --meta-creation-date "2026-07-31T12:00:00Z" \
+    --meta-software "KTH Software" \
+    --meta-software-version "1.0.0" \
+    --meta-run-id "e3b0c442-98fc-1c14-9af6-3b33d8fbc123"
+```
+
+* `-o output_kt.prof` tells `cProfile` to write the raw profiling data to a file (`output_kt.prof`).
+* All other arguments are the normal command‑line options for the converter.
+* Could also be run with `--protocol uva` and a suitable UVA input directory.
+
+---
+
+#### 10.3  Generate a static call‑graph image (gprof2dot + GraphViz)
+
+```bash
+gprof2dot -f pstats output_kt.prof | dot -Tpng -o profile_graph.png
+or
+gprof2dot -f pstats output_kt.prof | dot -Tsvg -o profile_graph.svg
+```
+
+* `gprof2dot -f pstats` reads the `cProfile` dump (`output_kt.prof`).
+* The pipeline feeds the DOT description to `dot`, which renders a PNG image (`profile_graph.png`) or SVG image (`profile_graph.svg`).
+* The resulting image shows functions as nodes, call relationships as edges, and the node size/color reflects cumulative
+  time spent.
+
+Open the image with any viewer, e.g.:
+
+---
+
+#### 10.4  Interactive inspection with SnakeViz
+
+```bash
+snakeviz output_kt.prof
+```
+
+* This launches a tiny local web server (usually on `http://127.0.0.1:8080`) and opens your default browser.
+* The UI lets you explore:
+    * **Tree view** – hierarchical call stack with cumulative and per‑call timings.
+    * **Flame graph** – a compact view of hot paths.
+    * **Source view** – click a function to jump to the corresponding line in your editor (if `PYTHONPATH` is set
+      correctly).
+
+---
+
+#### 10.5  Typical workflow
+
+1. **Run profiling** → `output_kt.prof` is created.
+2. **Quick glance** → `snakeviz output_kt.prof` for an interactive drill‑down.
+3. **Shareable artefact** → `profile_graph.png` can be committed to a PR, added to documentation, or sent to colleagues.
+
+---

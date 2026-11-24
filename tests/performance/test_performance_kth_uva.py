@@ -159,94 +159,97 @@ def kth_test_data(tmp_path: Path) -> List[Dict[str, Any]]:
     return rows
 
 
-# The actual performance test – averaged over several repetitions.
 @allure.parent_suite("VBT‑converter CI/CD")
 @allure.suite("Performance tests")
 @allure.sub_suite("Performance test for KTH/UVA factory")
-@allure.description(
-    "Performance regression test for the KTH/UVA factory. "
-    "The test builds 500 `Simulation` objects sequentially and in parallel, "
-    "averaging the runtimes over several repetitions. The parallel execution "
-    "must be at least 1.5× faster than the sequential baseline."
-)
-@allure.feature("KTH/UVA factory")
-def test_performance_kth_sequential_vs_parallel(
-        kth_test_data: List[Dict[str, Any]],
-        repetitions: int = 5,
-) -> None:
-    """
-    Build the ``Simulation`` objects sequentially and then in parallel
-    *repetitions* times.  The mean runtimes are compared and the parallel
-    execution must be at least **1.5×** faster than the sequential
-    baseline.  Using an average makes the measurement far less sensitive
-    to occasional system jitter on CI workers.
-    """
-    if repetitions < 1:
-        raise ValueError("repetitions must be a positive integer")
+class TestPerformanceKthUva:
+    # The actual performance test – averaged over several repetitions.
 
-    allure.attach(
-        f"Number of repetitions for averaging: {repetitions}\n"
-        f"Number of simulations: {len(kth_test_data)}",
-        name="Performance Test Parameters",
-        attachment_type=allure.attachment_type.TEXT
+    @allure.description(
+        "Performance regression test for the KTH/UVA factory. "
+        "The test builds 500 `Simulation` objects sequentially and in parallel, "
+        "averaging the runtimes over several repetitions. The parallel execution "
+        "must be at least 1.5× faster than the sequential baseline."
     )
+    @allure.feature("KTH/UVA factory")
+    def test_performance_kth_sequential_vs_parallel(
+            self,
+            kth_test_data: List[Dict[str, Any]],
+            repetitions: int = 5,
+    ) -> None:
+        """
+        Build the ``Simulation`` objects sequentially and then in parallel
+        *repetitions* times.  The mean runtimes are compared and the parallel
+        execution must be at least **1.5×** faster than the sequential
+        baseline.  Using an average makes the measurement far less sensitive
+        to occasional system jitter on CI workers.
+        """
+        if repetitions < 1:
+            raise ValueError("repetitions must be a positive integer")
 
-    sequential_times: List[float] = []
-    parallel_times: List[float] = []
-
-    # Sequential runs
-    for rep in range(repetitions):
-        start = time.perf_counter()
-        sequential_sims: List[Simulation] = []
-        for row in kth_test_data:
-            sequential_sims.append(_process_kth_row(row, parameters=None))
-        elapsed = time.perf_counter() - start
-        sequential_times.append(elapsed)
-
-        # sanity check – we really built the expected number of objects
-        assert len(sequential_sims) == len(kth_test_data) == 500, (
-            f"Unexpected number of simulations on iteration {rep}"
+        allure.attach(
+            f"Number of repetitions for averaging: {repetitions}\n"
+            f"Number of simulations: {len(kth_test_data)}",
+            name="Performance Test Parameters",
+            attachment_type=allure.attachment_type.TEXT
         )
 
-    # Parallel runs – fresh ProcessPoolExecutor for each repetition
-    for rep in range(repetitions):
-        start = time.perf_counter()
-        with ProcessPoolExecutor() as executor:
-            # ``executor.map`` receives the extra argument ``None`` for each
-            # row (the ``parameters`` argument of ``_process_kth_row``).
-            parallel_sims = list(
-                executor.map(_process_kth_row, kth_test_data, [None] * len(kth_test_data))
+        sequential_times: List[float] = []
+        parallel_times: List[float] = []
+
+        # Sequential runs
+        for rep in range(repetitions):
+            start = time.perf_counter()
+            sequential_sims: List[Simulation] = []
+            for row in kth_test_data:
+                sequential_sims.append(_process_kth_row(row, parameters=None))
+            elapsed = time.perf_counter() - start
+            sequential_times.append(elapsed)
+
+            # sanity check – we really built the expected number of objects
+            assert len(sequential_sims) == len(kth_test_data) == 500, (
+                f"Unexpected number of simulations on iteration {rep}"
             )
-        elapsed = time.perf_counter() - start
-        parallel_times.append(elapsed)
 
-        # sanity check – same amount of objects as the sequential path
-        assert len(parallel_sims) == len(kth_test_data) == 500, (
-            f"Unexpected number of simulations on iteration {rep}"
+        # Parallel runs – fresh ProcessPoolExecutor for each repetition
+        for rep in range(repetitions):
+            start = time.perf_counter()
+            with ProcessPoolExecutor() as executor:
+                # ``executor.map`` receives the extra argument ``None`` for each
+                # row (the ``parameters`` argument of ``_process_kth_row``).
+                parallel_sims = list(
+                    executor.map(_process_kth_row, kth_test_data, [None] * len(kth_test_data))
+                )
+            elapsed = time.perf_counter() - start
+            parallel_times.append(elapsed)
+
+            # sanity check – same amount of objects as the sequential path
+            assert len(parallel_sims) == len(kth_test_data) == 500, (
+                f"Unexpected number of simulations on iteration {rep}"
+            )
+
+        # Compute averages and evaluate the speed‑up requirement
+        avg_seq = mean(sequential_times)
+        avg_par = mean(parallel_times)
+        speedup = avg_seq / avg_par if avg_par > 0 else float("inf")
+
+        log.info(
+            "Average timings over %d repetitions – Sequential: %.3fs, Parallel: %.3fs, "
+            "Speed‑up: %.2f×",
+            repetitions,
+            avg_seq,
+            avg_par,
+            speedup,
         )
 
-    # Compute averages and evaluate the speed‑up requirement
-    avg_seq = mean(sequential_times)
-    avg_par = mean(parallel_times)
-    speedup = avg_seq / avg_par if avg_par > 0 else float("inf")
-
-    log.info(
-        "Average timings over %d repetitions – Sequential: %.3fs, Parallel: %.3fs, "
-        "Speed‑up: %.2f×",
-        repetitions,
-        avg_seq,
-        avg_par,
-        speedup,
-    )
-
-    # The requirement: parallel must be at least 1.5× faster than sequential.
-    assert speedup >= 1.5, (
-        f"Parallel processing was not fast enough on average: "
-        f"sequential={avg_seq:.3f}s, parallel={avg_par:.3f}s "
-        f"(speed‑up={speedup:.2f}×, required ≥1.5×)"
-    )
-    allure.attach(
-        f"Sequential: {avg_seq:.3f}s, Parallel: {avg_par:.3f}s, Speed-up: {speedup:.2f}×",
-        name="Performance Results",
-        attachment_type=allure.attachment_type.TEXT
-    )
+        # The requirement: parallel must be at least 1.5× faster than sequential.
+        assert speedup >= 1.5, (
+            f"Parallel processing was not fast enough on average: "
+            f"sequential={avg_seq:.3f}s, parallel={avg_par:.3f}s "
+            f"(speed‑up={speedup:.2f}×, required ≥1.5×)"
+        )
+        allure.attach(
+            f"Sequential: {avg_seq:.3f}s, Parallel: {avg_par:.3f}s, Speed-up: {speedup:.2f}×",
+            name="Performance Results",
+            attachment_type=allure.attachment_type.TEXT
+        )

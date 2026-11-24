@@ -116,11 +116,11 @@ performance_tests:
     - !reference [ .VBT_RUN, before_script ]  # Calls the base "method"
   variables:
     VBT_ALLURE_PARENT_SUITE: "VBT‑converter CI/CD"
-    VBT_ALLURE_SUITE: "Performance Tests"
+    VBT_ALLURE_SUITE: "Performance tests"
     VBT_ALLURE_EPIC: "Guarantee that the converter works for every possible input layout"
     VBT_ALLURE_FEATURE: "Use of cached test data to validate the converter’s functionality for a directory layout that is representative of real‑world use cases"
     VBT_ALLURE_STORY: "Performance test suite for the conversion of parameter‑sweep‑style directories to HDF5 file and validation of the converted file against the ground‑truth HDF5 file (https://tvb-projects.atlassian.net/browse/VT-233). Also conversion of the HDf5 file to NPZ format and their tests."
-    VBT_ALLURE_LINK_JIRA: "https://tvb-projects.atlassian.net/browse/VT-233"
+    VBT_ALLURE_LINK_JIRA: "https://gitlab.jsc.fz-juelich.de/virtualbraintwin/vbt-converter/-/work_items/9"
     VBT_DYNAMIC_TEST_NAME_SUFFIX: "performance_tests_parameter_sweep_dir_to_hdf5_to_upstream_formats"
     VBT_TEST_PATHS: "tests/performance"  # Override the default test suite path to point to the performance tests
   artifacts:

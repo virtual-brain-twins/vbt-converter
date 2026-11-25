@@ -26,12 +26,14 @@ Typical invocation
         --protocol uva [--no-raw-bundle] [--log-level INFO] \\
         [--protocol-version 1.0.0] [--protocol-info-path /path/to/protocol_info.pdf] \\
         [--parameters scale_num_neurons scale_syn_strength] \\
+        [--compress-level 1] [--compression deflated] \\
         [--meta-author "John Doe" --meta-project "NeuroSim" ...]
 
     python convert_any_to_hdf5.py -i /path/to/input/run_list.csv -o /path/to/master.h5 \\
         --protocol kth [--no-raw-bundle] [--log-level INFO] \\
         [--protocol-version 1.0.0] [--protocol-info-path /path/to/protocol_info.pdf] \\
         [--parameters scale_num_neurons scale_syn_strength] \\
+        [--compress-level 1] [--compression deflated] \\
         [--meta-author "John Doe" --meta-project "NeuroSim" ...]
 
 Arguments
@@ -101,6 +103,13 @@ Arguments
 * ``--meta‑comment``
   Value for the meta‑data field ``comment``.
 
+* ``--compress-level`` – integer compression level (default: ``1``, the
+  fastest level supported by the selected algorithm).
+
+* ``--compression`` – compression method, one of ``deflated``, ``stored``,
+  ``bzip2`` or ``lzma`` (default: ``deflated`` which maps to
+  ``zipfile.ZIP_DEFLATED``).
+
 All ``--meta‑*`` options are optional; any that are supplied are stored in the
 bundle’s ``metadata`` attribute.  The ``--parameters`` option is also optional
 and, if omitted, the protocol‑specific default parameter set is used.
@@ -114,6 +123,7 @@ import argparse
 import logging
 import sys
 import uuid
+import zipfile
 from pathlib import Path
 
 from converters.factory.protocol_registry import PROTOCOL_BUILDERS
@@ -125,6 +135,35 @@ logger = configure_logging(
     log_file_name=Path(__file__).with_suffix(".log").name,
     level=logging.INFO,
 )
+
+
+def _compression_name_to_constant(name: str) -> int:
+    """Return the ``zipfile`` compression constant for *name*.
+
+    Args
+        name (str): Compression method name (case‑insensitive). Supported
+            values are ``deflated``, ``no_compression``, ``bzip2``, ``lzma`` and ``zstandard``.
+
+    Returns
+        int: The corresponding ``zipfile`` compression constant.
+
+    Raises
+        argparse.ArgumentTypeError: If *name* is not one of the supported values.
+    """
+    mapping = {
+        "deflated": zipfile.ZIP_DEFLATED,
+        "no_compression": zipfile.ZIP_STORED,
+        "bzip2": zipfile.ZIP_BZIP2,
+        "lzma": zipfile.ZIP_LZMA,
+        "zstandard": zipfile.ZIP_ZSTANDARD,
+    }
+    try:
+        return mapping[name.lower()]
+    except KeyError as exc:  # pragma: no cover – defensive, argparse catches this
+        raise argparse.ArgumentTypeError(
+            f"Unsupported compression method '{name}'. "
+            f"Choose from {', '.join(mapping)}."
+        ) from exc
 
 
 def main() -> None:
@@ -208,6 +247,36 @@ def main() -> None:
         "--meta-comment",
         help="Value for meta‑data field ‘comment’.",
     )
+    parser.add_argument(
+        "--compress-level",
+        type=int,
+        default=1,
+        help=(
+            "ZIP compression level used to compress the raw‑bundle zip archive (default: 1).\n"
+            "\n"
+            "The valid range depends on the compression method selected with --compression:\n"
+            "\n"
+            "  • **ZIP_STORED** (no_compression)                 – level is ignored.\n"
+            "  • **ZIP_DEFLATED** (deflated)                     – 0–9  (fast, widely compatible).\n"
+            "  • **ZIP_BZIP2** (bzip2)                           – 1–9  (better compression, slower).\n"
+            "  • **ZIP_LZMA** (lzma)                             – level is ignored (high compression, may be slower).\n"
+            "  • **ZIP_ZSTANDARD** (zstandard)                   – –131072–22* (fast, efficient compression).\n"
+            "\n"
+            "If the chosen method does not support a numeric level (ZIP_STORED, ZIP_LZMA) the value is ignored.\n"
+            "For Zstandard the lower bound (‑131072) is a special value that forces the library to use its\n"
+            "internal “default” level; the upper bound (22) is the maximum compression level supported by\n"
+            "the current Zstandard release.\n"
+        ),
+    )
+    parser.add_argument(
+        "--compression",
+        type=_compression_name_to_constant,
+        default=zipfile.ZIP_DEFLATED,
+        help=(
+            "Compression method for the raw‑bundle zip archive. "
+            "Choose from ``deflated`` (default), ``no_compression``, ``bzip2``, ``lzma`` or ``zstandard``."
+        ),
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -228,7 +297,14 @@ def main() -> None:
     )
     protocol_info_path = Path(proto_path).expanduser().resolve()
     if not args.no_raw_bundle:
-        zip_directory(src_root=input_dir, dst_zip=raw_zip)
+        # ``zip_directory`` forwards *compresslevel* and *compression* directly to
+        # ``zipfile.ZipFile``; we expose them via CLI for flexibility.
+        zip_directory(
+            src_root=input_dir,
+            dst_zip=raw_zip,
+            compress_level=args.compress_level,
+            compression=args.compression,
+        )
     try:
         builder = PROTOCOL_BUILDERS[args.protocol]  # KeyError → unknown protocol (should never happen)
     except KeyError:

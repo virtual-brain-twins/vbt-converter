@@ -98,6 +98,37 @@ unit_tests:
       - allure-results/
     expire_in: 1 week
 
+# 2. Performance Tests: Runs automatically on every commit
+performance_tests:
+  extends: .VBT_RUN
+  stage: test
+  tags:
+    - docker
+    - jsc-cloud
+    - fenix
+  image: docker:cli
+  needs:
+    - job: vbt_setup_job
+      artifacts: true
+  before_script:
+    - echo "Installing dependencies in the docker runner …"
+    - apk add --no-cache jq python3 bash perl gettext curl
+    - !reference [ .VBT_RUN, before_script ]  # Calls the base "method"
+  variables:
+    VBT_ALLURE_PARENT_SUITE: "VBT‑converter CI/CD"
+    VBT_ALLURE_SUITE: "Performance tests"
+    VBT_ALLURE_EPIC: "Guarantee that the converter works for every possible input layout"
+    VBT_ALLURE_FEATURE: "Use of cached test data to validate the converter’s functionality for a directory layout that is representative of real‑world use cases"
+    VBT_ALLURE_STORY: "Performance test suite for the conversion of parameter‑sweep‑style directories to HDF5 file and validation of the converted file against the ground‑truth HDF5 file (https://tvb-projects.atlassian.net/browse/VT-233). Also conversion of the HDf5 file to NPZ format and their tests."
+    VBT_ALLURE_LINK_JIRA: "https://gitlab.jsc.fz-juelich.de/virtualbraintwin/vbt-converter/-/work_items/9"
+    VBT_DYNAMIC_TEST_NAME_SUFFIX: "performance_tests_parameter_sweep_dir_to_hdf5_to_upstream_formats"
+    VBT_TEST_PATHS: "tests/performance"  # Override the default test suite path to point to the performance tests
+  artifacts:
+    when: always
+    paths:
+      - allure-results/
+    expire_in: 1 week
+
 # 2. Integration Pipeline UVA data conversion: Triggered manually via UI or automatically if Pipeline files change
 trigger-integration-uva:
   stage: integration-pipelines
@@ -136,6 +167,8 @@ vbt_publish_job:
   stage: publish_report
   needs:
     - job: unit_tests
+      artifacts: true
+    - job: performance_tests
       artifacts: true
   variables:
     VBT_PUBLISH_SCRIPT: "${CI_PROJECT_DIR}/ci/template_repo/ci/scripts/publish_report.sh"

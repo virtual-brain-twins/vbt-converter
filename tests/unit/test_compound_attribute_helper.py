@@ -32,7 +32,8 @@ import pytest
 
 from converters.utils.compound_attribute_helper import _dtype_for_value, write_compound_attr, read_compound_attr
 
-
+@allure.parent_suite("VBT‑converter CI/CD")
+@allure.suite("Unit tests")
 @allure.feature("HDF5 compound attribute utilities")
 @allure.story("Low‑level dtype mapping")
 class TestDtypeMapping:
@@ -85,7 +86,8 @@ class TestDtypeMapping:
             attachment_type=allure.attachment_type.TEXT,
         )
 
-
+@allure.parent_suite("VBT‑converter CI/CD")
+@allure.suite("Unit tests")
 @allure.feature("HDF5 compound attribute utilities")
 @allure.story("Writing a compound attribute")
 class TestWriteCompoundAttr:
@@ -274,7 +276,8 @@ class TestWriteCompoundAttr:
             assert stored_from_enum == plain_unit
             assert stored_from_str == plain_unit
 
-
+@allure.parent_suite("VBT‑converter CI/CD")
+@allure.suite("Unit tests")
 @allure.feature("HDF5 compound attribute utilities")
 @allure.story("Reading a compound attribute")
 class TestReadCompoundAttr:

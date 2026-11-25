@@ -29,6 +29,7 @@ import json
 import os
 import re
 import uuid
+from concurrent import futures
 from datetime import datetime, timezone
 from logging import warning
 from pathlib import Path
@@ -235,18 +236,19 @@ def _parse_cortical_sub_stimulus(
 
     return stimulus, attrs
 
+
 def _parse_input_config(input_config: Path) -> StimuliGroup:
-    """Parse a JSON stimulus description and convert it to a :class:`StimulusSet`.
+    """Parse a JSON stimulus description and convert it to a :class:`StimuliGroup`.
 
     The JSON file follows the legacy Snudda format where each top‑level key is a
     population name that maps to a set of sub‑stimuli.  The function builds the
-    hierarchical :class:`StimulusSet` object that later can be written to HDF5.
+    hierarchical :class:`StimuliGroup` object that later can be written to HDF5.
 
     Args:
         input_config: Path to the JSON file containing the stimulus description.
 
     Returns:
-        A fully populated :class:`StimulusSet` instance.
+        A fully populated :class:`StimuliGroup` instance.
 
     Raises:
         FileNotFoundError: If ``input_config`` does not point to an existing file.
@@ -396,6 +398,64 @@ def _populations_from_output_spikes(h5_path: Path) -> List[Population]:
         return [Population(population_name=pop, neurons=neurons) for pop, neurons in populations.items()]
 
 
+def _process_row(row: Dict[str, Any], parameters: List[str] | None = None) -> Simulation:
+    """Convert a CSV row into a :class:`Simulation` object.
+
+    The function extracts configuration key‑value pairs, creates the associated
+    :class:`StimuliGroup` and :class:`Map` objects, and bundles everything into a
+    :class:`Simulation` instance.
+
+    Args:
+        row: Mapping representing a single CSV row as produced by
+            :func:`stream_csv_as_dicts`.
+        parameters: Optional list of parameter names to extract from the row.
+            If ``None``, :data:`DEFAULT_KTH_PARAMETERS` is used.
+
+    Returns:
+        A fully populated :class:`Simulation` instance.
+
+    Raises:
+        KeyError: If required columns such as ``"output_file"``,
+            ``"input_config"``, or ``"sim_info_file"`` are missing.
+        FileNotFoundError: Propagated from :func:`_parse_input_config` if the JSON
+            stimulus file cannot be found.
+        OSError: Propagated from :func:`_populations_from_output_spikes` if the HDF5
+            file cannot be opened.
+    """
+    # Simulation parameters taken directly from the CSV row.
+    # Extract the selected dynamic parameters, rename them, and wrap values as (value, None)
+    # Unit is not provided inside the parent sweep directory, hence kept None
+    full_cfg = {k: (v, None) for k, v in row.items()}
+    param_names = parameters if parameters is not None else DEFAULT_KTH_PARAMETERS
+    sim_params = {p: full_cfg.pop(p) for p in param_names if p in full_cfg}
+
+    # Remaining entries belong to the generic configuration object
+    # `full_cfg` now contains everything except the default parameters above.
+    sim_parameters = SimulationParameters(kv_pairs=sim_params)
+    config = Configuration(kv_pairs=full_cfg)
+
+    # Load spikes.
+    spikes_h5 = Path(row["output_file"])
+    populations = _populations_from_output_spikes(spikes_h5)
+    out_map = Map(populations=populations)
+
+    # Load stimulus.
+    stimulus_set = _parse_input_config(Path(row["input_config"]))
+
+    # Extract a friendly simulation identifier from the CSV row.
+    # The CSV column sim_info_file (file_path) contains a path like: /some/dir/simulation‑metadata‑<SIM_ID>.json
+    # We want only the `<SIM_ID>` part (the text after the final hyphen, without the file‑extension).
+    sim_id: str = Path(row["sim_info_file"]).stem.rsplit("-", 1)[-1]
+    # Assemble a ``Simulation`` entry.
+    return Simulation(
+        simulation_id=sim_id,
+        configuration=config,
+        parameters=sim_parameters,
+        stimuli=stimulus_set,
+        output_map=out_map,
+    )
+
+
 def build_kth_master_bundle(
         input_csv_path: Path,
         embed_raw: bool,
@@ -463,60 +523,31 @@ def build_kth_master_bundle(
     for key, value in defaults.items():
         mb.set(key, value)
 
+    runs: List[Simulation] = []
+    if len(csv_rows) > 4:
+        with futures.ProcessPoolExecutor() as executor:
+            for sim in executor.map(_process_row, csv_rows, [parameters] * len(csv_rows)):
+                runs.append(sim)
+    else:
+        for row in csv_rows:
+            runs.append(_process_row(row, parameters))
+
     # Overlay any user‑provided metadata (string → StandardKey conversion)
     if metadata:
         for raw_key, val in metadata.items():
             try:
-                key = StandardKey(raw_key)  # raises ValueError if unknown
-                mb.set(key, val)  # unit is None for CLI strings
+                key = StandardKey(raw_key)
+                mb.set(key, val)
             except ValueError as exc:
                 raise KeyError(f"Unsupported metadata key supplied via CLI: {raw_key!r}") from exc
 
     global_meta = mb.to_dict()
 
-    # Global section – reuse high‑level fields from each CSV row.
     global_section = GlobalSection(
         metadata_mapping=global_meta,
         parameter_simulation_mapping={},
         experiment_info="KTH sweep experiment",
     )
-
-    runs: List[Simulation] = []
-    for row in csv_rows:
-        # Simulation parameters taken directly from the CSV row.
-        # Extract the selected dynamic parameters, rename them, and wrap values as (value, None)
-        # Unit is not provided inside the parent sweep directory, hence kept None
-        full_cfg = {k: (v, None) for k, v in row.items()}  # copy the entire row to a new dict
-        param_names = parameters if parameters is not None else DEFAULT_KTH_PARAMETERS
-        sim_params = {p: full_cfg.pop(p) for p in param_names if p in full_cfg}
-
-        # Remaining entries belong to the generic configuration object
-        # `full_cfg` now contains everything except the default parameters above.
-        sim_parameters = SimulationParameters(kv_pairs=sim_params)
-        config = Configuration(kv_pairs=full_cfg)  # ← all other config items
-
-        # Load spikes.
-        spikes_h5 = Path(row["output_file"])
-        pops = _populations_from_output_spikes(spikes_h5)
-        out_map = Map(populations=pops)
-
-        # Load stimulus.
-        stimulus_set = _parse_input_config(Path(row["input_config"]))
-
-        # Extract a friendly simulation identifier from the CSV row.
-        # The CSV column sim_info_file (file_path) contains a path like: /some/dir/simulation‑metadata‑<SIM_ID>.json
-        # We want only the `<SIM_ID>` part (the text after the final hyphen, without the file‑extension).
-        sim_id: str = Path(row["sim_info_file"]).stem.rsplit("-", 1)[-1]
-        # Assemble a ``Simulation`` entry.
-        runs.append(
-            Simulation(
-                simulation_id=sim_id,
-                configuration=config,
-                parameters=sim_parameters,
-                stimuli=stimulus_set,
-                output_map=out_map
-            )
-        )
 
     standard_group = StandardFormatGroup(global_section=global_section, runs=runs)
 

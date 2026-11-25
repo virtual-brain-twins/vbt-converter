@@ -289,7 +289,7 @@ def _parse_stimulus_group(cfg: dict[Any, Any] | Any, run_dir: Path) -> StimuliGr
         run_dir: Path to the directory that holds the current simulation run.
     Returns:
         A :class:`~converters.schema.stimuli_group.StimuliGroup` containing a
-        :class:`~converters.schema.stimulus`.
+        :class:`~converters.schema.stimulus.Stimulus`.
 
     Raises:
         FileNotFoundError: If a matching ``*.npz`` stimulus file is expected but

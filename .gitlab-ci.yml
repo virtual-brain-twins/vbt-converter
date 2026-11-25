@@ -168,6 +168,8 @@ vbt_publish_job:
   needs:
     - job: unit_tests
       artifacts: true
+    - job: performance_tests
+      artifacts: true
   variables:
     VBT_PUBLISH_SCRIPT: "${CI_PROJECT_DIR}/ci/template_repo/ci/scripts/publish_report.sh"
   before_script:

@@ -123,7 +123,9 @@ class MasterBundle(HDF5Serializable):
 
     # The three logical groups
     standard: StandardFormatGroup = field(default_factory=StandardFormatGroup)
-    protocol: Optional[ProtocolGroup] = field(default_factory=ProtocolGroup)
+    # The protocol group is optional – create it only when a real protocol file
+    # is supplied.
+    protocol: Optional[ProtocolGroup] = None
     raw: Optional[RawBundleGroup] = field(default_factory=RawBundleGroup)
 
     # Serialisation – write to HDF5

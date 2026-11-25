@@ -296,6 +296,12 @@ def main() -> None:
         else args.protocol_info_path
     )
     protocol_info_path = Path(proto_path).expanduser().resolve()
+    # Early sanity‑check for the protocol file (optional feature)
+    if not protocol_info_path.is_file():
+        logger.warning(
+            "Protocol file %s not found – the Protocol group will be omitted.",
+            protocol_info_path,
+        )
     if not args.no_raw_bundle:
         # ``zip_directory`` forwards *compresslevel* and *compression* directly to
         # ``zipfile.ZipFile``; we expose them via CLI for flexibility.

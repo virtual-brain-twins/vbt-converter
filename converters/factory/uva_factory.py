@@ -267,7 +267,9 @@ def build_uva_master_bundle(
     raw_bundle = RawBundleGroup() if embed_raw else None
     if raw_bundle:
         raw_bundle.zip_path = embed_raw_path
-    proto = ProtocolGroup(version=protocol_version, content_path=protocol_info_path)
+    proto = (
+        ProtocolGroup(version=protocol_version, content_path=protocol_info_path)
+        if protocol_info_path.is_file() else None)
     return MasterBundle(standard=std_fmt, raw=raw_bundle, protocol=proto)
 
 

@@ -364,7 +364,7 @@ vbt_convert_job:
       aud: "https://gitlab.jsc.fz-juelich.de"
   when: manual  # allow manual triggering of the conversion job
   tags:
-    - juwels
+    - jupiter
     - shell
   needs:
     - job: vbt_setup_job            # reuse the virtual‑env created earlier
